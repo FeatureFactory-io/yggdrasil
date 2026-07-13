@@ -1,0 +1,104 @@
+---
+alwaysApply: false
+---
+
+Every service call or controller action must log to `app.log` at **INFO**. Configure logging if missing; `app.log` is cleared on restart for clean diagnosis.
+
+**Ask yourself before writing each log line:**
+- What information will I need to precisely pinpoint where the error is occurring?
+- What context will I need in the logs to understand why it happened?
+- What data transformations or validations occurred?
+- Which decisions led to the current point?
+
+## Logging setup
+
+```python
+import logging
+import io
+from pprint import pformat
+from tabulate import tabulate
+
+logger = logging.getLogger(__name__)
+buffer = io.StringIO()  # structured dumps
+```
+
+**Buffers:** use `StringIO`; log `buffer.getvalue()`, then `truncate(0)` (and `seek(0)` if reusing). **Summaries:** include shape/types, `head`/`tail`/`describe`, null counts where useful.
+
+## Patterns (examples)
+
+**1. Entry**
+
+```python
+def method_name(self, param1, param2):
+    logger.info(
+        f'Starting {method_name} param1={param1} param2_shape={getattr(param2, "shape", type(param2))}'
+    )
+```
+
+**2. Structures**
+
+```python
+df.info(buf=buffer)
+logger.info(f'{dataset_name}:\n{buffer.getvalue()}')
+buffer.truncate(0)
+logger.info(f'Config:\n{pformat(config_dict)}')
+logger.info(f'Preview:\n{tabulate(df.head(), headers=df.columns.tolist())}')
+```
+
+**3. Branches**
+
+```python
+if condition:
+    logger.info(f'Column {column_name} present; processing...')
+else:
+    logger.warning(f'Column {column_name} missing; default={default}')
+```
+
+**4. Validation / transforms**
+
+```python
+logger.debug(f'Input dtypes: {df.dtypes.to_dict()}')
+# after transform
+logger.info(f'{operation_name}:\n{result.describe()}')
+```
+
+**5. Errors**
+
+```python
+try:
+    logger.info(f'Completed {operation_name}')
+except Exception as e:
+    logger.error(f'{operation_name} failed: {e} param1={param1} data_shape={getattr(data, "shape", None)}')
+    logger.info('Attempting recovery...')
+```
+
+## Minimum on each major step
+
+- **Method entry:** operation name, key parameters, data shapes/types
+- **Configuration:** setup decisions, rule books, parameters used
+- **Data validation:** input validation results, type conversions (input and output), missing data handling warnings and errors
+- **Processing steps:** each major transformation with before/after summaries
+- **Conditional logic:** why certain paths were taken, what conditions triggered decisions
+- **Results:** statistical summaries, output shapes, success/failure indicators
+- **Error context:** full parameter context, data state, recovery attempts
+
+## Levels
+
+- **DEBUG:** flow, dtypes, internal state; actual data values when feasible (`head`/`tail`/`describe`).
+- **INFO:** entry/exit, config, main steps, outcomes.
+- **WARNING:** recoverable issues, fallbacks, data quality.
+- **ERROR:** failures needing attention.
+
+## Every INFO line must answer (when relevant)
+
+- Who triggered the action (user or AI agent)
+- What the action did (inputs, affected models/records)
+- Why the action occurred (based on intent, rule, or logic)
+- Where it happened (class, method/function, line if possible)
+- Key input parameters or identifiers relevant to the operation
+- The specific operation or action being attempted
+- The error or unexpected condition encountered (if any)
+- Relevant context or state (e.g., user ID, transaction ID, environment)
+- *(Optional)* Next steps or hints on how to investigate further
+
+Design messages so you can find root cause without reproducing the problem blindly.

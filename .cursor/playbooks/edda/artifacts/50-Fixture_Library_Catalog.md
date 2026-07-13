@@ -1,0 +1,11 @@
+# Fixture Library Catalog
+
+**Artifact ID**: 50
+**Type**: Document
+**Required**: True
+**Produced By Activity ID**: 190
+**Consumers**: 4
+
+## Description
+
+{"type": "Document", "is_required": true, "description": "Index of all available test fixtures and presets. Lists JSON fixtures (session-level seeds), FactoryBoy factories (test-level dynamic data), suite-level presets (team, project, empty), and AutoFixture helpers. Each entry includes: name, scope, what data it provides, dependencies, and example usage. Produced by TAF-04, updated by TAF-07, consumed by ESM-05, BPE-04, BPE-05."}

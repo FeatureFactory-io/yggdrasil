@@ -1,0 +1,11 @@
+# Step Library Catalog
+
+**Artifact ID**: 49
+**Type**: Document
+**Required**: True
+**Produced By Activity ID**: 189
+**Consumers**: 4
+
+## Description
+
+{"type": "Document", "is_required": true, "description": "Index of all available BDD step definitions organized by domain (navigation, forms, tables, auth, assertions, dialogs). Each entry lists: step pattern (Gherkin syntax), what it does, required preconditions, and example usage. This is the shared vocabulary between ESM (writes .features) and TAF (implements steps). ESM must consult this catalog before writing new steps. Produced by TAF-03, updated by TAF-07, consumed by ESM-05 and BPE-04."}

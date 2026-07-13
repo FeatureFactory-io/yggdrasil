@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<!-- Screen: ELEMENT-LIST+FIND-1 -->
+<h1>Elements</h1>
+<table class="table table-hover" data-testid="elements-table">
+  <thead><tr><th>Name</th><th>Stereotype</th><th>Confidence</th><th>Source</th></tr></thead>
+  <tbody>
+  {% for el in elements %}
+    <tr data-testid="row-{{ el.id }}"><td>{{ el.name }}</td><td>{{ el.stereotype.name }}</td><td>{{ el.confidence }}</td><td>{{ el.source }}</td></tr>
+  {% empty %}
+    <tr><td colspan="4" class="text-muted">No elements yet — run Ratatosk or create manually.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<!-- Screen: CHANGESET-LIST+FIND-1 -->
+<h1>Change Sets</h1>
+<table class="table">
+  <thead><tr><th>Run ID</th><th>Status</th><th>Source</th><th>Items</th></tr></thead>
+  <tbody>
+  {% for cs in changesets %}
+    <tr><td>{{ cs.run_id }}</td><td>{{ cs.status }}</td><td>{{ cs.source }}</td><td>{{ cs.items|length }}</td></tr>
+  {% empty %}
+    <tr><td colspan="4" class="text-muted">No pending changesets.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

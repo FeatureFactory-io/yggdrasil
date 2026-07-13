@@ -1,0 +1,20 @@
+[project]
+name = "yggdrasil"
+version = "0.1.0"
+description = "AI-maintained organizational knowledge repository"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "yggdrasil.settings"
+python_files = ["test_*.py", "*_test.py"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"graph/migrations/*" = ["E501"]

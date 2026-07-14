@@ -4,18 +4,24 @@ Yggdrasil is a part of the FeatureFactory Family of the systems.
 FeatureFactory is a framework to build AI-native organizations.
 There is human factor - building Octopus organization; has nothing to do with the software - pure culture and org. design. It all starts with the "nerve ring" team building a platform and Playbooks how to use it for the "arm" teams.
 Mimir is the system to store, serve, and evolve playbooks - via PIPs.
-All projects run by the "arm" teams are tracked by Hugin - who can access Playbooks, spot deviations and/or failures, and direct Human attention there.
+
+
+All projects run by the **"arm" teams are tracked by Hugin** - who can access Playbooks, spot deviations and/or failures, and direct Human attention there.
+
+
 But are these projects meaningful for the organization? To set priorities and focus attention we need to understand who do we serve, what is our value chain, which capabilities we already have and which we do not, which systems/processes/org. units we have for this, which apps they use, which data they provide, what infra components these app rely upon, which technology stacks we employ for this, which suppliers provide them etc.
 
-*Yggdrasil gives any organization a living architecture repository — bootstrapped from your existing repos, CMDBs, and Confluence  [in 48 hours], and kept current forever after by Ratatosk - so people and AI agents can safely understand and change systems.*
+***Yggdrasil gives any organization a living architecture repository — bootstrapped from your existing repos, CMDBs, and Confluence  [in 48 hours]**, and **kept current forever after by Ratatosk** - so people and AI agents can safely understand and change systems.*
 
 *Leadership gets the strategic clarity to make decisions grounded in reality. Your AI gets a depth of context no human team could hold — and delivers work of unimaginable quality as a result.*
 
 It follows a metamodel (Zachman, TOGAF etc) to organize this information, enabling Model-Driven-Engineering (MDE) for the AI operating as an agent or as an assistant in an Agentic Development Environment (ADE). For every component, Yggdrasil knows three things:
 
-1. Structural - what do we have and what consists of what (think: org charts and what they own, APIs connected to the API Portal etc.)
-2. Behavioral - how these components interact with each other (think: we have a value proposition which requires an app which has pages talking to an API which relies on servers to serve them etc.)
-3. State - what is the current state of the component and what is the current state of the process building it (think: "Email campaigns have 21 out of 34 outstanding; they have persistent bug problems with bug count not going down and availability being less than 96%")
+1. *Structural* - what do we have and what consists of what (think: org charts and what they own, APIs connected to the API Portal etc.)
+2. *Behavioral* - how these components interact with each other (think: we have a value proposition which requires an app which has pages talking to an API which relies on servers to serve them etc.)
+3. *State* - what is the current state of the component and what is the current state of the process building it (think: "Email campaigns have 21 out of 34 outstanding; they have persistent bug problems with bug count not going down and availability being less than 96%")
+
+
 
 # The Promise
 
@@ -69,6 +75,8 @@ Personas are grouped to mirror the entry-point bet: **Adopters & Builders** are 
 
 ## Adopters & Builders (AI-native, Day 1)
 
+
+
 ### Platform / Nerve-Ring Lead
 
 **Mission:** Stand up the platform and Playbooks the arm teams build on — and make sure they actually get used.
@@ -83,6 +91,8 @@ Personas are grouped to mirror the entry-point bet: **Adopters & Builders** are 
 **Time-to-value:** Day 1 — capability/ownership map from the first bootstrap; Compounds — adoption trends and reuse metrics as the platform grows.
 
 ---
+
+
 
 ### Software Architect
 
@@ -99,6 +109,8 @@ Personas are grouped to mirror the entry-point bet: **Adopters & Builders** are 
 
 ---
 
+
+
 ### Development Team Lead
 
 **Mission:** Keep the team shipping value without being blocked by unclear interfaces or outdated documentation.
@@ -113,6 +125,8 @@ Personas are grouped to mirror the entry-point bet: **Adopters & Builders** are 
 **Time-to-value:** Day 1 — Asset Card and interface map from the bootstrap; Compounds — never goes stale, so onboarding and integration stay frictionless.
 
 ---
+
+
 
 ### The Organizational AI (agent / ADE assistant)
 
@@ -129,6 +143,8 @@ Personas are grouped to mirror the entry-point bet: **Adopters & Builders** are 
 
 ## Leadership & Governance (scales into enterprise)
 
+
+
 ### CTO
 
 **Mission:** Translate technology into competitive advantage and ensure the portfolio of systems evolves with the business.
@@ -143,6 +159,8 @@ Personas are grouped to mirror the entry-point bet: **Adopters & Builders** are 
 **Time-to-value:** Day 1 — first capability map of the real landscape; Compounds — sunset/sunrise decisions backed by live health and cost trends.
 
 ---
+
+
 
 ### CFO
 
@@ -159,6 +177,8 @@ Personas are grouped to mirror the entry-point bet: **Adopters & Builders** are 
 
 ---
 
+
+
 ### Program Manager
 
 **Mission:** Deliver cross-team initiatives on time and surface risks before they become crises.
@@ -174,6 +194,8 @@ Personas are grouped to mirror the entry-point bet: **Adopters & Builders** are 
 
 ---
 
+
+
 ### VP Engineering
 
 **Mission:** Grow engineering throughput while keeping quality and morale high.
@@ -188,6 +210,8 @@ Personas are grouped to mirror the entry-point bet: **Adopters & Builders** are 
 **Time-to-value:** Day 1 — unified health baseline across teams; Compounds — trends reveal systemic pressure and where investment pays off.
 
 ---
+
+
 
 ### Enterprise Architect
 
@@ -207,6 +231,8 @@ Personas are grouped to mirror the entry-point bet: **Adopters & Builders** are 
 Each use case is tagged with its primary persona and a **Day 1 vs. Compounds** marker — what the 48h bootstrap delivers versus what maturing data unlocks. Four **flagship** use cases (the wedge scenarios) are elaborated with *Who / Trigger / What Yggdrasil shows / Outcome*. Source frameworks are noted in parentheses.
 
 ## Organizational Level
+
+
 
 ### Know our value chain & required capabilities and Points of Contact [with the Customer; per Igor Mann]
 
@@ -289,6 +315,8 @@ Which arm team owns which capability; gaps where no team is accountable. Linked 
 
 ## Program / Portfolio Level
 
+
+
 ### Roadmap & state of the themes / epics
 
 State of every theme/epic at a glance: Dark (no data), plus RAG status where data exists.
@@ -318,6 +346,8 @@ Visualise in-flight initiatives against org capacity. Surface overloaded value s
 *Who: Program Manager / VP Engineering · Day 1 → in-flight initiatives per stream · Compounds → capacity vs. load trends over time*
 
 ## Project Level
+
+
 
 ### Pillar: process — assess state
 
@@ -379,6 +409,8 @@ Mimir playbooks linked to the capabilities they govern. Hugin can flag "this cap
 *Who: Platform / Nerve-Ring Lead · Day 1 → playbooks linked to capabilities · Compounds → coverage and adherence signals via Hugin*
 
 ## IT Management
+
+
 
 ### Identify Systematic Problems
 
@@ -460,9 +492,11 @@ flowchart TD
 12. Metamodel editor & integrity engine: I can define and evolve the metamodel (Element / Relation / Stereotype / Package / Diagram types and their rules), and Yggdrasil continuously validates the graph against it — flagging orphans, missing links, wrong stereotypes, and governance/reference-architecture deviations.
 13. Alerts & subscriptions: I can subscribe to conditions and get notified when they trip — "a Point of Contact's health drops", "a vendor contract is 90 days from expiry", "a new orphan appears". This is the mechanism that routes human attention (the Hugin principle) from inside Yggdrasil.
 
+
+
 # The wedge / 1st bet
 
-We aim to enter through a focused wedge for software architects: a live, queryable technical model built from the systems already used to build and deliver software. It gives the architect — and the organizational AI acting with them — a reliable view of what exists, who owns it, how it connects, and whether a change has made the architecture drift.
+We aim to enter through **a focused wedge for software architects: a live, queryable technical model built from the systems** [we see them as datasources] already used to build and deliver software. It gives the architect — and the organizational AI acting with them — a reliable view of what exists, who owns it, how it connects, and whether a change has made the architecture drift.
 
 1. Connect Git, GitLab, or GitHub repositories.
 2. Connect one work tracker.
@@ -471,3 +505,4 @@ We aim to enter through a focused wedge for software architects: a live, queryab
 5. Discover ownership and dependencies.
 6. Detect architecture drift from changes through the Ratatosk CLI client, which can be wired into any delivery pipeline, webhook, event, or schedule.
 7. Expose the live model through MCP queries for architects, agents, and ADEs.
+

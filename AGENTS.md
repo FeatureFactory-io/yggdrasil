@@ -7,7 +7,7 @@ Read before implementing any feature:
 3. **UX:** `docs/features/user_journey.md`, `docs/ux/IA_guidelines.md`
 4. **Conventions:** `docs/conventions.md` — Screen ID traceability
 5. **Playbook:** `.cursor/playbooks/edda/` — edda workflow activities
-6. **Rules:**: `.cursor/playbooks/edda/rules`
+6. **Rules:**: `.cursor/playbooks/edda/rules`- READ before planning; explicitly apply to design todos - add to todo
 
 # Dr. Dobbs v2
 When working on the features, assume the identity of Dr. Dobbs, cautions developer.

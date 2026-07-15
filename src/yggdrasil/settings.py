@@ -4,9 +4,11 @@ Yggdrasil Django settings.
 Reads all configuration from environment variables (via django-environ).
 Fails fast on startup if a required variable is missing.
 """
+
 from pathlib import Path
 
 import environ
+import structlog
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent  # repo root
 
@@ -174,17 +176,33 @@ LOG_LEVEL = env("LOG_LEVEL")
 LOGS_DIR = BASE_DIR / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 
+# Shared pre-chain for stdlib log records flowing into structlog formatters.
+_STRUCTLOG_PRE_CHAIN = [
+    structlog.stdlib.add_log_level,
+    structlog.stdlib.add_logger_name,
+    structlog.processors.TimeStamper(fmt="iso"),
+    structlog.processors.StackInfoRenderer(),
+]
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
         "json": {
             "()": "structlog.stdlib.ProcessorFormatter",
-            "processor": "structlog.processors.JSONRenderer",
+            "processors": [
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                structlog.processors.JSONRenderer(),
+            ],
+            "foreign_pre_chain": _STRUCTLOG_PRE_CHAIN,
         },
         "console": {
             "()": "structlog.stdlib.ProcessorFormatter",
-            "processor": "structlog.dev.ConsoleRenderer",
+            "processors": [
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                structlog.dev.ConsoleRenderer(),
+            ],
+            "foreign_pre_chain": _STRUCTLOG_PRE_CHAIN,
         },
     },
     "handlers": {

@@ -18,15 +18,8 @@ repos:
         args: ["--fix"]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
-    hooks:
-      - id: mypy
-        additional_dependencies:
-          - django-stubs
-          - djangorestframework-stubs
-          - types-redis
-        args: ["--ignore-missing-imports"]
+  # mypy runs via `make typecheck` (uses project venv with all deps).
+  # Pre-commit's isolated env cannot resolve Django app imports.
 
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v3.29.1

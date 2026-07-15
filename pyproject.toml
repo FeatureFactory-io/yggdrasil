@@ -106,7 +106,7 @@ dev = [
 # ---------------------------------------------------------------------------
 [tool.ruff]
 line-length = 100
-target-version = "py314"
+target-version = "py313"
 src = ["src"]
 
 [tool.ruff.lint]
@@ -124,7 +124,7 @@ quote-style = "double"
 # Mypy
 # ---------------------------------------------------------------------------
 [tool.mypy]
-python_version = "3.14"
+python_version = "3.13"
 strict = true
 plugins = ["mypy_django_plugin.main"]
 mypy_path = "src"

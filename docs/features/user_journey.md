@@ -44,7 +44,7 @@ Priya opens "Settings → API Access" from the user menu.
             "run", "--rm", "-i",
             "-e", "YGGDRASIL_TOKEN=<token>",
             "-e", "YGGDRASIL_SERVER_URL=https://yggdrasil.featurefactory.io",
-            "ghcr.io/yggdrasil/yggdrasil-mcp:latest"
+            "featurefactory-io/yggdrasil-mcp:latest"
           ]
         }
       }

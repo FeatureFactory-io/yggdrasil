@@ -431,7 +431,7 @@ Tag published
     │       → (manual gate) → make swap → prod smoke
     │
     ├── Track 2: MCP Facade
-    │       build Dockerfile.mcp → push GHCR (ghcr.io/yggdrasil/yggdrasil-mcp:latest + :x.y.z)
+    │       build Dockerfile.mcp → push Docker Hub (featurefactory-io/yggdrasil-mcp:latest + :x.y.z)
     │
     └── Track 3: Ratatosk CLI
             build ratatosk/ wheel + sdist → publish PyPI → attach to GitHub Release assets
@@ -446,7 +446,7 @@ Tag published
 | Artifact | Registry | Visibility |
 |---|---|---|
 | Backend container | ECR (`yggdrasil`) | Private |
-| MCP facade container | GHCR (`ghcr.io/yggdrasil/yggdrasil-mcp`) | Public |
+| MCP facade container | Docker Hub (`featurefactory-io/yggdrasil-mcp`) | Public |
 | Ratatosk CLI wheel | PyPI (`ratatosk`) + GitHub Release assets | Public |
 
 **CI glue philosophy:** GitHub Actions YAML is thin — each job calls a `make` target or `scripts/` shell script. Logic lives in the repo, not in CI YAML.

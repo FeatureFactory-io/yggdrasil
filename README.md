@@ -103,7 +103,7 @@ The MCP client starts the container on demand. No port mapping or manual `docker
         "run", "--rm", "-i",
         "-e", "YGGDRASIL_TOKEN=<your-token>",
         "-e", "YGGDRASIL_SERVER_URL=https://yggdrasil.featurefactory.io",
-        "ghcr.io/yggdrasil/yggdrasil-mcp:latest"
+        "featurefactory-io/yggdrasil-mcp:latest"
       ]
     }
   }

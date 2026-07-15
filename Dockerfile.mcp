@@ -1,7 +1,7 @@
 # MCP facade container — FastMCP server
-# Published to GHCR (public image) for users to run locally.
-# Users run: docker run -e YGGDRASIL_TOKEN=<token> -e YGGDRASIL_SERVER_URL=... \
-#            -p 8001:8001 ghcr.io/yggdrasil/yggdrasil-mcp:latest
+# Published to Docker Hub (featurefactory-io/yggdrasil-mcp) as a public image.
+# MCP clients spawn it via stdio — no port mapping needed:
+#   command: docker  args: [run, --rm, -i, -e, YGGDRASIL_TOKEN=<token>, ...]
 FROM python:3.14-slim
 
 WORKDIR /app

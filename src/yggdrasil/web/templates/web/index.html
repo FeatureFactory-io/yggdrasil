@@ -1,36 +1,378 @@
+{% load static %}
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Yggdrasil</title>
+  <title>Yggdrasil — Living Architecture Repository</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    /* ── Design tokens (Huginn-compatible) ──────────────────────────────── */
+    :root {
+      --hg-primary:      #1f3a5f;
+      --hg-primary-700:  #16294a;
+      --hg-primary-100:  #e7eef7;
+      --hg-accent:       #c9a227;   /* used sparingly — never as button colour */
+      --hg-accent-700:   #8e7012;
+      --hg-bg-body:      #f5f7fa;
+      --hg-bg-surface:   #ffffff;
+      --hg-ink:          #1a1f2e;
+      --hg-ink-muted:    #5a6478;
+      --hg-border:       #e3e7ee;
+      --hg-radius:       8px;
+      --hg-radius-sm:    4px;
+      --hg-shadow-card-hover: 0 4px 14px rgba(31, 58, 95, 0.12);
+      --hg-font-sans:    "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      --hg-fw-regular:   400;
+      --hg-fw-medium:    500;
+      --hg-fw-semibold:  600;
+      --hg-fw-bold:      700;
+      --hg-track-caps:   0.06em;
+
+      /* Bootstrap overrides */
+      --bs-primary:          var(--hg-primary);
+      --bs-primary-rgb:      31, 58, 95;
+      --bs-font-sans-serif:  var(--hg-font-sans);
+      --bs-body-font-family: var(--hg-font-sans);
+      --bs-body-bg:          var(--hg-bg-body);
+      --bs-body-color:       var(--hg-ink);
+      --bs-border-color:     var(--hg-border);
+      --bs-link-color:       var(--hg-primary);
+      --bs-link-hover-color: var(--hg-primary-700);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0d1117; color: #e6edf3;
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      font-family: var(--hg-font-sans);
+      background: var(--hg-bg-body);
+      color: var(--hg-ink);
+      min-height: 100vh;
     }
-    .card {
-      text-align: center; padding: 3rem 4rem;
-      border: 1px solid #30363d; border-radius: 12px; background: #161b22;
-      max-width: 520px;
+
+    /* ── Bootstrap btn-primary wired to hg-primary ────────────────────── */
+    .btn-primary {
+      --bs-btn-bg:                var(--hg-primary);
+      --bs-btn-border-color:      var(--hg-primary);
+      --bs-btn-hover-bg:          var(--hg-primary-700);
+      --bs-btn-hover-border-color:var(--hg-primary-700);
+      --bs-btn-active-bg:         var(--hg-primary-700);
+      --bs-btn-active-border-color:var(--hg-primary-700);
+      font-weight: var(--hg-fw-semibold);
     }
-    h1 { font-size: 2rem; font-weight: 700; margin-bottom: .5rem; }
-    p  { color: #8b949e; margin-bottom: 1.5rem; line-height: 1.6; }
-    .badge {
-      display: inline-block; padding: .25rem .75rem;
-      border: 1px solid #388bfd; border-radius: 20px;
-      color: #388bfd; font-size: .85rem; font-weight: 500;
+
+    /* ── Hero ─────────────────────────────────────────────────────────── */
+    .yrg-landing-hero {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      min-height: 560px;
+      overflow: hidden;
+      background-image: url("{% static 'Yggdrasil.png' %}");
+      background-size: cover;
+      background-position: center center;
+      background-repeat: no-repeat;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .yrg-landing-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.50);
+      z-index: 0;
+    }
+
+    .yrg-landing-hero-inner {
+      position: relative;
+      z-index: 10;
+      max-width: 1000px;
+      padding: 0 1.25rem;
+      color: #ffffff;
+    }
+
+    .yrg-landing-eyebrow {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: var(--hg-fw-semibold);
+      letter-spacing: var(--hg-track-caps);
+      text-transform: uppercase;
+      color: var(--hg-accent);
+      border: 1px solid rgba(201, 162, 39, 0.40);
+      border-radius: 999px;
+      padding: 0.2rem 0.8rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .yrg-landing-title {
+      font-size: clamp(1.8rem, 4vw, 4rem);
+      font-weight: var(--hg-fw-bold);
+      line-height: 1.1;
+      color: #ffffff;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      margin-bottom: 1rem;
+    }
+
+    .yrg-landing-tagline {
+      font-size: clamp(1.25rem, 2.5vw, 1.6rem);
+      font-weight: var(--hg-fw-medium);
+      color: rgba(255, 255, 255, 0.90);
+      line-height: 1.55;
+      margin-bottom: 1rem;
+    }
+
+    /* ghost link — same pattern as Huginn */
+    .yrg-landing-link {
+      color: #ffffff;
+      font-size: 1rem;
+      font-weight: var(--hg-fw-medium);
+      text-decoration: none;
+    }
+
+    .yrg-landing-link:hover { color: rgba(255,255,255,0.75); text-decoration: none; }
+
+    /* ── Features wrap (light section, Huginn-style) ───────────────────── */
+    .yrg-features-wrap {
+      padding: 1.5rem 4rem 0;
+    }
+
+    /* ── Comparison (before/after) ─────────────────────────────────────── */
+    .yrg-compare-wrap {
+      padding: 0 4rem;
+    }
+
+    @media (max-width: 768px) {
+      .yrg-features-wrap,
+      .yrg-compare-wrap { padding-left: 1.25rem; padding-right: 1.25rem; }
+    }
+
+    .yrg-compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .yrg-compare-table th {
+      padding: 0.6rem 1rem;
+      font-size: 0.72rem;
+      font-weight: var(--hg-fw-semibold);
+      letter-spacing: var(--hg-track-caps);
+      text-transform: uppercase;
+      color: var(--hg-ink-muted);
+      border-bottom: 1px solid var(--hg-border);
+      text-align: left;
+    }
+
+    .yrg-compare-table td {
+      padding: 0.65rem 1rem;
+      border-bottom: 1px solid var(--hg-border);
+      line-height: 1.5;
+      vertical-align: top;
+    }
+
+    .yrg-compare-table tr:last-child td { border-bottom: none; }
+    .yrg-compare-table td:first-child   { color: var(--hg-ink-muted); }
+    .yrg-compare-table td:last-child    { color: var(--hg-primary); font-weight: var(--hg-fw-medium); }
+
+    /* ── Feature cards (same vocabulary as Huginn hg-landing-feature) ─── */
+    .yrg-landing-feature {
+      background: var(--hg-bg-surface);
+      border: 1px solid var(--hg-border);
+      border-radius: var(--hg-radius);
+      padding: 1rem 1.1rem;
+      height: 100%;
+    }
+
+    .yrg-landing-feature-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.25rem;
+      height: 2.25rem;
+      background: var(--hg-primary-100);
+      border-radius: var(--hg-radius-sm);
+      color: var(--hg-primary);
+      font-size: 1.05rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .yrg-landing-feature h3 {
+      font-size: 0.9rem;
+      font-weight: var(--hg-fw-semibold);
+      color: var(--hg-ink);
+      margin-bottom: 0.35rem;
+    }
+
+    .yrg-landing-feature p {
+      font-size: 0.85rem;
+      color: var(--hg-ink-muted);
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    /* ── Footer ────────────────────────────────────────────────────────── */
+    .yrg-footer {
+      border-top: 1px solid var(--hg-border);
+      background: var(--hg-bg-surface);
+      padding: 1rem 1.5rem;
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--hg-ink-muted);
     }
   </style>
 </head>
-<body>
-  <div class="card">
-    <h1>Yggdrasil</h1>
-    <p>AI-augmented architecture knowledge-graph platform.<br>
-       The tree that connects all worlds.</p>
-    <span class="badge">Bootstrap OK</span>
+<body data-testid="landing-loaded">
+
+  <!-- ── Hero ─────────────────────────────────────────────────────────── -->
+  <section class="yrg-landing-hero" data-testid="landing-hero">
+    <div class="yrg-landing-overlay" aria-hidden="true"></div>
+    <div class="yrg-landing-hero-inner">
+      <h1 class="yrg-landing-title" data-testid="landing-title">
+        Know your enterprise, down to the roots.
+      </h1>
+      <p class="yrg-landing-tagline" data-testid="landing-tagline">
+        The living architecture repository your AI agents actually trust.
+        Bootstrapped from your existing repos, CMDBs, and Confluence in&nbsp;48&nbsp;hours.
+        Kept current forever by Ratatosk — so people and AI agents can safely understand and change systems.
+      </p>
+      <div class="d-flex gap-4 flex-wrap justify-content-center align-items-center">
+        <a href="/admin/" class="btn btn-primary btn-lg px-5" data-testid="landing-cta-signin">
+          Get Started
+        </a>
+        <a href="#features" class="yrg-landing-link" data-testid="landing-cta-learn">Learn more</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Before / After ──────────────────────────────────────────────── -->
+  <div class="yrg-compare-wrap mt-4" id="features">
+    <div class="card border-0 shadow-sm rounded-3 mb-4">
+      <div class="card-header bg-white border-bottom py-2 px-3 fw-semibold d-flex align-items-center">
+        <i class="fa-solid fa-rotate me-2 text-primary" aria-hidden="true"></i>
+        <span>The promise</span>
+      </div>
+      <div class="card-body p-0">
+        <table class="yrg-compare-table" aria-label="Before and after comparison">
+          <thead>
+            <tr>
+              <th>Every EA tool before Yggdrasil</th>
+              <th>Yggdrasil</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Humans maintain it &rarr; it rots within weeks</td>
+              <td>Ratatosk maintains it &rarr; it compounds over time</td>
+            </tr>
+            <tr>
+              <td>Big-bang consultancy project to bootstrap</td>
+              <td>48 h automated discovery from your existing systems</td>
+            </tr>
+            <tr>
+              <td>A snapshot of a moment already gone</td>
+              <td>A living model, updated on every event and merge</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
+
+  <!-- ── Feature cards ────────────────────────────────────────────────── -->
+  <div class="yrg-features-wrap">
+    <div class="card border-0 shadow-sm rounded-3 mb-4" data-testid="landing-features">
+      <div class="card-header bg-white border-bottom py-2 px-3 fw-semibold d-flex align-items-center">
+        <i class="fa-solid fa-route me-2 text-primary" aria-hidden="true"></i>
+        <span>How it works</span>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+
+          <div class="col-12 col-md-6 col-xl-4 d-flex" data-testid="feature-bootstrap">
+            <div class="yrg-landing-feature flex-grow-1">
+              <div class="yrg-landing-feature-icon">
+                <i class="fa-solid fa-bolt" aria-hidden="true"></i>
+              </div>
+              <h3>Bootstrap in 48 hours</h3>
+              <p>Automated discovery from repos, CMDBs, and Confluence.
+                 No six-month consultancy engagement. No manual data entry.</p>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6 col-xl-4 d-flex" data-testid="feature-living">
+            <div class="yrg-landing-feature flex-grow-1">
+              <div class="yrg-landing-feature-icon">
+                <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
+              </div>
+              <h3>Always current</h3>
+              <p>Ratatosk watches every merge, event, and CI run.
+                 The model updates itself — diagrams never drift into fiction again.</p>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6 col-xl-4 d-flex" data-testid="feature-traceability">
+            <div class="yrg-landing-feature flex-grow-1">
+              <div class="yrg-landing-feature-icon">
+                <i class="fa-solid fa-link" aria-hidden="true"></i>
+              </div>
+              <h3>Customer-to-component traceability</h3>
+              <p>Every capability, app, and infra component traces up to a Point of Contact.
+                 Orphan detection and blast-radius analysis by construction.</p>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6 col-xl-4 d-flex" data-testid="feature-ai">
+            <div class="yrg-landing-feature flex-grow-1">
+              <div class="yrg-landing-feature-icon">
+                <i class="fa-solid fa-brain" aria-hidden="true"></i>
+              </div>
+              <h3>AI-native context</h3>
+              <p>Expose the full graph via REST, MCP, and CLI.
+                 Any AI agent gets structural, behavioural, and state knowledge — not just code.</p>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6 col-xl-4 d-flex" data-testid="feature-query">
+            <div class="yrg-landing-feature flex-grow-1">
+              <div class="yrg-landing-feature-icon">
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+              </div>
+              <h3>Graph queries, not keyword search</h3>
+              <p>Ask "which capabilities support this touchpoint?" and get an answer grounded in
+                 the actual, current architecture — not a stale wiki page.</p>
+            </div>
+          </div>
+
+          <div class="col-12 col-md-6 col-xl-4 d-flex" data-testid="feature-metamodel">
+            <div class="yrg-landing-feature flex-grow-1">
+              <div class="yrg-landing-feature-icon">
+                <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+              </div>
+              <h3>Enterprise-grade metamodel</h3>
+              <p>Zachman- and TOGAF-aligned from day one.
+                 Start greenfield; designed for enterprise scale from the first commit.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="yrg-footer">
+    &copy; {% now "Y" %} Yggdrasil &middot; Part of the FeatureFactory Family
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

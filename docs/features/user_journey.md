@@ -6,7 +6,7 @@ Personas from [PRD.MD](../../PRD.MD). Primary actors: **Priya** (Software Archit
 
 ## Part I — MVP (The Wedge)
 
-**Scope:** Connect a repo, bootstrap a Model, keep it current from CI/CD, browse/query it via GUI or any AI client, and ask Munin about it. No manual metamodel design or full CRUDLF here — Ratatosk and Munin populate and maintain the Model. See [PRD.MD](../../PRD.MD) "The wedge / 1st bet".
+**Scope:** Connect a repo, bootstrap a Model, fully manage elements and relationships via GUI, keep the model current from CI/CD, query it via any AI client, and ask Munin about it. See [PRD.MD](../../PRD.MD) "The wedge / 1st bet".
 
 ## Act 0: Authentication & API Access
 
@@ -23,6 +23,7 @@ Elena opens `https://yggdrasil.featurefactory.io`. Login form: email, password, 
 Priya opens "Settings → API Access" from the user menu.
 
 **Layout:**
+
 - **Existing tokens:** table of Name | Created | Last used | Scope | [Revoke]
 - **[Generate New Token]** → modal: name (e.g. "laptop-ratatosk"), scope (read-only / read-write), [Create] → token shown once, [Copy]
 - **Usage snippets** (copy-paste ready):
@@ -42,32 +43,83 @@ Priya opens "Settings → API Access" from the user menu.
 
 ---
 
+
+
 ## Act 1: Ratatosk Bootstrap (CLI)
 
-**Context:** Priya just generated a token (`AUTH-TOKEN-1`). She wants an initial Model built from the repo her team already ships from — no manual data entry.
+**Context:** Priya just generated a token (`AUTH-TOKEN-1`). She wants an initial Model built from the repo her team already ships from — no manual data entry. She can also give Ratatosk a focused instruction to guide its analysis beyond the generic NER pass.
 
 **Pattern:** CLI-only in MVP — the GUI shows the result of a run, not its trigger (see System Notes).
 
 ```bash
 $ export YGGDRASIL_TOKEN=<token>
+
+# Generic bootstrap — full NER pass, no existing model to compare against
 $ ratatosk bootstrap ./repo --token=$YGGDRASIL_TOKEN --model Yggdrasil --metamodel=c4
-[ratatosk] scanning ./repo …
-[ratatosk] found 3 services, 12 modules, 4 external dependencies
-[ratatosk] extracted 19 candidate elements, 27 candidate relationships
-[munin]    reconciling against existing Model "Yggdrasil" (0 elements) …
-[munin]    placed 16 elements into Context/Container/Component packages (C4)
-[munin]    3 elements below confidence threshold → ChangeSet #1 queued for review
-[ratatosk] run complete: 19 elements, 27 relationships, 1 ChangeSet pending
-          → https://yggdrasil.featurefactory.io/runs/1
+
+# Guided bootstrap — Ratatosk reads the existing model first, then focuses its pass
+$ ratatosk bootstrap ./repo --token=$YGGDRASIL_TOKEN --model Yggdrasil --metamodel=c4 \
+    --instructions "Do an extra pass on the business logic layer — check whether any Domain objects have drifted out of sync with their model representations."
+
+[ratatosk] fetching existing model state via MCP …
+[ratatosk] found 31 existing elements, 44 relationships in model Yggdrasil
+[ratatosk] scanning ./repo with instructions …
+[ratatosk] found 3 services, 12 modules, 4 external dependencies, 8 domain objects
+[ratatosk] delta buckets:
+             to_add:    6 elements, 11 relationships
+             to_update: 3 elements (domain objects out of sync)
+             to_delete: 1 element (removed module)
+             unchanged: 22 elements
+[munin]    reading buckets, planning graph operations …
+[munin]    ChangeSet #4: 6 add-element ops, 11 add-relationship ops,
+                         3 update-element ops, 1 delete-element op
+                         2 ops below threshold → queued for review
+[ratatosk] run complete — ChangeSet #4 pending
+          → https://yggdrasil.featurefactory.io/runs/4
 ```
 
-C4 is the default — and only — metamodel choice in MVP: Ratatosk seeds the Vertex/Edge/Stereotype/Diagram/Package structure (Context, Container, Component, Code views) automatically. There is no metamodel picker screen yet; designing/evolving the metamodel is Key Feature 12, Part II.
+C4 is the default — and only — metamodel in MVP: Ratatosk seeds the Vertex/Edge/Stereotype/Diagram/Package structure (Context, Container, Component, Code views) automatically. There is no metamodel picker yet; designing/evolving the metamodel is Key Feature 12, Part II.
 
-**Pipeline:** Ratatosk (field agent — NER + reconciliation against the existing graph, runs on a small/fast/cheap LLM) hands every candidate to **Munin** (ontology specialist — decides package/diagram placement). High-confidence placements apply directly to the Model; low-confidence ones queue as a ChangeSet (`Act 5`).
+**Pipeline:**
 
-Priya follows the printed link to `RATATOSK_RUN-VIEW_RATATOSK_RUN-1` (`Act 7`) to see the run in the GUI.
+1. **Ratatosk** (field agent — NER + reconciliation, small/fast/cheap LLM):
+   - If an existing model is present: calls MCP (`search`, `traverse`) to fetch current state first
+   - Runs its analysis pass, guided by `--instructions` if provided
+   - Classifies every finding into a delta bucket: `to_add` / `to_update` / `to_delete` / `unchanged`
+   - Hands the bucketed delta to Munin (skipping `unchanged` entirely — no noise for Munin to process)
+
+2. **Munin** (ontology specialist) reads the pre-classified buckets and produces the ChangeSet — a structured plan of precise graph operations. Pre-bucketed input means higher confidence and fewer items requiring human review.
+
+High-confidence operations apply directly to the Model; below-threshold operations queue for human review in `Act 7`.
+
+Priya follows the printed link to `MUNIN-BRIEFING-1` — Munin's post-run architectural briefing — rather than raw extraction logs.
+
+#### Screen: MUNIN-BRIEFING-1
+
+**Context:** Lands immediately after a Ratatosk run (bootstrap or update). Replaces raw logs as the post-run landing page. Designed to orient both experienced architects and users who are new to model-driven architecture.
+
+**Layout:**
+
+- **Munin's Summary** (narrative paragraph, auto-generated):
+  > "I analysed 3 services, 12 modules, and 4 external dependencies. The model now contains 16 elements and 24 relationships across the Technology package. 3 operations are awaiting your review — mainly around module-to-service ownership."
+- **Confidence distribution:** pill badges — e.g. `✓ 37 auto-applied` · `⚠ 3 queued for review` · `○ 2 below threshold (skipped)`
+- **Key findings:** ranked list of the most-connected elements, any detected naming conflicts, low-confidence items, and potential duplicates — each entry links to the relevant element or ChangeSet
+- **Suggested next steps:**
+  - [Review pending ChangeSet →] (`Act 7`)
+  - [Explore the graph →] (`VIEW-BROWSE-1`)
+  - [Run again with instructions →] (pre-fills CLI command)
+- **Raw run log** (collapsed by default) — links to `RATATOSK_RUN-VIEW_RATATOSK_RUN-1` (`Act 9`) for full extraction detail
+
+**First-time users — C4 Primer overlay:** on first login or first bootstrap, a dismissible overlay explains the C4 metamodel in plain language:
+
+> **C4 in 60 seconds**
+> Your model is organised in four levels: **Context** (your system and its users), **Container** (apps, databases, services), **Component** (internal building blocks), **Code** (classes, modules). Elements are the nodes; Relationships are the edges between them. Stereotypes label what a node or edge *is*. Packages group related elements into views. Munin maintains the structure — you provide the intent.
+>
+> [Got it — show me the graph →] [Learn more about C4 →]
 
 ---
+
+
 
 ## Act 2: View Browser — Explore the Graph
 
@@ -78,30 +130,209 @@ Priya follows the printed link to `RATATOSK_RUN-VIEW_RATATOSK_RUN-1` (`Act 7`) t
 #### Screen: VIEW-BROWSE-1
 
 **Layout:**
+
 - **Header:** "View Browser" with saved-views dropdown
-- **Filter panel (left):**
+- **Filter panel (top of the list; collapsible panel - when collapsed reads what filters applied):**
   - Package selector (Context, Container, Component, Code — from the C4 bootstrap)
   - Stereotype multi-select (Application, Capability, …)
-  - Property filters (owner, health, confidential)
+  - **Advanced filter builder:** compound AND/OR rules over any element property (see below)
+  - **Time Travel:** date picker (defaults to "now"); selecting a past date sets `?as_of=` in the URL and re-runs the query against the historical snapshot — a banner "Viewing model as of 2026-01-15" appears; [Compare with now →] opens `VIEW-HISTORY-1`
   - [Apply Filters] [Clear] [Save View]
-- **Results (center):**
+- **Results (center, under filters):**
   - Table mode: columns Name, Stereotype, Owner, Health, Package
   - Graph mode: Cytoscape.js rendering of filtered subgraph
   - Toggle [Table] [Graph]
+  - **Actions bar:** [Export →] (`EXPORT-BRIEFING-1`) [History →] (`VIEW-HISTORY-1`)
 - **Detail drawer (right):** selected element summary + quick links to VIEW/EDIT
-- **Munin panel:** collapsible chat side panel (`Act 6`) that can drive this same screen
+- **Munin panel:** collapsible chat side panel (`Act 8`) that can drive this same screen
 
-Priya selects Package "Business View", Stereotype "Capability", filters name contains "Fulfill Orders", sees 1 capability node; expands to dependent Applications in graph mode.
+**Advanced filter builder:** each row is a rule (field · operator · value); rows are joined with AND or OR; groups can be nested. Supported operators by property type:
 
-**AI-constructed URL:** Priya could reach the same scoped view without touching a filter control by asking Munin "show me apps that depend on Fulfill Orders" — Munin navigates straight to `/views/business-view/application?filter={"depends_on":"Fulfill Orders"}` (Key Feature 1). Any element/subgraph/list the filter panel can express has a corresponding URL an AI agent can construct directly, without going through the panel at all.
+
+| Property type     | Operators                                                          |
+| ----------------- | ------------------------------------------------------------------ |
+| Text              | contains, not contains, equals, not equals, starts with, ends with |
+| Numeric           | = , ≠ , > , ≥ , < , ≤                                              |
+| Boolean           | is true, is false                                                  |
+| Enum / Stereotype | is one of, is not one of                                           |
+
+
+Every filter state is encoded as a JSON query object appended to the URL — shareable, bookmarkable, and AI-constructable:
+
+```
+/views/technology/application?filter={"and":[{"field":"version","op":"gt","value":1},{"field":"name","op":"contains","value":"payment"}]}
+```
+
+**Semantic URL rules (filter encoding):**
+
+
+| Concept                | URL key / value                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------- |
+| AND group              | `{"and": [...rules]}`                                                                    |
+| OR group               | `{"or": [...rules]}`                                                                     |
+| Rule                   | `{"field": "<prop>", "op": "<operator>", "value": <scalar or array>}`                    |
+| Operators              | `eq` `neq` `gt` `gte` `lt` `lte` `contains` `not_contains` `starts` `ends` `in` `not_in` |
+| Package scope          | path segment: `/views/{package-slug}/`                                                   |
+| Stereotype scope       | path segment: `/views/{package-slug}/{stereotype-slug}`                                  |
+| Depth (traversal)      | `?depth=N`                                                                               |
+| Time travel            | `?as_of=2026-06-01`                                                                      |
+| Pre-filled create form | `/elements/new?prefill={"name":"X","stereotype":"Container","package":"technology"}`     |
+
+
+Munin (`Act 8`) and any MCP client can construct these URLs from natural language without touching the GUI (Key Feature 1). The filter builder always reflects the current URL state — paste a URL, restore the exact view.
+
+Priya selects Package "Technology", Stereotype "Application", adds rule `version > 1 AND name contains "payment"` — URL updates live; she copies it to Slack. Marcus clicks it and lands on the identical subgraph.
+
+#### Screen: EXPORT-BRIEFING-1
+
+**Context:** Priya needs to present the Payment System architecture to stakeholders next week. She has scoped the subgraph she wants, and now needs a shareable artifact — not a screenshot, a structured document with proper C4 diagrams.
+
+**Trigger:** [Export →] button in the View Browser actions bar. Opens a modal or side panel.
+
+**Export formats:**
+
+| Format | Output | Use case |
+|---|---|---|
+| **Mermaid diagram** | `.md` file with fenced `mermaid` C4 block for the current subgraph | Embed in GitHub / GitLab wiki, Notion, any Markdown renderer |
+| **Markdown deck** | Multi-section `.md`: executive summary (generated by Munin), one section per C4 level present in the subgraph, Mermaid diagrams inline | Presentation to stakeholders; renderable as slides with Marp or similar |
+| **JSON** | Raw element + relationship data for the current filter scope | Scripting, further processing |
+
+**Munin narrative toggle:** for Mermaid and Markdown deck exports, an optional "Ask Munin to annotate" checkbox — Munin generates a 2–3 sentence description per section explaining the architectural intent, not just the structure.
+
+**Download:** [Export as Mermaid] [Export as Markdown Deck] [Export as JSON] — each triggers a file download. No server-side storage; exports are point-in-time snapshots.
+
+Semantic URL for export: `/views/{package}/{stereotype}/export?format=mermaid&filter=...` — constructible by Munin in chat so a GUI-free user can generate a download link without opening the browser.
+
+#### Screen: VIEW-HISTORY-1
+
+**Context:** Elena wants to know what the Technology package looked like three months ago and what changed since. Priya wants a diff between the model before and after a major refactor.
+
+**Layout:**
+
+- **Header:** "Model History — {Model name}"
+- **Timeline rail (left):** chronological list of ChangeSet apply events — date, source (Ratatosk / Munin / Human), number of operations, [View snapshot]
+- **Snapshot A / Snapshot B pickers (top):** two date selectors; defaults to "last Ratatosk run" vs "now"; selecting either updates the diff panel
+- **Diff panel (center):**
+  - **Added** (green): elements and relationships that exist in B but not A
+  - **Removed** (red): exist in A but not B
+  - **Modified** (amber): exist in both, properties changed — expandable to show field-level diff
+  - Each row links to the relevant element or ChangeSet
+- **[Open Snapshot A in View Browser →]** and **[Open Snapshot B in View Browser →]:** navigates to `VIEW-BROWSE-1` with `?as_of=<date>` pre-set
+
+Semantic URL: `/models/{model}/history?a=2026-01-01&b=2026-04-01` — constructible by Munin in chat.
 
 ---
 
-## Act 3: MCP Browse — Query via Any AI Client
 
-**Context:** Priya is in Cursor, mid-task, and wants to know what depends on a service before touching it — without leaving her editor.
 
-**Pattern:** No GUI screen — the FastMCP server wraps the same REST API the View Browser calls, so any MCP-aware client can query ground truth directly (Key Feature 4).
+## Act 3: Elements — Full CRUDLF
+
+**Context:** Priya notices the bootstrap missed "Notification Service" (not yet in the codebase). She needs to add it to the Model, wire its relationships, and tell Munin which diagrams it belongs in. Marcus needs to correct a misclassified component. Full lifecycle — find, inspect, create, edit, delete — is available in the GUI without CLI or MCP access.
+
+**Pattern:** Full CRUDLF with LIST+FIND as entry point. Human writes (Create, Edit, Delete) go through the Munin pipeline — same as Ratatosk — so graph integrity and audit trail are never bypassed.
+
+#### Screen: ELEMENT-LIST+FIND-1
+
+Priya clicks "Elements" in nav.
+
+**Layout:**
+
+- **Header:** "Elements" with count badge
+- **Actions:** [Create Element]
+- **Search:** "Find elements…" (name, stereotype, package)
+- **Filters:** Stereotype, Package, Health, Source (Ratatosk / Munin / Human)
+- **Table:** Name | Stereotype | Package | Owner | Health | Source | Actions
+- **Row actions:** View, Edit, Delete
+- **Empty state:** "No elements yet — run Ratatosk bootstrap or create manually"
+
+
+
+#### Screen: ELEMENT-VIEW_ELEMENT-1
+
+Detail page: structural properties (JSONB), behavioral links (incoming/outgoing relationships with their stereotypes), state panel (health, provenance, confidence, last verified), mini Cytoscape ego-graph.
+
+#### Screen: ELEMENT-CREATE_ELEMENT-1
+
+**Form:**
+
+- Name (required)
+- Stereotype (dropdown — C4: System, Container, Component, Person, External)
+- Package (dropdown — Context, Container, Component, Code)
+- Properties (dynamic fields driven by stereotype schema)
+- Owner
+- **Relationships:** multi-row table — each row: direction (inbound / outbound), target element (search autocomplete), edge stereotype (e.g. depends_on, calls, serves)
+- **Diagram placement:** checklist of existing Diagrams in the selected Package — checked = hint to Munin to include this element
+
+On [Submit]: posts to the Munin pipeline with `source=human`. Munin validates placement and edge rules, produces a ChangeSet, auto-applies if in Auto-approval mode or queues for `Act 7` if in Manual-review mode.
+
+#### Screen: ELEMENT-EDIT_ELEMENT-1
+
+Same form as Create, pre-populated. Changes go through the same Munin pipeline.
+
+#### Screen: ELEMENT-DELETE_ELEMENT-1
+
+Modal: element name + stereotype; blast-radius panel showing all dependent relationships and elements affected. [Cancel] [Delete]. Deletion queues as a ChangeSet; Munin identifies now-orphaned relationships and includes them in the review.
+
+---
+
+
+
+## Act 4: Relationships — Full CRUDLF
+
+**Context:** Marcus needs to wire a `depends_on` relationship between two existing elements that Ratatosk missed, and correct an edge stereotype that was misclassified.
+
+**Pattern:** Full CRUDLF with LIST+FIND as entry point. All writes go through the Munin pipeline.
+
+#### Screen: RELATIONSHIP-LIST+FIND-1
+
+Marcus clicks "Relationships" in nav.
+
+**Layout:**
+
+- **Header:** "Relationships" with count badge
+- **Actions:** [Create Relationship]
+- **Filters:** Edge Stereotype, From Element, To Element, Confidence, Source
+- **Table:** From Element | Edge Stereotype | To Element | Confidence | Source | Actions
+- **Row actions:** View, Edit, Delete
+
+
+
+#### Screen: RELATIONSHIP-VIEW_RELATIONSHIP-1
+
+Detail page: from/to elements (linked), edge stereotype, properties, provenance (source, last verified, confidence), change history.
+
+#### Screen: RELATIONSHIP-CREATE_RELATIONSHIP-1
+
+**Form:**
+
+- From element (search autocomplete)
+- Edge stereotype (constrained by the from-element's allowed edge rules per its stereotype)
+- To element (search autocomplete, constrained by edge stereotype's allowed targets)
+- Properties (dynamic per edge stereotype schema)
+
+On [Submit]: Munin validates the edge against metamodel rules, creates the relationship, adds it to relevant diagrams, queues ChangeSet if Manual-review mode.
+
+#### Screen: RELATIONSHIP-EDIT_RELATIONSHIP-1
+
+Same form as Create, pre-populated. Changing the edge stereotype re-validates targets.
+
+#### Screen: RELATIONSHIP-DELETE_RELATIONSHIP-1
+
+Modal: from/to elements + edge stereotype; confirms deletion. Munin checks if any diagram layout or package integrity is affected.
+
+---
+
+
+
+## Act 5: MCP Browse — Query via Any AI Client
+
+**Context:** Priya is in Cursor, mid-task, and wants to know what depends on a service before touching it — without leaving her editor. Marcus wants to wire a batch of relationships programmatically.
+
+**Batch writes are intentionally excluded from the GUI.** In the GUI, batches are produced by Ratatosk runs and Munin's agentic loop, then reviewed as ChangeSets (`Act 7`). Manual batch entry via a GUI table is premature complexity — MCP's `update_elements_batch` / `update_relationships_batch` tools serve this need for scripting and automation, and `ask_munin` in chat handles it for interactive use.
+
+**Key design principle — GUI-free users are first-class citizens.** A significant class of users (architects embedded in AI-native workflows, platform engineers, automation authors) will *never* open the browser UI. Their interface is Claude Desktop, Cursor Agent, or a custom MCP client. The MCP tool catalog must provide **complete feature parity with the GUI** — every read, every write, every workflow action available in the browser must be reachable via a tool call. The GUI is a convenience wrapper; the MCP layer is the product.
+
+**Pattern:** No GUI screen — the FastMCP server exposes the same service layer as the REST API via `tools_handler.py` (Key Feature 4). Any MCP-aware client (Cursor, Claude Desktop, custom scripts) gets full read/write access to the live Model.
 
 Priya's `mcp_config.json` (from `AUTH-TOKEN-1`):
 
@@ -116,17 +347,87 @@ Priya's `mcp_config.json` (from `AUTH-TOKEN-1`):
 }
 ```
 
-She asks Cursor: "What depends on the Payment API?" → Cursor calls the `traverse` tool (`from=Payment API, direction=incoming`) → gets back elements, owners, and health, grounded in the live Model — never a hallucinated architecture (Key Feature 1; the Organizational AI persona in [PRD.MD](../../PRD.MD)).
+### MCP Tool Catalog
 
-Available tools mirror the REST surface: `search`, `get_element`, `traverse`. `ask_munin` (`Act 6`) is a separate, higher-level tool for conversational/narrative queries.
+#### Query tools (read-only)
+
+| Tool | Signature (key params) | Returns |
+|---|---|---|
+| `list_models` | _(none)_ | All registered Models with id, name, metamodel, mode (auto/manual) |
+| `list_elements` | `model?, stereotype?, package?, filter?, as_of?, cursor?` | Paginated element list — mirrors the GUI element list view |
+| `search` | `query, stereotype?, package?, filter?, as_of?` | Full-text + filter search; returns matching elements with properties |
+| `get_element` | `id_or_name` | Element: properties, relationships, provenance, confidence |
+| `list_relationships` | `model?, stereotype?, from_id?, to_id?, cursor?` | Paginated relationship list |
+| `get_relationship` | `id` | Relationship: from/to, stereotype, properties, provenance |
+| `traverse` | `from, direction?, depth?, stereotype?, as_of?` | Subgraph of elements and relationships |
+| `list_stereotypes` | `model?` | All stereotypes defined in the metamodel (populates filter dropdowns) |
+| `list_packages` | `model?` | All packages in the metamodel |
+| `list_diagrams` | `model?, package?` | All C4 diagrams — id, type (Context/Container/Component/Code), package |
+| `get_diagram` | `id` | Diagram with element + relationship membership |
+| `list_changesets` | `status?, source?` | Queue of pending/applied ChangeSets |
+| `get_changeset` | `id` | ChangeSet with full operations list and Munin reasoning |
+| `list_ratatosk_runs` | `model?, status?, limit?` | Paginated run list — id, trigger, status, timestamp, changeset_id |
+| `get_ratatosk_run` | `run_id` | Run status, extraction log, Munin blackboard |
+
+#### Write tools (all routed through Munin pipeline; respects Model's Auto/Manual mode)
+
+| Tool | Signature (key params) | Effect |
+|---|---|---|
+| `create_element` | `name, stereotype, package, properties?, relationships?, diagram_hints?` | Munin validates and places; auto-applies or queues ChangeSet |
+| `update_element` | `id, **fields` | Munin validates change; auto-applies or queues |
+| `delete_element` | `id` | Munin checks blast-radius; queues deletion ChangeSet |
+| `create_relationship` | `from_id, stereotype, to_id, properties?` | Munin validates edge rules; applies or queues |
+| `update_relationship` | `id, **fields` | Munin validates; applies or queues |
+| `delete_relationship` | `id` | Applies or queues |
+| `update_elements_batch` | `operations: list[{op, ...}]` | Batch create/update/delete; Munin plans as one ChangeSet |
+| `update_relationships_batch` | `operations: list[{op, ...}]` | Batch create/update/delete relationships |
+
+#### ChangeSet tools
+
+| Tool | Signature | Effect |
+|---|---|---|
+| `approve_changeset` | `id, item_ids?` | Approve all or specific items; Munin applies |
+| `reject_changeset` | `id, item_ids?, reason?` | Reject; reason appended to LEARNED if provided |
+| `do_other_changeset` | `id, item_ids, instructions` | Reject specific items and redirect Munin: "Do X instead"; Munin replans and produces a replacement ChangeSet; instructions appended to LEARNED |
+
+#### Model configuration tools
+
+| Tool | Signature | Effect |
+|---|---|---|
+| `set_model_mode` | `model_id, mode: auto\|manual` | Toggle whether high-confidence ops auto-apply or always queue for review |
+
+#### Munin tools (ontology specialist / conversational)
+
+| Tool | Signature | Returns |
+|---|---|---|
+| `ask_munin` | `question, context_element_ids?` | Answer text + cited element links + semantic URLs; may trigger agentic loop for complex operations |
+| `get_munin_blackboard` | `run_id` | Munin's current JSON task list (step status: pending / completed / failed) — for monitoring and recovery |
+
+#### Ratatosk tools (field agent)
+
+| Tool | Signature | Returns |
+|---|---|---|
+| `ask_ratatosk` | `path_or_diff, model, metamodel?, instructions?` | Ratatosk fetches current model via MCP, runs guided analysis, produces delta buckets; returns `run_id` immediately (async) |
+
+### Example interactions
+
+**Priya in Cursor (never opens the GUI):** "What depends on the Payment API?" → Cursor calls `traverse(from="payment-api", direction="incoming")` → elements, owners, confidence — grounded in the live Model. She then calls `create_relationship` to add a missing dependency; Munin queues a ChangeSet; she calls `approve_changeset` — all without leaving her editor.
+
+**Marcus via script:** bulk-wires a new service's relationships by calling `update_relationships_batch` with 12 operations; Munin plans one ChangeSet; Marcus calls `get_changeset` to inspect, then `approve_changeset`.
+
+**Elena in Claude Desktop (GUI-free):** calls `list_elements(stereotype="Domain", as_of="2026-01-01")` to see the domain model as it was six months ago; compares with current via `list_elements(stereotype="Domain")`; asks `ask_munin("What domain objects were added or changed since Jan?")`.
+
+**CI agent:** calls `ask_ratatosk(path="./repo", model="Yggdrasil")` post-merge → polls `get_ratatosk_run(run_id)` → on completion, calls `approve_changeset(id)` if all operations are high-confidence; calls `do_other_changeset` for the one item it's uncertain about, passing Munin a corrective instruction.
 
 ---
 
-## Act 4: CI/CD Maintenance — Ratatosk Update
 
-**Context:** Marcus's team merges a PR that adds a new downstream call. The Model must reflect that before the next architecture question gets asked against it.
 
-**Pattern:** Ratatosk runs as a pipeline step, fed the diff instead of a full repo scan (Phase 3: Maintain, [PRD.MD](../../PRD.MD)).
+## Act 6: CI/CD Maintenance — Ratatosk Update
+
+**Context:** Marcus's team merges a PR that adds a new downstream call. The Model must reflect that before the next architecture question is asked.
+
+**Pattern:** Ratatosk runs as a pipeline step, fed the diff instead of a full scan (Phase 3: Maintain).
 
 `.github/workflows/yggdrasil.yml` (or equivalent GitLab CI step):
 
@@ -134,119 +435,119 @@ Available tools mirror the REST surface: `search`, `get_element`, `traverse`. `a
 - name: Update Yggdrasil model
   run: |
     git log -p ${{ github.event.before }}..${{ github.sha }} \
-      | ratatosk update --model Yggdrasil --token=$YGGDRASIL_TOKEN
+      | ratatosk update --model Yggdrasil --token=$YGGDRASIL_TOKEN \
+          --instructions "Focus on interface changes — any API contracts added, removed, or modified?"
 ```
 
-Ratatosk parses the diff, identifies what changed structurally (new/removed calls, modules, dependencies), hands candidates to Munin for reconciliation, and posts the result as a run plus — if anything is low-confidence — a ChangeSet. Same pipeline as the bootstrap (`Act 1`), just incremental.
+Ratatosk first fetches the current model state via MCP, then analyzes the diff with the instructions as a focus, produces delta buckets (`to_add` / `to_update` / `to_delete`), and hands them to Munin. Munin plans a ChangeSet of precise graph operations. Same pipeline as the bootstrap (`Act 1`), just incremental — `unchanged` elements are never touched.
 
 ---
 
-## Act 5: Change Review — Munin's Integration
 
-**Context:** From the CI/CD run in `Act 4`, Ratatosk proposed 12 candidate elements; Munin placed 9 directly into the Model (high confidence) and queued 3 for human review because their package/stereotype placement was ambiguous.
+
+## Act 7: Change Review — Munin's Work Plan
+
+**Context:** Munin produces a ChangeSet after every write source (Ratatosk, human GUI, CI/CD, MCP). The ChangeSet is Munin's structured plan of precise graph operations — not raw candidates. Operating mode determines whether the human sees it before or after it applies.
+
+**Operating modes** (per-Model setting, accessible from Model config):
+
+- **Auto-approval**: Munin applies the ChangeSet directly to the Model. A completed ChangeSet is kept as an audit trail. The human can inspect it and roll back the entire run if needed.
+- **Manual-review**: all operations queue before applying. Human reviews each operation, accepts/rejects/instructs. Only then does Munin apply approved items.
+
+
 
 #### Screen: CHANGESET-LIST+FIND-1
 
-Queue: Run ID | Source | Submitted | Items | Confidence | Status (Pending/Applied/Rejected) | Actions.
+Queue: Run ID | Source (Ratatosk / Human / MCP) | Submitted | Operations | Mode | Status (Pending / Applied / Rolled Back / Rejected) | Actions.
 
 #### Screen: CHANGESET-VIEW_CHANGESET-1
 
-Diff view: Munin's proposed adds/updates/deletes side-by-side with the current graph, including Munin's reasoning for each placement (e.g. "placed under Container/Payment Service — closest existing Component by import graph"). [Approve All High Confidence] [Review Item-by-Item] [Reject].
+**Header:** Run ID, source, submission time, Mode badge (Auto / Manual), Munin's summary reasoning.
 
-Marcus approves the 3 pending items; the Model updates immediately and is reflected the next time anyone opens `VIEW-BROWSE-1` (`Act 2`) or queries via MCP (`Act 3`).
+**Operations list** — each row is one precise graph operation Munin planned:
+
+
+| #   | Operation      | Detail                                          | Status  | Actions                      |
+| --- | -------------- | ----------------------------------------------- | ------- | ---------------------------- |
+| 1   | Add Element    | "Notification Service" → Container / Technology | Pending | [Accept] [Reject] [Do Other] |
+| 2   | Link Element   | Notification Service →`depends_on`→ Payment API | Pending | [Accept] [Reject] [Do Other] |
+| 3   | Add to Diagram | Notification Service → Container Diagram C1     | Pending | [Accept] [Reject] [Do Other] |
+
+
+**[Do Other]:** opens an instruction input inline — user types a correction ("don't add this to the Container diagram, it's an external system"). On submit, Munin re-processes that single operation with the instruction prepended as context, then updates the LEARNED component so the same mistake is not repeated.
+
+**Bulk actions:** [Accept All] [Reject All] [Accept High Confidence]
+
+**Auto-approval ChangeSet view:** shows the same operations list, already applied, with a [Roll Back Entire Run] action that reverses all operations as a new ChangeSet (source=rollback).
+
+Marcus reviews 3 pending operations, accepts 2, uses [Do Other] on the third with "Code diagram is for repository structure, not runtime services" → Munin re-processes, moves the element to the Container diagram, appends the rule to LEARNED.
 
 ---
 
-## Act 6: Chat with Munin
 
-**Context:** Marcus is about to touch the Payment API and wants to know who owns it — and separately, the story of how it has drifted since the last release — before writing a line of code.
 
-**Pattern:** Munin's chat is embedded **inside** the View Browser (`VIEW-BROWSE-1`) as a side panel, not a standalone page, so when Munin scopes a view it drives the very screen it's attached to. It is also reachable headlessly via the `ask_munin` MCP tool (`Act 3`).
+## Act 8: Chat with Munin
+
+**Context:** Marcus is about to touch the Payment API and wants to know who owns it and how it has drifted since the last release, before writing a line of code.
+
+**Pattern:** Munin's chat is embedded **inside** the View Browser (`VIEW-BROWSE-1`) as a collapsible side panel — when Munin scopes a view or opens a form, it drives the surrounding screen directly. Also reachable headlessly via the `ask_munin` MCP tool (`Act 5`).
 
 #### Screen: CHAT-MUNIN-1 (embedded panel within VIEW-BROWSE-1)
 
 **Layout:**
-- **Chat thread** (panel, collapsible): user messages + Munin's responses with cited element links
+
+- **Chat thread:** user messages + Munin's responses with cited element links and clickable semantic URLs
 - **Context panel:** elements referenced in the last answer (live from graph)
 - **Input:** natural language + optional @element mentions
-- Munin answers from MCP/API ground truth only, never hallucinates architecture — and can navigate the surrounding View Browser directly via semantic URLs (`Act 2`)
 
-**Example 1 — find & navigate:** Marcus types "Who owns Payment API?" → Munin queries the graph, responds with owner/health, and navigates the surrounding view to `/elements/payment-api` (`ELEMENT-VIEW_ELEMENT-1`).
+Munin answers from ground truth only (never hallucinates), drives the surrounding View Browser via semantic URLs, and can open pre-filled create/edit forms via prefill URLs.
 
-**Example 2 — scope a view:** "Show me everything that depends on Payment API and is owned by another team" → Munin constructs and navigates to `/traverse?from=payment-api&direction=incoming&filter={"owner_ne":"my-team"}`.
+**Munin's agentic loop:** for complex requests, Munin runs multiple tool calls in sequence — fetch an element, inspect its linked elements, decide which to update, execute a batch operation — maintaining a blackboard of its intent that survives a crash and supports recovery (see System Notes).
 
-**Example 3 — tell a story:** "Tell me a story about changes in the model of Payment API" → Munin reads the bitemporal history (Key Feature 8: time-travel & diff) — every ChangeSet, Ratatosk run, and Munin placement decision that touched this element — and narrates it as a timeline, ending with a link to the diff between two points in time.
+**Example 1 — find & navigate:** "Who owns Payment API?" → Munin queries the graph, responds with owner/health, navigates the view to `/elements/payment-api`.
+
+**Example 2 — scope a view:** "Show me everything that depends on Payment API and is owned by another team" → Munin constructs `/traverse?from=payment-api&direction=incoming&filter={"owner_ne":"my-team"}` and navigates.
+
+**Example 3 — propose an element:** "Add Notification Service as a Container under Technology" → Munin responds with a clickable link to `/elements/new?prefill={"name":"Notification Service","stereotype":"Container","package":"technology"}` — the human clicks, reviews the pre-filled form, and submits.
+
+**Example 4 — tell a story:** "Tell me a story about changes in the model of Payment API" → Munin reads the bitemporal history — every ChangeSet, Ratatosk run, and Munin decision that touched this element — and narrates as a timeline with a diff link.
+
+**Example 5 — batch update:** "Link all Components in the Payment package to the new API Gateway" → Munin runs an agentic loop: searches for all Components in the Payment package, plans the relationship additions, calls `update_relationships_batch`, posts a ChangeSet for review if in Manual mode.
+
+**Example 6 — generate a briefing:** "Generate a Markdown briefing for the Payment System — one section per C4 level, Mermaid diagrams included, written for a non-technical audience" → Munin scopes the subgraph, generates Mermaid blocks for each level, writes a narrative per section, and returns a Markdown document in the chat — the user copies it or downloads it directly. (Same artifact as `EXPORT-BRIEFING-1`, generated conversationally rather than through the export UI.)
 
 ---
 
-## Act 7: Ratatosk & Munin Run History (read-only in GUI)
 
-**Context:** Alex checks the bootstrap run from `Act 1`, and the incremental run that just fired from `Act 4`.
+
+## Act 9: Ratatosk & Munin Run History (read-only in GUI)
+
+**Context:** Alex checks the bootstrap run from `Act 1` and the incremental run from `Act 6`.
 
 #### Screen: RATATOSK_RUN-LIST+FIND-1
 
-List: Run ID | Connector | Started | Duration | Elements discovered | ChangeSets created | Status.
+List: Run ID | Connector | Started | Duration | Candidates extracted | Operations planned | ChangeSets created | Status.
 
 #### Screen: RATATOSK_RUN-VIEW_RATATOSK_RUN-1
 
-Run log split by agent: Ratatosk's raw extraction (elements/relationships discovered, source diff/scan) and Munin's integration decisions (where each candidate was placed and why, what queued as a ChangeSet). Link to the resulting ChangeSet (`Act 5`).
-
----
-
-## Part II — Post-MVP (Governance & Manual Curation)
-
-**Scope:** Everything below serves Elena (Enterprise Architect) governing the metamodel and manually curating elements. None of it is required for the wedge (Part I) — Ratatosk and Munin populate and maintain the Model without manual CRUD. Kept here for completeness and next-iteration planning.
-
-## Act 8: Elements — Complete CRUDLF
-
-**Context:** Marcus occasionally needs to inspect and correct elements Ratatosk/Munin discovered.
-
-**Pattern:** Standard CRUDLF with LIST+FIND as entry point.
-
-#### Screen: ELEMENT-LIST+FIND-1
-
-Marcus clicks "Elements" in nav. List page:
-
 **Layout:**
-- **Header:** "Elements" with count badge
-- **Actions:** [Create Element] [Import]
-- **Search:** "Find elements…" (name, stereotype, package)
-- **Filters:** Stereotype, Package, Health, Source (Ratatosk/Munin/Manual)
-- **Table:** Name | Stereotype | Package | Owner | Health | Source | Actions
-- **Row actions:** View, Edit, Delete
-- **Empty state:** "No elements yet — connect Ratatosk or create manually"
 
-#### Screen: ELEMENT-VIEW_ELEMENT-1
-
-Detail page: structural properties (JSONB), behavioral links (incoming/outgoing relationships), state panel (health, provenance, confidence, last verified), mini Cytoscape ego-graph.
-
-#### Screen: ELEMENT-CREATE_ELEMENT-1 / ELEMENT-EDIT_ELEMENT-1
-
-Form: name, stereotype (dropdown from STEREOTYPE entities), package, properties (dynamic fields per stereotype schema), owner.
-
-#### Screen: ELEMENT-DELETE_ELEMENT-1
-
-Modal: confirms deletion; shows blast-radius (dependent relationships count).
+- **Ratatosk extraction log:** raw candidates discovered (elements, relationships, diff sections)
+- **Munin reasoning trace:** why each candidate was turned into a specific graph operation; edge rule checks; package placement decisions
+- **Munin blackboard:** JSON task list showing each step Munin intended to execute, with status (completed / skipped / failed) — visible for debugging and trust; persists through crashes for recovery
+- **Link to ChangeSet** (`Act 7`)
 
 ---
 
-## Act 9: Relationships — Complete CRUDLF
 
-**Context:** Marcus wires upstream/downstream dependencies.
 
-#### Screen: RELATIONSHIP-LIST+FIND-1
+## Part II — Post-MVP (Governance & Metamodel)
 
-List: From Element | Edge Type | To Element | Confidence | Actions.
-
-#### Screen: RELATIONSHIP-CREATE_RELATIONSHIP-1
-
-Form: from element (search), edge stereotype, to element (search), properties.
-
----
+**Scope:** Elements and Relationships are fully manageable in Part I (Acts 3-4). Part II is exclusively Elena's metamodel governance — Stereotypes, Packages, and Diagrams — enabling the Model to evolve beyond the C4 default.
 
 ## Act 10: Metamodel — Stereotypes & Packages
 
-**Context:** Elena governs the metamodel (Zachman/TOGAF stereotypes) once the Model has matured beyond C4-only.
+**Context:** Elena governs the metamodel once the Model has matured beyond C4-only.
 
 #### Screen: STEREOTYPE-LIST+FIND-1
 
@@ -262,11 +563,23 @@ Diagrams per package; [Open in Graph Editor] launches Cytoscape layout editor.
 
 ---
 
+
+
 ## System Notes
 
 - **Web UI:** Django + HTMX + Bootstrap + Cytoscape.js
-- **API:** DRF REST (engine); all writes go through a ChangeSet when the source is Ratatosk/Munin
-- **MCP:** FastMCP thin layer over REST for Claude/Cursor/any MCP client; raw tools (`search`, `get_element`, `traverse`) plus a higher-level `ask_munin` tool
-- **Ratatosk:** CLI only in MVP (`ratatosk bootstrap`, `ratatosk update`); field agent — NER + reconciliation against the existing graph; GUI shows run history via API, never triggers a run
-- **Munin:** ontology specialist sitting between Ratatosk and the Model — decides package/diagram placement, auto-applies high-confidence changes, queues the rest as a ChangeSet; reachable via chat (embedded in the View Browser) and MCP; constructs semantic URLs on the user's behalf
+- **API:** DRF REST (engine); all writes (human, Ratatosk, MCP) go through the Munin/ChangeSet pipeline
+- **MCP:** FastMCP thin layer over REST; raw tools: `search`, `get_element`, `traverse`, `update_elements_batch`, `update_relationships_batch`; higher-level tool: `ask_munin`
+- **Ratatosk:** CLI only in MVP (`ratatosk bootstrap`, `ratatosk update`); field agent — model-aware NER + reconciliation (small/fast/cheap LLM); internal loop: (1) fetch current model state via MCP, (2) run guided analysis (code/diff + optional `--instructions`), (3) classify findings into delta buckets (`to_add` / `to_update` / `to_delete` / `unchanged`), (4) hand buckets to Munin; `unchanged` elements are never sent to Munin — no noise; GUI shows run history, never triggers runs; also invocable via `ask_ratatosk` MCP tool
+- **Munin — ontology specialist and agentic planner:**
+  - Reads candidates from any source (Ratatosk, human form, MCP) and produces a ChangeSet: a structured plan of precise graph operations (add/update/delete/link)
+  - Operates via an agentic loop with access to the same tools as MCP (via `tools_handler.py` exposing all `*_service.py`)
+  - Maintains a **blackboard** (JSON task list) of its current intent — written before acting, updated as steps complete; survives crashes; visible in run history
+  - Supports **batch operations** (`update_elements_batch`, `update_relationships_batch`) for multi-element reasoning in a single loop
+  - **LEARNED component:** append-only log of `MuninRule` entities (`{model, rule_text, source_changeset_item, contributed_by, created_at}`) built from user "Do Other" feedback; prepended to Munin's BASE prompt on every run so corrections persist; per-Model, user-attributed, versioned
+  - Generates semantic URLs and prefill URLs in chat responses (clickable HTML links)
+  - Embedded in the View Browser as `CHAT-MUNIN-1`; also reachable via `ask_munin` MCP tool
+- **ChangeSet operating modes** (per-Model): **Auto-approval** — Munin applies directly, ChangeSet kept as audit trail with rollback available; **Manual-review** — all operations queue for human accept/reject/do-other before applying
+- **Concurrency:** optimistic locking on Element and Relationship writes; concurrent edits detected and surfaced as conflicts in the ChangeSet rather than silent overwrites
 - **Auth:** session auth for the Web UI; personal access tokens (`AUTH-TOKEN-1`) for Ratatosk CLI and MCP clients
+

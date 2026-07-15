@@ -28,8 +28,30 @@ Priya opens "Settings → API Access" from the user menu.
 - **[Generate New Token]** → modal: name (e.g. "laptop-ratatosk"), scope (read-only / read-write), [Create] → token shown once, [Copy]
 - **Usage snippets** (copy-paste ready):
   - Shell: `export YGGDRASIL_TOKEN=<token>`
-  - Ratatosk CLI: `ratatosk bootstrap ./repo --token=<token>`
-  - `mcp_config.json`:
+  - Ratatosk CLI (install once, then use in any shell or CI pipeline):
+    ```bash
+    pip install ratatosk
+    ratatosk bootstrap ./repo --token=<token>
+    ```
+  - MCP via Docker (run locally, no cloud credentials in MCP client):
+    ```bash
+    docker run -d \
+      -e YGGDRASIL_TOKEN=<token> \
+      -e YGGDRASIL_SERVER_URL=https://yggdrasil.featurefactory.io \
+      -p 8001:8001 \
+      ghcr.io/yggdrasil/yggdrasil-mcp:latest
+    ```
+    `mcp_config.json` (points to local container):
+    ```json
+    {
+      "mcpServers": {
+        "yggdrasil": {
+          "base_url": "http://localhost:8001"
+        }
+      }
+    }
+    ```
+  - MCP direct (cloud — no Docker required):
     ```json
     {
       "mcpServers": {

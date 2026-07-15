@@ -15,23 +15,30 @@ Inception phase establishes the product vision, UX specification, and software a
 Use this diagram to track progress through the phase. Each node is a checkpoint — activities produce artifacts (cylinders), gates require explicit human approval before continuing.
 
 ```mermaid
+---
+title: Inception DAG
+---
 flowchart TD
+    classDef activity fill:#dbeafe,stroke:#2563eb,color:#1e3a5f
+    classDef artifact fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef gate     fill:#fef9c3,stroke:#ca8a04,color:#713f12
+    classDef exit     fill:#f0fdf4,stroke:#15803d,color:#14532d
 
     %% ── ESM: Envision System ─────────────────────────────
     subgraph ESM["ESM — Envision System"]
         direction TB
         ESM01["ESM-01: Establish Conventions"]
         ESM02["ESM-02: Define User Journey"]
-        UJ[("user_journey.md")]
-        GATE_A{"Gate A: User Journey Review"}
+        UJ("user_journey.md")
+        GATE_A{{"Gate A: User Journey Review"}}
         ESM03["ESM-03: Define Information Architecture"]
-        IA[("IA_guidelines.md")]
+        IA("IA_guidelines.md")
         ESM04["ESM-04: Create Dialogue Maps"]
-        SF[("screen-flow.drawio")]
+        SF("screen-flow.drawio")
         ESM05["ESM-05: Write Feature Files"]
-        FF[("docs/features/act-X/*.feature")]
+        FF("docs/features/act-X/")
         ESM06["ESM-06: Create Mockups"]
-        MK[("mockups/ + templates/mockups/")]
+        MK("mockups/ + templates/mockups/")
         ESM07["ESM-07: Feed into Implementation"]
 
         ESM01 --> ESM02
@@ -73,8 +80,8 @@ flowchart TD
         DTA16["DTA-16: Developer Experience"]
         DTA17["DTA-17: Documentation Strategy"]
         DTA18["DTA-18: Write SAO.md"]
-        SAO[("docs/architecture/SAO.md")]
-        GATE_B{"Gate B: SAO Review"}
+        SAO("docs/architecture/SAO.md")
+        GATE_B{{"Gate B: SAO Review"}}
 
         DTA01 --> DTA02 --> DTA03 --> DTA04 --> DTA05 --> DTA06
         DTA06 --> DTA07 --> DTA08 --> DTA09 --> DTA10 --> DTA11
@@ -91,12 +98,6 @@ flowchart TD
     %% ── Phase exit ───────────────────────────────────────
     GATE_B --> ELAB["Elaboration: Plan Sprint / Execute Sprint"]
 
-    %% ── Styles ───────────────────────────────────────────
-    classDef activity fill:#dbeafe,stroke:#2563eb,color:#1e3a5f
-    classDef artifact fill:#dcfce7,stroke:#16a34a,color:#14532d
-    classDef gate     fill:#fef9c3,stroke:#ca8a04,color:#713f12
-    classDef exit     fill:#f0fdf4,stroke:#15803d,color:#14532d
-
     class ESM01,ESM02,ESM03,ESM04,ESM05,ESM06,ESM07 activity
     class DTA01,DTA02,DTA03,DTA04,DTA05,DTA06,DTA07,DTA08,DTA09,DTA10,DTA11,DTA12,DTA13,DTA14,DTA15,DTA16,DTA17,DTA18 activity
     class UJ,IA,SF,FF,MK,SAO artifact
@@ -109,7 +110,7 @@ flowchart TD
 | Style | Meaning |
 |---|---|
 | Blue rectangle | Activity (action to perform) |
-| Green cylinder | Artifact (file produced on disk) |
-| Yellow diamond | Gate — **requires explicit human approval** before continuing |
+| Green rounded rect | Artifact (file produced on disk) |
+| Yellow hexagon | Gate — **requires explicit human approval** before continuing |
 | Solid arrow `→` | Primary dependency (must complete first) |
 | Dashed arrow `-.->` | Secondary input (document read, not blocking sequencing) |

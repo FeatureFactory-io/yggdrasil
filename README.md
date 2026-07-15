@@ -90,33 +90,35 @@ make test-all           # everything
 
 ### Option A — local Docker container (recommended)
 
-```bash
-docker run -d \
-  -e YGGDRASIL_TOKEN=<your-token> \
-  -e YGGDRASIL_SERVER_URL=https://yggdrasil.featurefactory.io \
-  -p 8001:8001 \
-  ghcr.io/yggdrasil/yggdrasil-mcp:latest
-```
+The MCP client starts the container on demand. No port mapping or manual `docker run` needed.
 
-`mcp_config.json` (points to local container — no cloud credentials in MCP client):
+`mcp_config.json`:
 
 ```json
 {
   "mcpServers": {
     "yggdrasil": {
-      "base_url": "http://localhost:8001"
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "YGGDRASIL_TOKEN=<your-token>",
+        "-e", "YGGDRASIL_SERVER_URL=https://yggdrasil.featurefactory.io",
+        "ghcr.io/yggdrasil/yggdrasil-mcp:latest"
+      ]
     }
   }
 }
 ```
 
-### Option B — MCP direct (cloud)
+The container authenticates against the Yggdrasil DRF API using `YGGDRASIL_TOKEN` and communicates with the MCP client over stdio. Your token never leaves your machine.
+
+### Option B — MCP direct (cloud, SSE)
 
 ```json
 {
   "mcpServers": {
     "yggdrasil": {
-      "base_url": "https://yggdrasil.featurefactory.io/mcp",
+      "url": "https://yggdrasil.featurefactory.io/mcp/sse",
       "headers": { "Authorization": "Bearer <your-token>" }
     }
   }

@@ -33,30 +33,30 @@ Priya opens "Settings → API Access" from the user menu.
     pip install ratatosk
     ratatosk bootstrap ./repo --token=<token>
     ```
-  - MCP via Docker (run locally, no cloud credentials in MCP client):
-    ```bash
-    docker run -d \
-      -e YGGDRASIL_TOKEN=<token> \
-      -e YGGDRASIL_SERVER_URL=https://yggdrasil.featurefactory.io \
-      -p 8001:8001 \
-      ghcr.io/yggdrasil/yggdrasil-mcp:latest
-    ```
-    `mcp_config.json` (points to local container):
+  - MCP via Docker (recommended — MCP client starts the container on demand, token stays local):
+    `mcp_config.json`:
     ```json
     {
       "mcpServers": {
         "yggdrasil": {
-          "base_url": "http://localhost:8001"
+          "command": "docker",
+          "args": [
+            "run", "--rm", "-i",
+            "-e", "YGGDRASIL_TOKEN=<token>",
+            "-e", "YGGDRASIL_SERVER_URL=https://yggdrasil.featurefactory.io",
+            "ghcr.io/yggdrasil/yggdrasil-mcp:latest"
+          ]
         }
       }
     }
     ```
+    The container authenticates against the Yggdrasil DRF API using `YGGDRASIL_TOKEN` and exposes MCP tools over stdio. No port mapping needed.
   - MCP direct (cloud — no Docker required):
     ```json
     {
       "mcpServers": {
         "yggdrasil": {
-          "base_url": "https://yggdrasil.featurefactory.io/mcp",
+          "url": "https://yggdrasil.featurefactory.io/mcp/sse",
           "headers": { "Authorization": "Bearer <token>" }
         }
       }
@@ -604,4 +604,3 @@ Diagrams per package; [Open in Graph Editor] launches Cytoscape layout editor.
 - **ChangeSet operating modes** (per-Model): **Auto-approval** — Munin applies directly, ChangeSet kept as audit trail with rollback available; **Manual-review** — all operations queue for human accept/reject/do-other before applying
 - **Concurrency:** optimistic locking on Element and Relationship writes; concurrent edits detected and surfaced as conflicts in the ChangeSet rather than silent overwrites
 - **Auth:** session auth for the Web UI; personal access tokens (`AUTH-TOKEN-1`) for Ratatosk CLI and MCP clients
-

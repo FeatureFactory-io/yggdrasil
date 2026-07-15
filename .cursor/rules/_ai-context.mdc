@@ -1,0 +1,214 @@
+---
+description: Master AI context for Yggdrasil. Read at the start of every conversation or task.
+alwaysApply: true
+---
+
+# Yggdrasil — AI Context
+
+> Read this file at the start of every conversation or task. It is the map; the other docs are the territory.
+
+---
+
+## What Is Yggdrasil
+
+Yggdrasil is an AI-augmented architecture knowledge-graph platform that keeps a living, queryable model of a software system synchronized with its codebase via CI/CD. The system is queried through a web GUI, a REST API, and an MCP interface usable from any AI client (Cursor, Claude Desktop, custom scripts).
+
+**Three distributable artifacts per release:**
+- Backend container (ECR → Elastic Beanstalk)
+- MCP facade container (GHCR, public — `docker run … ghcr.io/yggdrasil/yggdrasil-mcp:latest`)
+- Ratatosk CLI (PyPI — `pip install ratatosk`)
+
+**Full offline/desktop mode**: `docker-compose + Ollama`, zero cloud credentials required.
+
+---
+
+## Architecture Quick Reference
+
+**Pattern**: Modular Django monolith — single project, each bounded context is a Django app.
+
+```
+src/yggdrasil/
+├── auth/        # Session auth, personal access tokens (SHA-256 hashed), RBAC
+├── graph/       # Element, Relationship, Stereotype, Package, Diagram
+├── changeset/   # ChangeSet, ChangeSetItem — ALL writes go through here
+├── munin/       # Agentic planner (larger LLM) — reads ChangeSets, produces graph ops
+├── ratatosk/    # RataskRun model, CLI integration models, run history
+├── mcp/         # FastMCP server — exposes full service layer as MCP tools
+├── api/         # DRF routers + serializers — REST interface for GUI, CLI, MCP
+├── llm/         # LLMClient protocol + AnthropicClient / OpenAIClient / OllamaClient
+└── web/         # Django views, HTMX partials, templates, Cytoscape.js rendering
+```
+
+**Dependency rules (no circular imports):**
+```
+munin    → graph, changeset, llm
+ratatosk → graph, munin, llm
+mcp      → graph, changeset, munin (via api service layer)
+api      → graph, changeset, munin, ratatosk, auth
+web      → api (via service layer), graph, changeset
+```
+
+**Key design decisions:**
+1. All writes (human, Ratatosk, MCP) go through the Munin / ChangeSet pipeline — graph integrity never bypassed
+2. `LLMClient` protocol abstracts Anthropic / OpenAI / Ollama — swap per environment
+3. Celery + Redis for async tasks (local docker-compose, no SQS)
+4. Server-rendered HTMX — testable with Django test client, no browser required for most tests
+5. Blue/green EB CNAME swap for zero-downtime production releases
+
+**Full architecture**: `docs/architecture/SAO.md`
+
+---
+
+## Tech Stack
+
+| Layer | Tool | Version |
+|---|---|---|
+| Language | Python | 3.14 |
+| Web | Django + DRF + HTMX | 5.1+ |
+| Graph viz | Cytoscape.js | 3.x (CDN) |
+| MCP | FastMCP | 2.x |
+| Async | Celery + Redis | 5.x + 7.x |
+| LLM (local) | Ollama | latest |
+| DB (local) | PostgreSQL 16 (docker-compose) | |
+| DB (prod) | Aurora PostgreSQL serverless v2 | |
+| IaC | AWS CDK (Python) | 2.x |
+| Tests | pytest + behave + Playwright | |
+| Linting | ruff + mypy | 0.6+ / 1.x |
+| Packaging | uv | 0.11+ |
+
+---
+
+## Documentation Map
+
+| What | Where | When to Read |
+|------|-------|--------------|
+| System architecture (all decisions) | `docs/architecture/SAO.md` | Before any non-trivial change |
+| User journey / all Acts | `docs/features/user_journey.md` | Feature planning |
+| Feature specs (BDD) | `docs/features/act-*/` | Before implementing any feature |
+| UI patterns & IA | `docs/ux/IA_guidelines.md` | Before building UI |
+| Screen flow & domain model | `docs/ux/2_dialogue-maps/screen-flow.md` | UI navigation and Screen IDs |
+| Screen ID conventions | `docs/conventions.md` | Whenever touching UI routes or IDs |
+| PRD (personas, use cases) | `PRD.MD` | Understanding who uses the system |
+| Development rules | `.cursor/rules/*.mdc` | Always active (auto-loaded) |
+| Process playbook | `.cursor/playbooks/edda/` | When running a workflow |
+
+---
+
+## Available Workflows (Edda Playbook)
+
+| Workflow | Purpose | Activities | When to Use |
+|----------|---------|------------|-------------|
+| ESM | Envision the System | 7 | Defining what to build |
+| DTA | Define Technical Architecture | 18 | Making architectural decisions |
+| DSP | Deploy Software Process | 6 | Setting up AI IDE |
+| BSP | Bootstrap Project | 8 | Scaffolding new project |
+| BPE | Build Feature | N | **Primary workflow for feature delivery** |
+
+Workflow files: `.cursor/playbooks/edda/{WORKFLOW}/`
+
+---
+
+## Available Rules (auto-loaded from `.cursor/rules/`)
+
+| Rule | `alwaysApply` | What it enforces |
+|---|---|---|
+| `add-logging.mdc` | true | Always add `app.log`, rotating file handler, INFO-level structured logging |
+| `do-write-concise-methods.mdc` | true | Public methods ≤ 20–30 lines; delegate to private helpers |
+| `do-follow-commit-convention.mdc` | true | Angular commit convention (`type(scope): subject`) |
+| `do-docstring-format.mdc` | false | Sphinx `:param:`/`:return:`/`:raises:` with example values |
+| `do-test-first.mdc` | false | Write failing test first; red → green → refactor |
+| `do-not-mock-in-integration-tests.mdc` | false | Integration tests use real objects, real DB, real fixtures |
+| `do-continuous-testing.mdc` | false | Run tests after every change |
+| `do-skeletons-first.mdc` | false | Docstrings + types + stubs before implementation |
+| `pytest.mdc` | false | pytest conventions for this project |
+| `do-import-on-module-level.mdc` | false | No local imports inside functions |
+| `do-informative-logging.mdc` | false | Logs must answer: who / what / when / why |
+| `do-plan-before-doing.mdc` | false | Pseudocode + skeleton before coding |
+| `do-semantic-versioning-on-ui-elements.mdc` | false | `data-testid` attributes on interactive UI elements |
+| `do-validate-api-contracts.mdc` | false | Validate API contracts in tests |
+| `do-test-fixture-data-management.mdc` | false | Fixture strategy: `seed.json` for dev, factories for tests |
+| `never-delete-mindlessly.mdc` | false | Check before deleting code or data |
+| `do-small-increments.mdc` | false | Small commits, one concern per PR |
+| `do-pull-frequently.mdc` | false | Pull before starting work |
+| `do-github-issues.mdc` | false | Reference issue numbers in commits |
+| `do-check-before-deleting.mdc` | false | Confirm destructive operations |
+
+---
+
+## Artifact Templates
+
+| Template | Workflow | Purpose | Location |
+|----------|----------|---------|----------|
+| User Journey Template | ESM | Structure for user journey doc | `.cursor/playbooks/edda/artifacts/22-User_Journey_Template.md` |
+| IA Guidelines Template | ESM | Design system & UI patterns | `.cursor/playbooks/edda/artifacts/23-IA_Guidelines_Template.md` |
+| Feature File Template | ESM | BDD scenario format (Gherkin) | `.cursor/playbooks/edda/artifacts/24-Feature_File_Template_Gherkin.md` |
+| Screen Flow Template | ESM | Dialogue map & Mermaid screen flows | `.cursor/playbooks/edda/artifacts/44-Screen_Flow_Dialogue_Map_Template.md` |
+| SAO Template | DTA | Architecture document structure | `.cursor/playbooks/edda/artifacts/21-System_Architecture_Overview_Template.md` |
+| Cursor Rules Template | DSP | AI config for Cursor | `.cursor/playbooks/edda/artifacts/20-WindsurfCursor_Rules_Template.md` |
+| CLAUDE.md Template | DSP | AI config for Claude Code | `.cursor/playbooks/edda/artifacts/18-CLAUDEmd_Template.md` |
+| Copilot Instructions | DSP | AI config for GitHub Copilot | `.cursor/playbooks/edda/artifacts/19-Copilot_Instructions_Template.md` |
+| Makefile Template | BSP | Project orchestration | `.cursor/playbooks/edda/artifacts/11-Makefile_Template.md` |
+| Implementation Plan | BPE | Feature implementation plan | `.cursor/playbooks/edda/artifacts/9-Implementation_Plan_Template.md` |
+| Definition of Done | BPE | DoD checklist for sign-off | `.cursor/playbooks/edda/artifacts/43-Definition_of_Done_Checklist_Template.md` |
+| Test Architecture | BPE | Test architecture document | `.cursor/playbooks/edda/artifacts/48-Test_Architecture_Document.md` |
+| CI Pipeline (GH Actions) | BSP | GitHub Actions CI workflow | `.cursor/playbooks/edda/artifacts/12-CI_Pipeline_GitHub_Actions.md` |
+| CD Pipeline (GH Actions) | BSP | GitHub Actions CD workflow | `.cursor/playbooks/edda/artifacts/13-CD_Pipeline_GitHub_Actions.md` |
+| CDK Stack Templates | DTA | AWS CDK Python stacks | `.cursor/playbooks/edda/artifacts/16-CDK_Stack_Templates.md` |
+
+---
+
+## AI / Human Collaboration
+
+**AI does**: Code generation following established patterns, test implementation, docstrings, refactoring within architectural boundaries.
+
+**Human does**: Architectural decisions beyond existing patterns, code review, security-sensitive implementations, production deployment.
+
+**Escalate to human when**: Requirements are ambiguous, a decision is outside existing SAO.md patterns, or code touches auth/security/secrets.
+
+**Quality gates (in order):**
+1. All tests pass (`make test`)
+2. Coverage ≥ 80% (`make test`)
+3. Lint + types pass (`make check`)
+4. Docstrings on all public APIs
+5. Human review before merge
+
+---
+
+## How to Build Features (BPE Summary)
+
+1. Read the feature spec in `docs/features/act-*/` (Gherkin)
+2. Read `docs/architecture/SAO.md` for the relevant bounded context
+3. Check `docs/ux/2_dialogue-maps/screen-flow.md` for Screen IDs and navigation
+4. Skeleton first: docstrings + type hints + stubs
+5. Write failing tests (red)
+6. Implement minimum code to pass (green)
+7. Refactor; all tests green
+8. PR with conventional commit message
+
+---
+
+## Running Locally
+
+```bash
+# One-time setup
+make provision          # installs deps, copies .env, installs pre-commit hooks
+
+# Start backing services (Postgres + Redis)
+make up                 # or: make up-desktop (adds Ollama for local LLM)
+
+# First run
+make migrate            # apply migrations
+make run                # http://localhost:8000  (or F5 in Cursor)
+
+# Tests (no Docker required)
+make test               # unit + integration, in-memory SQLite
+make test-at            # acceptance tests (behave-django)
+make check              # lint + typecheck
+
+# Useful shortcuts
+make shell              # Django shell_plus
+make seed               # load fixtures/seed.json
+```
+
+**F5 in Cursor** → launches `Django: Run Server` configuration (`.vscode/launch.json`).
+Requires: `.env` present + `make up` running (Postgres + Redis).

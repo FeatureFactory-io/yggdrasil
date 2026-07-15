@@ -1,0 +1,4 @@
+# AWS CDK Python deps — used by the infra/ stack only.
+# Install in a separate venv: cd infra && python -m venv .venv && pip install -r requirements.txt
+aws-cdk-lib>=2.150
+constructs>=10.3

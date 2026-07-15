@@ -1,0 +1,25 @@
+# MCP facade container — FastMCP server
+# Published to GHCR (public image) for users to run locally.
+# Users run: docker run -e YGGDRASIL_TOKEN=<token> -e YGGDRASIL_SERVER_URL=... \
+#            -p 8001:8001 ghcr.io/yggdrasil/yggdrasil-mcp:latest
+FROM python:3.14-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
+# MCP facade has its own minimal deps (fastmcp + httpx)
+COPY pyproject.toml README.md ./
+COPY src/yggdrasil/mcp/ ./src/yggdrasil/mcp/
+
+RUN pip install fastmcp httpx
+
+# YGGDRASIL_TOKEN and YGGDRASIL_SERVER_URL are required at runtime
+ENV YGGDRASIL_SERVER_URL=http://localhost:8000
+
+EXPOSE 8001
+
+CMD ["python", "-m", "yggdrasil.mcp.server"]

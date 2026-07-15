@@ -52,6 +52,7 @@ dev = [
     "behave>=1.2.6",
     "behave-django>=1.4",
     "playwright>=1.46",
+    "watchdog>=5.0",
 
     # Linting & formatting
     "ruff>=0.6",
@@ -90,6 +91,7 @@ dev = [
     "behave>=1.2.6",
     "behave-django>=1.4",
     "playwright>=1.46",
+    "watchdog>=5.0",
     "ruff>=0.6",
     "mypy>=1.11",
     "django-stubs>=5.1",
@@ -130,7 +132,7 @@ plugins = ["mypy_django_plugin.main"]
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = ["*.migrations.*", "*.tests.*"]
+module = ["*.migrations.*", "*.tests.*", "tests.*", "features.*", "conftest"]
 ignore_errors = true
 
 [tool.django-stubs]
@@ -142,11 +144,12 @@ django_settings_module = "yggdrasil.settings"
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "yggdrasil.test_settings"
 pythonpath = ["src"]
-testpaths = ["src", "features"]
-addopts = "--strict-markers -q"
+testpaths = ["src", "features", "tests"]
+addopts = "--strict-markers -q --log-file=tests.log --log-file-level=INFO"
 markers = [
     "unit: pure unit tests, no DB",
     "integration: tests requiring DB / services",
+    "acceptance: acceptance tests (behave BDD)",
     "e2e: end-to-end browser tests (slow)",
 ]
 

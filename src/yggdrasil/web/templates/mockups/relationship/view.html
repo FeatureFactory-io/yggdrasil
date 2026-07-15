@@ -1,0 +1,139 @@
+{% extends "mockups/base.html" %}
+{% block screen_id %}RELATIONSHIP-VIEW_RELATIONSHIP-1{% endblock %}
+{% block title %}{{ relationship.from_element }} → {{ relationship.to_element }}{% endblock %}
+{% block nav_relationships %}active{% endblock %}
+
+{% block page_header %}
+<!-- Row 1: breadcrumb — §4.2, §11.1 -->
+<nav aria-label="breadcrumb" class="mb-1">
+  <ol class="breadcrumb mb-0 small">
+    <li class="breadcrumb-item"><a href="{% url 'mockup_relationship_list' %}">Relationships</a></li>
+    <li class="breadcrumb-item active" aria-current="page">
+      {{ relationship.from_element }} → {{ relationship.to_element }}
+    </li>
+  </ol>
+</nav>
+
+<!-- Row 2: title + action cluster — §13.2 VIEW header order: [Delete] [Edit] -->
+<div class="d-flex align-items-center justify-content-between">
+  <h1 class="hg-page-title">Relationship detail</h1>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal"
+            data-bs-target="#deleteRelationshipModal" data-testid="delete-relationship-btn">
+      <i class="fa-solid fa-trash me-1" aria-hidden="true"></i>Delete
+    </button>
+    <a href="{% url 'mockup_relationship_edit' id=relationship.id %}"
+       class="btn btn-primary btn-sm" data-testid="edit-relationship-btn">
+      <i class="fa-solid fa-pen me-1" aria-hidden="true"></i>Edit
+    </a>
+  </div>
+</div>
+
+<!-- Row 3: metadata sub-row — VIEW screens only, §11.1 -->
+<div class="yrg-meta-row mt-1">
+  <span><i class="fa-solid fa-link me-1" aria-hidden="true"></i>{{ relationship.edge_stereotype }}</span>
+  <span>·</span>
+  <span class="hg-badge-source hg-badge-{{ relationship.source }}">{{ relationship.source }}</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<div data-testid="relationship-view-page" style="max-width:600px;">
+  <div class="hg-card p-4">
+
+    <!-- Edge visualization -->
+    <div class="d-flex align-items-center justify-content-center gap-3 py-3 mb-4"
+         style="background:var(--hg-bg-body);border-radius:6px;">
+      <a href="{% url 'mockup_element_view' id=relationship.from_id %}"
+         class="text-decoration-none">
+        <div class="text-center">
+          <div class="fw-semibold" style="font-size:0.9rem;">{{ relationship.from_element }}</div>
+          <div class="text-muted small">from</div>
+        </div>
+      </a>
+      <div class="text-center">
+        <div style="font-size:0.72rem;color:var(--hg-ink-muted);">──────</div>
+        <code style="font-size:0.78rem;color:var(--hg-primary);">{{ relationship.edge_stereotype }}</code>
+        <div style="font-size:0.72rem;color:var(--hg-ink-muted);">──────▶</div>
+      </div>
+      <a href="{% url 'mockup_element_view' id=relationship.to_id %}"
+         class="text-decoration-none">
+        <div class="text-center">
+          <div class="fw-semibold" style="font-size:0.9rem;">{{ relationship.to_element }}</div>
+          <div class="text-muted small">to</div>
+        </div>
+      </a>
+    </div>
+
+    <dl class="row mb-0" style="font-size:0.85rem;">
+      <dt class="col-4 text-muted fw-normal">Edge stereotype</dt>
+      <dd class="col-8"><code>{{ relationship.edge_stereotype }}</code></dd>
+      <dt class="col-4 text-muted fw-normal">Source</dt>
+      <dd class="col-8">
+        <span class="hg-badge-source hg-badge-{{ relationship.source }}">{{ relationship.source }}</span>
+      </dd>
+      <dt class="col-4 text-muted fw-normal">Confidence</dt>
+      <dd class="col-8">
+        <div class="yrg-confidence" title="Confidence: {{ relationship.confidence }}" aria-label="Confidence {{ relationship.conf_pct }}%">
+          <div class="yrg-confidence-track">
+            <div class="yrg-confidence-fill" style="width:{{ relationship.conf_pct }}%;background:var(--yrg-conf-{{ relationship.conf_band }});"></div>
+          </div>
+          <span class="yrg-confidence-label">{{ relationship.confidence }}</span>
+        </div>
+      </dd>
+      {% for k, v in relationship.properties.items %}
+      <dt class="col-4 text-muted fw-normal">{{ k }}</dt>
+      <dd class="col-8">{{ v }}</dd>
+      {% endfor %}
+    </dl>
+  </div>
+</div>
+
+<!-- Screen: RELATIONSHIP-DELETE_RELATIONSHIP-1 -->
+<!-- Delete confirmation modal — §6.4, §12.4: delete is always a modal, never a full page -->
+<div class="modal fade" id="deleteRelationshipModal" tabindex="-1"
+     aria-labelledby="deleteRelationshipModalLabel" data-testid="relationship-delete-modal">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteRelationshipModalLabel">Delete Relationship?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1">
+          <strong>{{ relationship.from_element }}</strong>
+          →<code class="mx-1">{{ relationship.edge_stereotype }}</code>→
+          <strong>{{ relationship.to_element }}</strong>
+        </p>
+        <p class="text-muted small mb-0">
+          Munin will check diagram layout and package integrity, then queue a ChangeSet.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <form method="post" action="{% url 'mockup_changeset_view' id=1 %}"
+              data-testid="relationship-delete-form" class="mb-0">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger" data-testid="confirm-delete-btn"
+                  onclick="console.log('[mockup:relationship-delete_relationship-1] delete confirmed, id={{ relationship.id }}')">
+            <i class="fa-solid fa-trash me-1" aria-hidden="true"></i>Delete
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    console.log('[mockup:relationship-view_relationship-1] page loaded, id={{ relationship.id }}');
+    document.querySelector('[data-testid="relationship-delete-form"]').addEventListener('submit', function (e) {
+      e.preventDefault();
+      console.log('[mockup:relationship-delete_relationship-1] delete confirmed');
+      window.location.href = "{% url 'mockup_changeset_view' id=1 %}";
+    });
+  });
+</script>
+{% endblock %}

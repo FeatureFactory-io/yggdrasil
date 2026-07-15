@@ -1,0 +1,198 @@
+{% extends "mockups/base.html" %}
+{% block screen_id %}ELEMENT-VIEW_ELEMENT-1{% endblock %}
+{% block title %}{{ element.name }}{% endblock %}
+{% block nav_elements %}active{% endblock %}
+
+{% block page_header %}
+<!-- Row 1: breadcrumb — §4.2, §11.1 -->
+<nav aria-label="breadcrumb" class="mb-1">
+  <ol class="breadcrumb mb-0 small">
+    <li class="breadcrumb-item"><a href="{% url 'mockup_element_list' %}">Elements</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ element.name }}</li>
+  </ol>
+</nav>
+
+<!-- Row 2: title + action cluster — §13.2 VIEW header order: [Delete] [Edit] -->
+<div class="d-flex align-items-center justify-content-between">
+  <h1 class="hg-page-title d-flex align-items-center gap-2">
+    <span class="hg-dot hg-dot-{{ element.health }}" aria-label="{{ element.health }} health"></span>
+    {{ element.name }}
+  </h1>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal"
+            data-bs-target="#deleteElementModal" data-testid="delete-element-btn">
+      <i class="fa-solid fa-trash me-1" aria-hidden="true"></i>Delete
+    </button>
+    <a href="{% url 'mockup_element_edit' id=element.id %}"
+       class="btn btn-primary btn-sm" data-testid="edit-element-btn">
+      <i class="fa-solid fa-pen me-1" aria-hidden="true"></i>Edit
+    </a>
+  </div>
+</div>
+
+<!-- Row 3: metadata sub-row — VIEW screens only, §11.1 -->
+<div class="yrg-meta-row mt-1">
+  <span><i class="fa-solid fa-tag me-1" aria-hidden="true"></i>{{ element.stereotype }}</span>
+  <span>·</span>
+  <span><i class="fa-solid fa-layer-group me-1" aria-hidden="true"></i>{{ element.package }}</span>
+  <span>·</span>
+  <span class="hg-badge-source hg-badge-{{ element.source }}">{{ element.source }}</span>
+  <span>·</span>
+  <span>Last verified {{ element.last_verified }}</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<div data-testid="element-view-page" class="row g-3">
+
+  <!-- Properties + provenance -->
+  <div class="col-md-4">
+    <div class="hg-card p-3 mb-3">
+      <div class="hg-section-label mb-3">Properties</div>
+      <dl class="row mb-0" style="font-size:0.85rem;">
+        <dt class="col-5 text-muted fw-normal">Owner</dt>
+        <dd class="col-7">{{ element.owner }}</dd>
+        <dt class="col-5 text-muted fw-normal">Package</dt>
+        <dd class="col-7">{{ element.package }}</dd>
+        <dt class="col-5 text-muted fw-normal">Stereotype</dt>
+        <dd class="col-7">{{ element.stereotype }}</dd>
+        {% for k, v in element.properties.items %}
+        <dt class="col-5 text-muted fw-normal">{{ k }}</dt>
+        <dd class="col-7">{{ v }}</dd>
+        {% endfor %}
+      </dl>
+    </div>
+    <div class="hg-card p-3">
+      <div class="hg-section-label mb-3">Provenance</div>
+      <dl class="row mb-0" style="font-size:0.85rem;">
+        <dt class="col-5 text-muted fw-normal">Source</dt>
+        <dd class="col-7">
+          <span class="hg-badge-source hg-badge-{{ element.source }}">{{ element.source }}</span>
+        </dd>
+        <dt class="col-5 text-muted fw-normal">Confidence</dt>
+        <dd class="col-7">
+          <div class="yrg-confidence" title="Confidence: {{ element.confidence }}" aria-label="Confidence {{ element.conf_pct }}%">
+            <div class="yrg-confidence-track">
+              <div class="yrg-confidence-fill" style="width:{{ element.conf_pct }}%;background:var(--yrg-conf-{{ element.conf_band }});"></div>
+            </div>
+            <span class="yrg-confidence-label">{{ element.confidence }}</span>
+          </div>
+        </dd>
+        <dt class="col-5 text-muted fw-normal">Health</dt>
+        <dd class="col-7">
+          <span class="hg-dot hg-dot-{{ element.health }}" aria-hidden="true"></span>
+          {{ element.health }}
+        </dd>
+        <dt class="col-5 text-muted fw-normal">Last verified</dt>
+        <dd class="col-7">{{ element.last_verified }}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <!-- Relationships -->
+  <div class="col-md-4">
+    <div class="hg-card">
+      <div class="px-3 pt-3 pb-2">
+        <div class="hg-section-label">Relationships ({{ relationships|length }})</div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 small" aria-label="Element relationships">
+          <thead>
+            <tr><th>Direction</th><th>Stereotype</th><th>Other</th></tr>
+          </thead>
+          <tbody>
+            {% for rel in relationships %}
+            <tr>
+              <td class="text-muted">
+                {% if rel.from_id == element.id %}
+                <i class="fa-solid fa-arrow-right" style="color:var(--hg-primary);" aria-label="outbound"></i>
+                {% else %}
+                <i class="fa-solid fa-arrow-left" style="color:var(--hg-green);" aria-label="inbound"></i>
+                {% endif %}
+              </td>
+              <td><code style="font-size:0.72rem;">{{ rel.edge_stereotype }}</code></td>
+              <td>
+                <a href="{% if rel.from_id == element.id %}{% url 'mockup_element_view' id=rel.to_id %}{% else %}{% url 'mockup_element_view' id=rel.from_id %}{% endif %}">
+                  {% if rel.from_id == element.id %}{{ rel.to_element }}{% else %}{{ rel.from_element }}{% endif %}
+                </a>
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="text-muted text-center py-3">No relationships.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ego graph placeholder -->
+  <div class="col-md-4">
+    <div class="hg-card p-3" style="min-height:280px;">
+      <div class="hg-section-label mb-2">Ego graph</div>
+      <div class="d-flex align-items-center justify-content-center"
+           style="min-height:220px;background:var(--hg-bg-body);border-radius:6px;border:1px dashed var(--hg-border);">
+        <div class="text-center text-muted">
+          <i class="fa-solid fa-circle-nodes fa-2x mb-2" style="color:var(--hg-border);" aria-hidden="true"></i>
+          <div style="font-size:0.78rem;">
+            Cytoscape.js ego graph<br>
+            (depth-1 neighbourhood of {{ element.name }})
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Screen: ELEMENT-DELETE_ELEMENT-1 -->
+<!-- Delete confirmation modal — §6.4, §12.4: delete is always a modal, never a full page -->
+<div class="modal fade" id="deleteElementModal" tabindex="-1"
+     aria-labelledby="deleteElementModalLabel" data-testid="element-delete-modal">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteElementModalLabel">Delete Element?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>
+          Delete <strong>{{ element.name }}</strong>?<br>
+          <span class="text-muted small">{{ element.stereotype }} · {{ element.package }} · owned by {{ element.owner }}</span>
+        </p>
+        {% if relationships %}
+        <div class="yrg-blast-radius" data-testid="blast-radius-panel">
+          <p class="hg-section-label mb-1">Affected</p>
+          <ul class="small text-muted mb-0">
+            <li>{{ relationships|length }} relationship(s) will be orphaned.</li>
+          </ul>
+        </div>
+        {% endif %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <form method="post" action="{% url 'mockup_changeset_view' id=1 %}"
+              data-testid="element-delete-form" class="mb-0">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger" data-testid="confirm-delete-btn"
+                  onclick="console.log('[mockup:element-delete_element-1] delete confirmed, id={{ element.id }}')">
+            <i class="fa-solid fa-trash me-1" aria-hidden="true"></i>Delete
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    console.log('[mockup:element-view_element-1] page loaded, id={{ element.id }}');
+    document.querySelector('[data-testid="element-delete-form"]').addEventListener('submit', function (e) {
+      e.preventDefault();
+      console.log('[mockup:element-delete_element-1] delete confirmed, id={{ element.id }}');
+      window.location.href = "{% url 'mockup_changeset_view' id=1 %}";
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,171 @@
+{% extends "mockups/base.html" %}
+{% block screen_id %}ELEMENT-LIST+FIND-1{% endblock %}
+{% block title %}Elements{% endblock %}
+{% block nav_elements %}active{% endblock %}
+
+{% block page_header %}
+<div class="d-flex align-items-center justify-content-between">
+  <div>
+    <h1 class="hg-page-title">
+      Elements
+      <span class="badge ms-2 rounded-pill" style="background:var(--hg-primary);font-size:0.7rem;vertical-align:middle;">{{ element_count }}</span>
+    </h1>
+    <p class="text-muted small mb-0">ELEMENT-LIST+FIND-1 · C4 elements across all packages</p>
+  </div>
+  <a href="{% url 'mockup_element_create' %}" class="btn btn-primary btn-sm"
+     data-testid="create-element-btn">
+    <i class="fa-solid fa-plus me-1" aria-hidden="true"></i>Create Element
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div data-testid="element-list-page">
+  <!-- Search + filters — §9.1 semantic filter region -->
+  <section aria-label="Filter panel" class="row g-2 mb-3">
+    <div class="col-md-5">
+      <div class="input-group input-group-sm">
+        <span class="input-group-text"><i class="fa-solid fa-magnifying-glass text-muted" aria-hidden="true"></i></span>
+        <input type="text" class="form-control" placeholder="Find elements…"
+               aria-label="Search elements" data-testid="element-search">
+      </div>
+    </div>
+    <div class="col-auto">
+      <select class="form-select form-select-sm" data-testid="filter-stereotype" aria-label="Filter by stereotype">
+        <option>All stereotypes</option>
+        <option>System</option><option>Container</option>
+        <option>Component</option><option>Person</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <select class="form-select form-select-sm" data-testid="filter-package" aria-label="Filter by package">
+        <option>All packages</option>
+        <option>Context</option><option>Technology</option>
+        <option>Application</option><option>Code</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <select class="form-select form-select-sm" data-testid="filter-source" aria-label="Filter by source">
+        <option>All sources</option>
+        <option>ratatosk</option><option>human</option><option>mcp</option>
+      </select>
+    </div>
+  </section>
+
+  <div class="hg-card">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" aria-label="Elements table">
+        <thead>
+          <tr>
+            <th>Name</th><th>Stereotype</th><th>Package</th>
+            <th>Owner</th><th>Health</th><th>Source</th><th>Confidence</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for el in elements %}
+          <tr data-testid="element-row-{{ el.id }}">
+            <td>
+              <a href="{% url 'mockup_element_view' id=el.id %}"
+                 class="fw-semibold text-decoration-none">{{ el.name }}</a>
+            </td>
+            <td>
+              <span class="badge" style="background:var(--hg-primary-100);color:var(--hg-primary);font-size:0.7rem;">
+                {{ el.stereotype }}
+              </span>
+            </td>
+            <td class="text-muted">{{ el.package }}</td>
+            <td class="text-muted">{{ el.owner }}</td>
+            <td>
+              <span class="hg-dot hg-dot-{{ el.health }}"
+                    data-bs-toggle="tooltip" title="{{ el.health }}"
+                    aria-label="{{ el.health }}"></span>
+            </td>
+            <td>
+              <span class="hg-badge-source hg-badge-{{ el.source }}">{{ el.source }}</span>
+            </td>
+            <td>
+              <div class="yrg-confidence" title="Confidence: {{ el.confidence }}" aria-label="Confidence {{ el.conf_pct }}%">
+                <div class="yrg-confidence-track" style="width:60px;">
+                  <div class="yrg-confidence-fill" style="width:{{ el.conf_pct }}%;background:var(--yrg-conf-{{ el.conf_band }});"></div>
+                </div>
+                <span class="yrg-confidence-label">{{ el.confidence }}</span>
+              </div>
+            </td>
+            <td class="text-end">
+              <div class="btn-group btn-group-sm" role="group">
+                <a href="{% url 'mockup_element_view' id=el.id %}"
+                   class="btn btn-outline-secondary" data-bs-toggle="tooltip" title="View"
+                   aria-label="View {{ el.name }}" data-testid="view-el-{{ el.id }}">
+                  <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                </a>
+                <a href="{% url 'mockup_element_edit' id=el.id %}"
+                   class="btn btn-outline-secondary" data-bs-toggle="tooltip" title="Edit"
+                   aria-label="Edit {{ el.name }}" data-testid="edit-el-{{ el.id }}">
+                  <i class="fa-solid fa-pen" aria-hidden="true"></i>
+                </a>
+                <button type="button" class="btn btn-outline-danger" aria-label="Delete {{ el.name }}"
+                        data-testid="delete-el-{{ el.id }}" data-bs-toggle="modal"
+                        data-bs-target="#deleteConfirmModal"
+                        onclick="prepareDelete('{{ el.name|escapejs }}', '{% url 'mockup_changeset_view' id=1 %}')">
+                  <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="8" class="text-center text-muted py-5">
+              No elements yet — run Ratatosk bootstrap or
+              <a href="{% url 'mockup_element_create' %}">create manually</a>.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Screen: ELEMENT-DELETE_ELEMENT-1 -->
+<!-- Generic row-action delete modal — §6.4, §12.4: delete is always a modal, never a full page -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1"
+     aria-labelledby="deleteConfirmModalLabel" data-testid="element-delete-modal">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteConfirmModalLabel">
+          Delete <span id="deleteConfirmTarget">this element</span>?
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-0">
+          Munin will queue a deletion ChangeSet for review, including any affected relationships.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <a id="deleteConfirmBtn" href="#" class="btn btn-danger" data-testid="confirm-delete-btn">
+          <i class="fa-solid fa-trash me-1" aria-hidden="true"></i>Delete
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    console.log('[mockup:element-list+find-1] page loaded');
+    document.querySelector('[data-testid="element-search"]').addEventListener('input', function (e) {
+      console.log('[mockup:element-list+find-1] search input, value=' + e.target.value);
+    });
+  });
+  function prepareDelete(name, redirectUrl) {
+    document.getElementById('deleteConfirmTarget').textContent = name;
+    document.getElementById('deleteConfirmBtn').href = redirectUrl;
+    console.log('[mockup:element-delete_element-1] delete modal opened, name=' + name);
+  }
+</script>
+{% endblock %}

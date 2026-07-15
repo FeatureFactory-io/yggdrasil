@@ -1,0 +1,72 @@
+[
+  {
+    "model": "auth.group",
+    "pk": 1,
+    "fields": {
+      "name": "architect",
+      "permissions": []
+    }
+  },
+  {
+    "model": "auth.group",
+    "pk": 2,
+    "fields": {
+      "name": "viewer",
+      "permissions": []
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": 1,
+    "fields": {
+      "password": "md5$ksUGlIP1RX04tZomtkzngK$b677c566f25a64d080eb74f7122974b7",
+      "last_login": null,
+      "is_superuser": true,
+      "username": "admin",
+      "first_name": "Alex",
+      "last_name": "Admin",
+      "email": "admin@example.com",
+      "is_staff": true,
+      "is_active": true,
+      "date_joined": "2026-01-01T00:00:00Z",
+      "groups": [],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": 2,
+    "fields": {
+      "password": "md5$ksUGlIP1RX04tZomtkzngK$b677c566f25a64d080eb74f7122974b7",
+      "last_login": null,
+      "is_superuser": false,
+      "username": "priya",
+      "first_name": "Priya",
+      "last_name": "Architect",
+      "email": "priya@example.com",
+      "is_staff": false,
+      "is_active": true,
+      "date_joined": "2026-01-01T00:00:00Z",
+      "groups": [1],
+      "user_permissions": []
+    }
+  },
+  {
+    "model": "auth.user",
+    "pk": 3,
+    "fields": {
+      "password": "md5$ksUGlIP1RX04tZomtkzngK$b677c566f25a64d080eb74f7122974b7",
+      "last_login": null,
+      "is_superuser": false,
+      "username": "elena",
+      "first_name": "Elena",
+      "last_name": "Viewer",
+      "email": "elena@example.com",
+      "is_staff": false,
+      "is_active": true,
+      "date_joined": "2026-01-01T00:00:00Z",
+      "groups": [2],
+      "user_permissions": []
+    }
+  }
+]

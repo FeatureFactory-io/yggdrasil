@@ -1,0 +1,240 @@
+{% extends "mockups/base.html" %}
+{% block screen_id %}CHANGESET-VIEW_CHANGESET-1{% endblock %}
+{% block title %}ChangeSet {{ changeset.run_id }}{% endblock %}
+{% block nav_changesets %}active{% endblock %}
+
+{% block extra_head %}
+<style>
+  .hg-op-row { transition: background 120ms; }
+  .hg-op-row.accepted { background: #d4edda30; }
+  .hg-op-row.rejected { background: #f8d7da30; }
+  .hg-do-other-input { display:none; }
+  .hg-do-other-input.visible { display:block; }
+  .hg-conf-badge {
+    font-size:0.65rem; font-weight:700; padding:2px 6px; border-radius:3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .hg-conf-high { background:#d4edda; color:#155724; }
+  .hg-conf-med  { background:#fff3cd; color:#856404; }
+  .hg-conf-low  { background:#f8d7da; color:#721c24; }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+  <div class="d-flex align-items-center gap-3">
+    <a href="{% url 'mockup_changeset_list' %}" class="text-muted" aria-label="Back">
+      <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+    </a>
+    <div>
+      <h1 class="hg-page-title d-flex align-items-center gap-2">
+        ChangeSet
+        <code style="font-size:1rem;">{{ changeset.run_id }}</code>
+        <span class="hg-badge-source hg-badge-{{ changeset.status }}" style="font-size:0.72rem;">{{ changeset.status }}</span>
+      </h1>
+      <p class="text-muted small mb-0">
+        CHANGESET-VIEW_CHANGESET-1 ·
+        {{ changeset.source }} · {{ changeset.submitted }} ·
+        <span class="hg-badge-source {% if changeset.mode == 'manual' %}hg-badge-ratatosk{% else %}hg-badge-human{% endif %}">
+          {{ changeset.mode }}
+        </span>
+      </p>
+    </div>
+  </div>
+  {% if changeset.status == 'pending' %}
+  <!-- Bulk action cluster order — §13.2 M-08: destructive-leaning actions left, primary confirming action rightmost -->
+  <div class="d-flex gap-2">
+    <button class="btn btn-sm btn-outline-secondary" data-testid="accept-high-confidence-btn"
+            onclick="acceptHighConf()">
+      Accept high-confidence
+    </button>
+    <button class="btn btn-sm btn-outline-danger" data-testid="reject-all-btn"
+            onclick="rejectAll()">
+      <i class="fa-solid fa-circle-xmark me-1" aria-hidden="true"></i>Reject all
+    </button>
+    <button class="btn btn-success btn-sm" data-testid="accept-all-btn"
+            onclick="acceptAll()">
+      <i class="fa-solid fa-circle-check me-1" aria-hidden="true"></i>Accept all
+    </button>
+  </div>
+  {% elif changeset.status == 'applied' %}
+  <button class="btn btn-sm btn-outline-danger" data-testid="rollback-btn"
+          onclick="console.log('[mockup:changeset-view] rollback clicked')">
+    <i class="fa-solid fa-rotate-left me-1" aria-hidden="true"></i>Roll back entire run
+  </button>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div data-testid="changeset-view-page" class="row g-3" style="max-width:960px;">
+
+  <!-- Munin summary -->
+  <div class="col-12">
+    <div class="hg-card p-3 d-flex gap-3 align-items-start">
+      <i class="fa-solid fa-brain mt-1" style="color:var(--hg-accent);flex-shrink:0;" aria-hidden="true"></i>
+      <p class="mb-0" style="font-size:0.88rem;line-height:1.7;">{{ changeset.summary }}</p>
+    </div>
+  </div>
+
+  <!-- Operations table -->
+  <div class="col-12">
+    <div class="hg-card">
+      <div class="px-3 pt-3 pb-2">
+        <div class="hg-section-label">
+          Planned operations — {{ changeset.ops|length }} total
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table mb-0" aria-label="ChangeSet operations">
+          <thead>
+            <tr>
+              <th>#</th><th>Operation</th><th>Detail</th>
+              <th>Confidence</th><th>Status</th>
+              {% if changeset.status == 'pending' %}<th>Actions</th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for op in changeset.ops %}
+            <tr class="hg-op-row" id="op-row-{{ op.id }}"
+                data-testid="op-row-{{ op.id }}">
+              <td class="text-muted">{{ op.id }}</td>
+              <td>
+                <span class="badge" style="background:var(--hg-primary-100);color:var(--hg-primary);font-size:0.7rem;">
+                  {{ op.op }}
+                </span>
+              </td>
+              <td style="font-size:0.82rem;">{{ op.detail }}</td>
+              <td>
+                {% if op.confidence >= 0.85 %}
+                  <span class="hg-conf-badge hg-conf-high">{{ op.confidence }}</span>
+                {% elif op.confidence >= 0.70 %}
+                  <span class="hg-conf-badge hg-conf-med">{{ op.confidence }}</span>
+                {% else %}
+                  <span class="hg-conf-badge hg-conf-low">{{ op.confidence }}</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="hg-badge-source hg-badge-{{ op.status }}" id="op-status-{{ op.id }}">
+                  {{ op.status }}
+                </span>
+              </td>
+              {% if changeset.status == 'pending' %}
+              <td>
+                <div class="d-flex gap-1 flex-wrap align-items-start">
+                  <button class="btn btn-sm btn-success"
+                          data-testid="accept-op-{{ op.id }}"
+                          onclick="acceptOp({{ op.id }})"
+                          aria-label="Accept operation {{ op.id }}">
+                    <i class="fa-solid fa-check" aria-hidden="true"></i>
+                  </button>
+                  <button class="btn btn-sm btn-outline-danger"
+                          data-testid="reject-op-{{ op.id }}"
+                          onclick="rejectOp({{ op.id }})"
+                          aria-label="Reject operation {{ op.id }}">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                  </button>
+                  <button class="btn btn-sm btn-outline-secondary"
+                          data-testid="do-other-op-{{ op.id }}"
+                          onclick="showDoOther({{ op.id }})"
+                          aria-label="Do other for operation {{ op.id }}">
+                    Do Other
+                  </button>
+                </div>
+                <!-- Do Other inline input -->
+                <div class="hg-do-other-input mt-2" id="do-other-{{ op.id }}">
+                  <div class="input-group input-group-sm">
+                    <input type="text" class="form-control"
+                           placeholder="Instruct Munin — e.g. "Don't add to Container diagram, it's external""
+                           data-testid="do-other-input-{{ op.id }}"
+                           aria-label="Instruction for Munin">
+                    <button class="btn btn-outline-secondary" type="button"
+                            onclick="submitDoOther({{ op.id }})"
+                            data-testid="do-other-submit-{{ op.id }}">Send</button>
+                  </div>
+                  <div class="form-text">Munin will replan this operation and append your instruction to LEARNED.</div>
+                </div>
+              </td>
+              {% endif %}
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted py-4">No operations in this ChangeSet.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Link to run -->
+  {% if changeset.id %}
+  <div class="col-12">
+    <a href="{% url 'mockup_ratatosk_run_view' id=changeset.id %}"
+       class="text-muted small">
+      <i class="fa-solid fa-arrow-right me-1" aria-hidden="true"></i>Full run detail →
+    </a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    console.log('[mockup:changeset-view_changeset-1] page loaded, id={{ changeset.id }}');
+  });
+  function acceptOp(id) {
+    var row = document.getElementById('op-row-' + id);
+    var badge = document.getElementById('op-status-' + id);
+    row.classList.add('accepted'); row.classList.remove('rejected');
+    badge.className = 'hg-badge-source hg-badge-applied'; badge.textContent = 'accepted';
+    console.log('[mockup:changeset-view_changeset-1] accept clicked, op=' + id);
+  }
+  function rejectOp(id) {
+    var row = document.getElementById('op-row-' + id);
+    var badge = document.getElementById('op-status-' + id);
+    row.classList.add('rejected'); row.classList.remove('accepted');
+    badge.className = 'hg-badge-source hg-badge-rejected'; badge.textContent = 'rejected';
+    console.log('[mockup:changeset-view_changeset-1] reject clicked, op=' + id);
+  }
+  function showDoOther(id) {
+    var panel = document.getElementById('do-other-' + id);
+    panel.classList.toggle('visible');
+    console.log('[mockup:changeset-view_changeset-1] do-other opened, op=' + id);
+  }
+  function submitDoOther(id) {
+    var input = document.querySelector('#do-other-' + id + ' input');
+    var instruction = input.value.trim();
+    if (!instruction) return;
+    rejectOp(id);
+    document.getElementById('do-other-' + id).classList.remove('visible');
+    console.log('[mockup:changeset-view_changeset-1] do-other submitted, op=' + id + ', instruction=' + instruction);
+    alert('[Mockup] Munin replanning op ' + id + ' with instruction: "' + instruction + '"');
+  }
+  function acceptAll() {
+    document.querySelectorAll('[id^="op-row-"]').forEach(function(row) {
+      var id = row.id.split('-')[2];
+      acceptOp(id);
+    });
+    console.log('[mockup:changeset-view_changeset-1] accept-all clicked');
+  }
+  function rejectAll() {
+    document.querySelectorAll('[id^="op-row-"]').forEach(function(row) {
+      var id = row.id.split('-')[2];
+      rejectOp(id);
+    });
+    console.log('[mockup:changeset-view_changeset-1] reject-all clicked');
+  }
+  function acceptHighConf() {
+    // Accept ops with confidence >= 0.85 (hg-conf-high badge)
+    document.querySelectorAll('.hg-conf-high').forEach(function(badge) {
+      var row = badge.closest('tr');
+      var id = row.id.split('-')[2];
+      acceptOp(id);
+    });
+    console.log('[mockup:changeset-view_changeset-1] accept-high-confidence clicked');
+  }
+</script>
+{% endblock %}

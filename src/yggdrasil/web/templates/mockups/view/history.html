@@ -1,0 +1,134 @@
+{% extends "mockups/base.html" %}
+{% block screen_id %}VIEW-HISTORY-1{% endblock %}
+{% block title %}Model History{% endblock %}
+{% block nav_browse %}active{% endblock %}
+
+{% block page_header %}
+<div class="d-flex align-items-center gap-3">
+  <a href="{% url 'mockup_view_browse' %}" class="text-muted" aria-label="Back">
+    <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+  </a>
+  <div>
+    <h1 class="hg-page-title">Model History — Yggdrasil</h1>
+    <p class="text-muted small mb-0">VIEW-HISTORY-1 · bitemporal diff across ChangeSet events</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div data-testid="view-history-page" class="row g-3">
+
+  <!-- A/B pickers -->
+  <div class="col-12">
+    <div class="hg-card p-3">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:0.78rem;font-weight:600;">Snapshot A (from)</label>
+          <input type="date" class="form-control form-control-sm" value="2026-07-10"
+                 data-testid="snapshot-a" aria-label="Snapshot A date">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" style="font-size:0.78rem;font-weight:600;">Snapshot B (to)</label>
+          <input type="date" class="form-control form-control-sm" value="2026-07-14"
+                 data-testid="snapshot-b" aria-label="Snapshot B date">
+        </div>
+        <div class="col-md-4">
+          <button class="btn btn-primary btn-sm"
+                  onclick="console.log('[mockup:view-history-1] compare clicked')"
+                  data-testid="compare-btn">
+            Compare snapshots
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timeline rail -->
+  <div class="col-md-3">
+    <div class="hg-card p-3">
+      <div class="hg-section-label mb-3">ChangeSet events</div>
+      <div class="d-flex flex-column gap-2">
+        {% for cs in changesets %}
+        <a href="{% url 'mockup_changeset_view' id=cs.id %}"
+           class="d-block text-decoration-none p-2 rounded"
+           style="border:1px solid var(--hg-border);background:#fff;"
+           data-testid="timeline-item-{{ cs.id }}">
+          <div style="font-size:0.78rem;font-weight:600;color:var(--hg-ink);">{{ cs.submitted }}</div>
+          <div style="font-size:0.72rem;color:var(--hg-ink-muted);">
+            {{ cs.source }} · {{ cs.operations }} ops · {{ cs.status }}
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Diff panel -->
+  <div class="col-md-9">
+    <div class="hg-card">
+      <div class="px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
+        <span style="font-size:0.82rem;font-weight:600;">Diff: 2026-07-10 → 2026-07-14</span>
+        <div class="d-flex gap-2">
+          <a href="{% url 'mockup_view_browse' %}" class="btn btn-sm btn-outline-secondary"
+             data-testid="open-snapshot-a">Open A in View Browser</a>
+          <a href="{% url 'mockup_view_browse' %}" class="btn btn-sm btn-outline-secondary"
+             data-testid="open-snapshot-b">Open B in View Browser</a>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table mb-0" aria-label="Model diff">
+          <thead>
+            <tr><th>Change</th><th>Entity</th><th>Detail</th><th>ChangeSet</th></tr>
+          </thead>
+          <tbody>
+            <tr style="background:#d4edda20;">
+              <td><span class="badge bg-success">Added</span></td>
+              <td>Element</td>
+              <td>Notification Service (Container / Technology)</td>
+              <td><a href="{% url 'mockup_changeset_view' id=1 %}">#1</a></td>
+            </tr>
+            <tr style="background:#d4edda20;">
+              <td><span class="badge bg-success">Added</span></td>
+              <td>Relationship</td>
+              <td>Payment API →calls→ Notification Service</td>
+              <td><a href="{% url 'mockup_changeset_view' id=1 %}">#1</a></td>
+            </tr>
+            <tr style="background:#fff3cd30;">
+              <td><span class="badge bg-warning text-dark">Modified</span></td>
+              <td>Element</td>
+              <td>
+                Order Domain: owner<br>
+                <code style="font-size:0.72rem;">
+                  <span style="color:var(--hg-red);">- payments-team</span><br>
+                  <span style="color:var(--hg-green);">+ fulfillment-team</span>
+                </code>
+              </td>
+              <td><a href="{% url 'mockup_changeset_view' id=1 %}">#1</a></td>
+            </tr>
+            <tr style="background:#f8d7da20;">
+              <td><span class="badge bg-danger">Removed</span></td>
+              <td>Element</td>
+              <td>LegacyBatch (Component / Application)</td>
+              <td><a href="{% url 'mockup_changeset_view' id=1 %}">#1</a></td>
+            </tr>
+            <tr style="background:#d4edda20;">
+              <td><span class="badge bg-success">Added</span></td>
+              <td>Element</td>
+              <td>Fulfillment Worker (Component / Application)</td>
+              <td><a href="{% url 'mockup_changeset_view' id=2 %}">#2</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    console.log('[mockup:view-history-1] page loaded');
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "mockups/base.html" %}
+{% block screen_id %}RATATOSK_RUN-LIST+FIND-1{% endblock %}
+{% block title %}Runs{% endblock %}
+{% block nav_runs %}active{% endblock %}
+
+{% block page_header %}
+<div>
+  <h1 class="hg-page-title">
+    Runs
+    <span class="badge ms-2 rounded-pill" style="background:var(--hg-primary);font-size:0.7rem;vertical-align:middle;">{{ run_count }}</span>
+  </h1>
+  <p class="text-muted small mb-0">RATATOSK_RUN-LIST+FIND-1 · Ratatosk extraction runs and their ChangeSets</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<div data-testid="ratatosk-run-list-page">
+  <div class="hg-card">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" aria-label="Ratatosk runs">
+        <thead>
+          <tr>
+            <th>Run ID</th><th>Trigger</th><th>Started</th>
+            <th>Duration</th><th>Candidates</th><th>Ops planned</th><th>Status</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for run in runs %}
+          <tr data-testid="run-row-{{ run.id }}">
+            <td>
+              <a href="{% url 'mockup_ratatosk_run_view' id=run.id %}"
+                 class="fw-semibold text-decoration-none font-monospace"
+                 style="font-size:0.82rem;">run-{{ run.id|stringformat:"03d" }}</a>
+            </td>
+            <td>
+              <code style="font-size:0.72rem;color:var(--hg-ink-muted);word-break:break-all;">
+                {{ run.trigger|truncatechars:60 }}
+              </code>
+            </td>
+            <td class="text-muted" style="white-space:nowrap;">{{ run.started }}</td>
+            <td class="text-muted">{{ run.duration }}</td>
+            <td>{{ run.candidates }}</td>
+            <td>{{ run.operations }}</td>
+            <td>
+              <span class="badge" style="background:#d4edda;color:#155724;font-size:0.7rem;">
+                <i class="fa-solid fa-circle-check me-1" aria-hidden="true"></i>{{ run.status }}
+              </span>
+            </td>
+            <td class="text-end">
+              <a href="{% url 'mockup_ratatosk_run_view' id=run.id %}"
+                 class="btn btn-sm btn-outline-secondary"
+                 data-testid="view-run-{{ run.id }}">View</a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="8" class="text-center text-muted py-5">
+              No runs yet. Run <code>ratatosk bootstrap ./repo --token=$YGGDRASIL_TOKEN</code>.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    console.log('[mockup:ratatosk_run-list+find-1] page loaded');
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,88 @@
+{% extends "mockups/base.html" %}
+{% block screen_id %}CHANGESET-LIST+FIND-1{% endblock %}
+{% block title %}ChangeSets{% endblock %}
+{% block nav_changesets %}active{% endblock %}
+
+{% block page_header %}
+<div class="d-flex align-items-center justify-content-between">
+  <div>
+    <h1 class="hg-page-title">
+      ChangeSets
+      <span class="badge ms-2 rounded-pill" style="background:var(--hg-accent);font-size:0.7rem;vertical-align:middle;">1 pending</span>
+    </h1>
+    <p class="text-muted small mb-0">CHANGESET-LIST+FIND-1 · Munin's work queue — every write, from every source</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div data-testid="changeset-list-page">
+  <div class="row g-2 mb-3">
+    <div class="col-auto">
+      <select class="form-select form-select-sm" data-testid="filter-status" aria-label="Filter by status">
+        <option>All statuses</option>
+        <option selected>pending</option><option>applied</option>
+        <option>rolled_back</option><option>rejected</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <select class="form-select form-select-sm" data-testid="filter-source" aria-label="Filter by source">
+        <option>All sources</option>
+        <option>ratatosk</option><option>human</option><option>mcp</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="hg-card">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0" aria-label="ChangeSets table">
+        <thead>
+          <tr>
+            <th>Run ID</th><th>Source</th><th>Submitted</th>
+            <th>Ops</th><th>Mode</th><th>Status</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cs in changesets %}
+          <tr data-testid="changeset-row-{{ cs.id }}">
+            <td>
+              <a href="{% url 'mockup_changeset_view' id=cs.id %}"
+                 class="fw-semibold text-decoration-none font-monospace"
+                 style="font-size:0.82rem;">{{ cs.run_id }}</a>
+            </td>
+            <td><span class="hg-badge-source hg-badge-{{ cs.source }}">{{ cs.source }}</span></td>
+            <td class="text-muted">{{ cs.submitted }}</td>
+            <td>{{ cs.operations }}</td>
+            <td>
+              <span class="hg-badge-source {% if cs.mode == 'manual' %}hg-badge-ratatosk{% else %}hg-badge-human{% endif %}">
+                {{ cs.mode }}
+              </span>
+            </td>
+            <td>
+              <span class="hg-badge-source hg-badge-{{ cs.status }}">{{ cs.status }}</span>
+            </td>
+            <td class="text-end">
+              <a href="{% url 'mockup_changeset_view' id=cs.id %}"
+                 class="btn btn-sm btn-outline-secondary"
+                 data-testid="review-changeset-{{ cs.id }}">Review</a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-muted py-5">No ChangeSets yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    console.log('[mockup:changeset-list+find-1] page loaded');
+  });
+</script>
+{% endblock %}

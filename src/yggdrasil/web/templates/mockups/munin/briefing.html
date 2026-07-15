@@ -1,0 +1,181 @@
+{% extends "mockups/base.html" %}
+{% block screen_id %}MUNIN-BRIEFING-1{% endblock %}
+{% block title %}Munin Briefing{% endblock %}
+
+{% block page_header %}
+<div class="d-flex align-items-center justify-content-between">
+  <div>
+    <h1 class="hg-page-title">
+      <i class="fa-solid fa-brain me-2" style="color:var(--hg-accent);" aria-hidden="true"></i>Munin Briefing
+    </h1>
+    <p class="text-muted small mb-0">MUNIN-BRIEFING-1 · Run {{ run.id }} · {{ run.started }}</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'mockup_changeset_view' id=changeset.id %}"
+       class="btn btn-primary btn-sm" data-testid="review-changeset-btn">
+      <i class="fa-solid fa-list-check me-1" aria-hidden="true"></i>Review pending ChangeSet
+    </a>
+    <a href="{% url 'mockup_view_browse' %}" class="btn btn-outline-secondary btn-sm"
+       data-testid="explore-graph-btn">
+      <i class="fa-solid fa-eye me-1" aria-hidden="true"></i>Explore the graph
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div data-testid="munin-briefing-page" class="row g-4" style="max-width:900px;">
+
+  <!-- Munin summary -->
+  <div class="col-12">
+    <div class="hg-card p-4">
+      <div class="hg-section-label mb-2">
+        <i class="fa-solid fa-brain me-1" aria-hidden="true"></i>Munin's summary
+      </div>
+      <p style="font-size:0.95rem;line-height:1.7;color:var(--hg-ink);">
+        {{ changeset.summary }}
+      </p>
+      <!-- Confidence distribution -->
+      <div class="d-flex flex-wrap gap-2 mt-3">
+        <span class="badge rounded-pill px-3 py-2" style="background:#d4edda;color:#155724;font-size:0.78rem;">
+          <i class="fa-solid fa-circle-check me-1" aria-hidden="true"></i>
+          <strong>{{ auto_applied }}</strong> auto-applied
+        </span>
+        <span class="badge rounded-pill px-3 py-2" style="background:#fff3cd;color:#856404;font-size:0.78rem;">
+          <i class="fa-solid fa-triangle-exclamation me-1" aria-hidden="true"></i>
+          <strong>{{ queued }}</strong> queued for review
+        </span>
+        <span class="badge rounded-pill px-3 py-2" style="background:#e2e3e5;color:#383d41;font-size:0.78rem;">
+          <i class="fa-solid fa-circle me-1" aria-hidden="true"></i>
+          <strong>{{ skipped }}</strong> below threshold (skipped)
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key findings -->
+  <div class="col-12 col-md-7">
+    <div class="hg-card">
+      <div class="px-3 pt-3 pb-2">
+        <div class="hg-section-label">Key findings</div>
+      </div>
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item py-2 px-3 d-flex justify-content-between align-items-start">
+          <div>
+            <div class="fw-semibold" style="font-size:0.85rem;">Notification Service</div>
+            <small class="text-muted">New Container — most connections in this run (3 relationships)</small>
+          </div>
+          <a href="{% url 'mockup_element_create' %}" class="btn btn-outline-secondary btn-sm ms-2" style="white-space:nowrap;">View</a>
+        </li>
+        <li class="list-group-item py-2 px-3 d-flex justify-content-between align-items-start">
+          <div>
+            <div class="fw-semibold" style="font-size:0.85rem;">Order Domain ownership conflict</div>
+            <small class="text-muted">Model says payments-team; Ratatosk found fulfillment-team in 4 files</small>
+          </div>
+          <a href="{% url 'mockup_changeset_view' id=1 %}" class="btn btn-outline-secondary btn-sm ms-2" style="white-space:nowrap;">Review</a>
+        </li>
+        <li class="list-group-item py-2 px-3 d-flex justify-content-between align-items-start">
+          <div>
+            <div class="fw-semibold" style="font-size:0.85rem;">LegacyBatch deleted</div>
+            <small class="text-muted">Module removed from codebase — 0 active relationships</small>
+          </div>
+          <a href="{% url 'mockup_changeset_view' id=1 %}" class="btn btn-outline-secondary btn-sm ms-2" style="white-space:nowrap;">Review</a>
+        </li>
+        <li class="list-group-item py-2 px-3">
+          <div class="fw-semibold" style="font-size:0.85rem;color:var(--hg-grey);">
+            <i class="fa-solid fa-circle-half-stroke fa-spin me-1" aria-hidden="true"></i>
+            Container Diagram C1 placement — low confidence (0.65)
+          </div>
+          <small class="text-muted">Munin unsure whether Notification Service belongs in C1 vs C2</small>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Suggested next steps -->
+  <div class="col-12 col-md-5">
+    <div class="hg-card p-3">
+      <div class="hg-section-label mb-3">Suggested next steps</div>
+      <div class="d-flex flex-column gap-2">
+        <a href="{% url 'mockup_changeset_view' id=1 %}"
+           class="btn btn-primary btn-sm text-start" data-testid="next-review-changeset">
+          <i class="fa-solid fa-list-check me-2" aria-hidden="true"></i>Review pending ChangeSet →
+        </a>
+        <a href="{% url 'mockup_view_browse' %}"
+           class="btn btn-outline-secondary btn-sm text-start" data-testid="next-explore-graph">
+          <i class="fa-solid fa-eye me-2" aria-hidden="true"></i>Explore the graph →
+        </a>
+        <button class="btn btn-outline-secondary btn-sm text-start" data-testid="next-run-again"
+                onclick="console.log('[mockup:munin-briefing-1] run-again clicked')">
+          <i class="fa-solid fa-arrows-rotate me-2" aria-hidden="true"></i>Run again with instructions →
+        </button>
+      </div>
+    </div>
+
+    <!-- C4 primer (first-time overlay trigger) -->
+    <div class="hg-card p-3 mt-3" style="border-color:var(--hg-accent);border-left:3px solid var(--hg-accent);">
+      <div class="hg-section-label mb-2">C4 in 60 seconds</div>
+      <p style="font-size:0.78rem;color:var(--hg-ink-muted);line-height:1.6;margin:0;">
+        Your model has four levels: <strong>Context</strong> (your system and users),
+        <strong>Container</strong> (apps, databases, services),
+        <strong>Component</strong> (internal building blocks),
+        <strong>Code</strong> (classes, modules).
+        Elements are nodes; Relationships are edges. Munin maintains structure — you provide the intent.
+      </p>
+      <a href="{% url 'mockup_view_browse' %}" class="btn btn-sm btn-outline-secondary mt-2"
+         data-testid="c4-primer-got-it">
+        Got it — show me the graph →
+      </a>
+    </div>
+  </div>
+
+  <!-- Raw log (collapsed) -->
+  <div class="col-12">
+    <div class="accordion" id="rawLogAccordion">
+      <div class="accordion-item hg-card">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#rawLog"
+                  aria-expanded="false" aria-controls="rawLog"
+                  style="font-size:0.82rem;font-weight:600;">
+            <i class="fa-solid fa-terminal me-2 text-muted" aria-hidden="true"></i>
+            Raw run log
+          </button>
+        </h2>
+        <div id="rawLog" class="accordion-collapse collapse" data-bs-parent="#rawLogAccordion">
+          <div class="accordion-body p-0">
+            <pre class="bg-dark text-white p-3 mb-0 rounded-bottom" style="font-size:0.75rem;max-height:300px;overflow-y:auto;">[ratatosk] fetching existing model state via MCP …
+[ratatosk] found 16 existing elements, 18 relationships in model Yggdrasil
+[ratatosk] scanning ./repo with instructions …
+[ratatosk] found 3 services, 12 modules, 4 external dependencies
+[ratatosk] delta buckets:
+             to_add:    1 element, 2 relationships
+             to_update: 2 elements (owner drift)
+             to_delete: 1 element (removed module)
+             unchanged: 14 elements
+[munin]    reading buckets, planning graph operations …
+[munin]    ChangeSet #1: 1 add-element, 2 add-relationship,
+                         2 update-element, 1 delete-element, 1 add-to-diagram
+                         1 op below threshold → queued for review
+[ratatosk] run complete — ChangeSet #1 pending
+          → /mockups/changeset/1/</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-2">
+      <a href="{% url 'mockup_ratatosk_run_view' id=3 %}" class="text-muted small">
+        <i class="fa-solid fa-arrow-right me-1" aria-hidden="true"></i>Full extraction detail →
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    console.log('[mockup:munin-briefing-1] page loaded, run={{ run.id }}');
+  });
+</script>
+{% endblock %}

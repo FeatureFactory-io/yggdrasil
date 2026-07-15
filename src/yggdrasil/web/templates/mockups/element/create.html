@@ -1,0 +1,179 @@
+{% extends "mockups/base.html" %}
+{% block screen_id %}ELEMENT-CREATE_ELEMENT-1{% endblock %}
+{% block title %}Create Element{% endblock %}
+{% block nav_elements %}active{% endblock %}
+
+{% block page_header %}
+<nav aria-label="breadcrumb" class="mb-1">
+  <ol class="breadcrumb mb-0 small">
+    <li class="breadcrumb-item"><a href="{% url 'mockup_element_list' %}">Elements</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Create</li>
+  </ol>
+</nav>
+<h1 class="hg-page-title">Create Element</h1>
+<p class="text-muted small mb-0">ELEMENT-CREATE_ELEMENT-1 · Submitted to Munin pipeline · source=human</p>
+{% endblock %}
+
+{% block content %}
+<div data-testid="element-create-page" class="row justify-content-center">
+<div class="col-md-8 col-lg-6">
+  <form method="post" action="{% url 'mockup_changeset_view' id=1 %}"
+        data-testid="element-create-form">
+    {% csrf_token %}
+    <div class="hg-card p-4">
+      <div class="row g-3">
+        <div class="col-12">
+          <label for="name" class="form-label" style="font-size:0.82rem;font-weight:600;">
+            Name <span class="text-danger" aria-hidden="true">*</span>
+          </label>
+          <input type="text" class="form-control" id="name" name="name"
+                 placeholder="e.g. Notification Service" required
+                 data-testid="element-name-input">
+        </div>
+        <div class="col-md-6">
+          <label for="stereotype" class="form-label" style="font-size:0.82rem;font-weight:600;">
+            Stereotype <span class="text-danger" aria-hidden="true">*</span>
+          </label>
+          <select class="form-select" id="stereotype" name="stereotype" required
+                  data-testid="element-stereotype-select">
+            <option value="">— select —</option>
+            <option>System</option>
+            <option>Container</option>
+            <option>Component</option>
+            <option>Person</option>
+            <option>External</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label for="package" class="form-label" style="font-size:0.82rem;font-weight:600;">
+            Package <span class="text-danger" aria-hidden="true">*</span>
+          </label>
+          <select class="form-select" id="package" name="package" required
+                  data-testid="element-package-select">
+            <option value="">— select —</option>
+            <option>Context</option>
+            <option>Technology</option>
+            <option>Application</option>
+            <option>Code</option>
+          </select>
+        </div>
+        <div class="col-12">
+          <label for="owner" class="form-label" style="font-size:0.82rem;font-weight:600;">Owner</label>
+          <input type="text" class="form-control" id="owner" name="owner"
+                 placeholder="e.g. payments-team" data-testid="element-owner-input">
+        </div>
+
+        <!-- Dynamic properties (stereotype-driven) -->
+        <div class="col-12">
+          <div class="hg-section-label mb-2">Properties</div>
+          <div id="propertiesSection" class="d-flex flex-column gap-2">
+            <div class="row g-2 align-items-center">
+              <div class="col-5">
+                <input type="text" class="form-control form-control-sm" placeholder="Property name"
+                       aria-label="Property name">
+              </div>
+              <div class="col-5">
+                <input type="text" class="form-control form-control-sm" placeholder="Value"
+                       aria-label="Property value">
+              </div>
+              <div class="col-2">
+                <button type="button" class="btn btn-sm btn-outline-danger w-100"
+                        aria-label="Remove property">
+                  <i class="fa-solid fa-minus" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-secondary mt-2"
+                  data-testid="add-property-btn"
+                  onclick="console.log('[mockup:element-create] add-property clicked')">
+            <i class="fa-solid fa-plus me-1" aria-hidden="true"></i>Add property
+          </button>
+        </div>
+
+        <!-- Relationships -->
+        <div class="col-12">
+          <div class="hg-section-label mb-2">Relationships</div>
+          <table class="table table-sm mb-2" aria-label="Relationships to add">
+            <thead>
+              <tr><th>Direction</th><th>Target element</th><th>Edge stereotype</th><th></th></tr>
+            </thead>
+            <tbody id="relTable">
+              <tr>
+                <td>
+                  <select class="form-select form-select-sm" aria-label="Direction">
+                    <option>outbound</option><option>inbound</option>
+                  </select>
+                </td>
+                <td>
+                  <input type="text" class="form-control form-control-sm"
+                         placeholder="Search elements…" list="elementsList" aria-label="Target element">
+                  <datalist id="elementsList">
+                    {% for el in elements %}<option value="{{ el.name }}">{% endfor %}
+                  </datalist>
+                </td>
+                <td>
+                  <select class="form-select form-select-sm" aria-label="Edge stereotype">
+                    <option>depends_on</option><option>calls</option>
+                    <option>serves</option><option>reads_from</option>
+                  </select>
+                </td>
+                <td>
+                  <button type="button" class="btn btn-sm btn-outline-danger" aria-label="Remove">
+                    <i class="fa-solid fa-minus" aria-hidden="true"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <button type="button" class="btn btn-sm btn-outline-secondary"
+                  data-testid="add-relationship-btn"
+                  onclick="console.log('[mockup:element-create] add-relationship clicked')">
+            <i class="fa-solid fa-plus me-1" aria-hidden="true"></i>Add relationship
+          </button>
+        </div>
+
+        <!-- Diagram placement -->
+        <div class="col-12">
+          <div class="hg-section-label mb-2">Diagram placement (hints to Munin)</div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="diag1" value="C1" data-testid="diagram-C1">
+            <label class="form-check-label small" for="diag1">Container Diagram C1</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="diag2" value="C2" data-testid="diagram-C2">
+            <label class="form-check-label small" for="diag2">Context Diagram Cx1</label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2 mt-3">
+      <a href="{% url 'mockup_element_list' %}" class="btn btn-outline-secondary">Cancel</a>
+      <button type="submit" class="btn btn-primary" data-testid="element-submit-btn"
+              onclick="console.log('[mockup:element-create] submit clicked')">
+        <i class="fa-solid fa-floppy-disk me-1" aria-hidden="true"></i>Submit to Munin
+      </button>
+    </div>
+    <p class="text-muted small mt-2">
+      <i class="fa-solid fa-circle-info me-1" aria-hidden="true"></i>
+      Munin will validate placement and edge rules, then create a ChangeSet.
+    </p>
+  </form>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    console.log('[mockup:element-create_element-1] page loaded');
+    document.querySelector('[data-testid="element-create-form"]').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var name = document.getElementById('name').value;
+      console.log('[mockup:element-create_element-1] submit clicked, name=' + name);
+      window.location.href = "{% url 'mockup_changeset_view' id=1 %}";
+    });
+  });
+</script>
+{% endblock %}

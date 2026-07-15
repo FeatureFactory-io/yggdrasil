@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Yggdrasil{% endblock %} — Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+  <style>
+    :root {
+      /* Brand — §2.1 */
+      --hg-primary:     #1f3a5f;
+      --hg-primary-700: #16294a;
+      --hg-primary-100: #e7eef7;
+      --hg-accent:      #c9a227;
+      --hg-accent-700:  #8e7012;
+      --hg-bg-body:     #f5f7fa;
+      --hg-bg-surface:  #ffffff;
+      --hg-bg-elevated: #ffffff;
+      --hg-bg-subtle:   #f0f3f8;
+      --hg-ink:         #1a1f2e;
+      --hg-ink-muted:   #5a6478;
+      --hg-border:      #e3e7ee;
+      --hg-border-strong: #c5cdd9;
+
+      /* RYG semantic — §2.2 */
+      --hg-red:    #dc3545; --hg-orange: #fd7e14; --hg-yellow: #ffc107;
+      --hg-green:  #198754; --hg-blue:   #0dcaf0; --hg-grey:   #6c757d;
+
+      /* Yggdrasil-specific — §2.3 */
+      --yrg-source-ratatosk: #6f42c1;
+      --yrg-source-human:    var(--hg-primary);
+      --yrg-source-mcp:      #0dcaf0;
+      --yrg-conf-high:   var(--hg-green);
+      --yrg-conf-medium: var(--hg-yellow);
+      --yrg-conf-low:    var(--hg-orange);
+      --yrg-conf-vlow:   var(--hg-red);
+      --yrg-graph-bg:    #f8f9fb;
+      --yrg-node-fill:   var(--hg-primary-100);
+      --yrg-node-stroke: var(--hg-primary);
+      --yrg-edge-stroke: var(--hg-ink-muted);
+
+      /* Radii / shadows — §2.6 */
+      --hg-radius:      8px;
+      --hg-radius-lg:   12px;
+      --hg-radius-md:   6px;
+      --hg-radius-sm:   4px;
+      --hg-radius-pill: 999px;
+      --hg-shadow-card-hover: 0 4px 14px rgba(31,58,95,0.12);
+      --hg-shadow-popover:    0 8px 24px rgba(31,58,95,0.16);
+      --hg-shadow-toast:      0 4px 12px rgba(0,0,0,0.15);
+
+      /* Typography — §2.5 */
+      --hg-font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+      --hg-fs-sm: 0.875rem;
+      --hg-fs-xs: 0.78rem;
+      --hg-fw-medium: 500;
+      --hg-fw-semibold: 600;
+
+      --bs-primary: #1f3a5f;
+      --bs-link-color: #1f3a5f;
+    }
+    body {
+      font-family: "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--hg-bg-body);
+      color: var(--hg-ink);
+      padding-top: 81px; /* banner 24px + navbar 57px */
+      font-size: 0.9rem;
+    }
+    /* Mockup banner */
+    .hg-mockup-banner {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 1200;
+      background: #fff3cd; border-bottom: 1px solid #ffc107;
+      font-size: 0.7rem; font-weight: 700; text-align: center;
+      padding: 3px; color: #856404; letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    /* Navbar — §3.3 */
+    .yrg-navbar { background: var(--hg-primary); border-bottom: 3px solid var(--hg-accent); }
+    .yrg-navbar .navbar-brand { color: #fff; font-weight: 700; font-size: 1rem; }
+    .yrg-navbar .navbar-brand .accent { color: var(--hg-accent); }
+    .yrg-navbar .nav-link {
+      color: rgba(255,255,255,0.82); font-size: 0.8rem; font-weight: 500;
+      border-radius: 4px; padding: 6px 10px;
+    }
+    .yrg-navbar .nav-link:hover { background: rgba(255,255,255,0.07); color: #fff; }
+    .yrg-navbar .nav-link.active { background: rgba(255,255,255,0.13); color: #fff; }
+    .yrg-navbar .dropdown-toggle::after { display: none; }
+    /* Page header */
+    .hg-page-header {
+      background: #fff; border-bottom: 1px solid var(--hg-border);
+      padding: 0.875rem 1.5rem;
+    }
+    .hg-page-title { font-size: 1.4rem; font-weight: 600; color: var(--hg-ink); margin: 0; }
+    /* Breadcrumb / metadata row — §4.2, §11.1 */
+    .yrg-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: var(--hg-fs-xs);
+      color: var(--hg-ink-muted);
+    }
+    /* Cards */
+    .hg-card {
+      background: #fff; border: 1px solid var(--hg-border);
+      border-radius: var(--hg-radius); overflow: hidden;
+    }
+    /* Tables */
+    .table { font-size: 0.85rem; }
+    .table > thead > tr > th {
+      font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--hg-ink-muted);
+      background: var(--hg-bg-body); border-bottom: 2px solid var(--hg-border);
+      white-space: nowrap;
+    }
+    .table > tbody > tr:hover td { background: #f8f9fc; }
+    /* Health dot */
+    .hg-dot {
+      width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0;
+    }
+    .hg-dot-green  { background: var(--hg-green);  }
+    .hg-dot-yellow { background: var(--hg-yellow); }
+    .hg-dot-red    { background: var(--hg-red);    }
+    .hg-dot-blue   { background: var(--hg-blue);   }
+    .hg-dot-grey   { background: var(--hg-grey);   }
+    /* Confidence bar — §5.1 */
+    .yrg-confidence       { display: flex; align-items: center; gap: 0.4rem; }
+    .yrg-confidence-track { flex: 1; height: 4px; background: var(--hg-border); border-radius: var(--hg-radius-pill); overflow: hidden; min-width: 48px; }
+    .yrg-confidence-fill  { height: 100%; border-radius: var(--hg-radius-pill); transition: width 0.2s; }
+    .yrg-confidence-label { font-size: var(--hg-fs-xs); color: var(--hg-ink-muted); min-width: 2.5rem; }
+    /* Source badge */
+    .hg-badge-source {
+      font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.04em; border-radius: 3px; padding: 1px 5px;
+    }
+    .hg-badge-ratatosk { background: var(--yrg-source-ratatosk); color: #fff; }
+    .hg-badge-human    { background: var(--hg-primary); color: #fff; }
+    .hg-badge-mcp      { background: var(--yrg-source-mcp); color: #000; }
+    /* Status badge */
+    .hg-badge-pending  { background: #fff3cd; color: #856404; }
+    .hg-badge-applied  { background: #d4edda; color: #155724; }
+    .hg-badge-rejected { background: #f8d7da; color: #721c24; }
+    .hg-badge-rolled_back { background: #e2e3e5; color: #383d41; }
+    /* Mode badge */
+    .hg-badge-manual { background: var(--hg-primary-100); color: var(--hg-primary); }
+    .hg-badge-auto   { background: #d4edda; color: #155724; }
+    /* Section heading */
+    .hg-section-label {
+      font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--hg-ink-muted); margin-bottom: 0.5rem;
+    }
+    /* Primary btn — §5.1 CSS-variable override, applies to Bootstrap's btn-primary directly */
+    .btn-primary {
+      --bs-btn-bg:                 var(--hg-primary);
+      --bs-btn-border-color:       var(--hg-primary);
+      --bs-btn-hover-bg:           var(--hg-primary-700);
+      --bs-btn-hover-border-color: var(--hg-primary-700);
+      --bs-btn-active-bg:          var(--hg-primary-700);
+      --bs-btn-active-border-color: var(--hg-primary-700);
+      --bs-btn-color:              #fff;
+      --bs-btn-hover-color:        #fff;
+      --bs-btn-active-color:       #fff;
+      font-size: 0.8rem; font-weight: 600;
+    }
+    /* Mockup nav */
+    .hg-mockup-nav {
+      background: #fffef5; border: 1px solid #ffc107; border-radius: var(--hg-radius);
+      padding: 0.75rem 1rem; font-size: 0.78rem; color: var(--hg-ink-muted);
+    }
+    .hg-mockup-nav a { color: var(--hg-primary); text-decoration: none; }
+    .hg-mockup-nav a:hover { text-decoration: underline; }
+    /* Offcanvas Munin panel */
+    #muninPanel { width: 380px; }
+    #muninPanel .offcanvas-header { background: var(--hg-primary); color: #fff; }
+    #muninPanel .offcanvas-title { font-size: 0.9rem; font-weight: 600; }
+    .munin-bubble-user {
+      background: var(--hg-primary-100); border-radius: 8px 8px 0 8px;
+      padding: 8px 12px; font-size: 0.82rem; align-self: flex-end; max-width: 85%;
+    }
+    .munin-bubble-munin {
+      background: #fff; border: 1px solid var(--hg-border); border-radius: 8px 8px 8px 0;
+      padding: 8px 12px; font-size: 0.82rem; max-width: 95%;
+    }
+    /* Toasts — §6.3, §14 */
+    .toast-container { z-index: 1300; }
+    /* Blast radius panel — §6.4, delete confirmation modals */
+    .yrg-blast-radius {
+      background: #fff3cd; border: 1px solid #ffc107;
+      border-radius: var(--hg-radius-sm); padding: 0.65rem 0.85rem; margin-top: 0.75rem;
+    }
+    a { color: var(--hg-primary); }
+    a:hover { color: var(--hg-primary-700); }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <!-- Screen: {% block screen_id %}{% endblock %} -->
+
+  <div class="hg-mockup-banner">
+    Mockup · design reference only · not connected to live data
+  </div>
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg yrg-navbar fixed-top" style="top:24px;" aria-label="Yggdrasil main navigation">
+    <div class="container-fluid px-3">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'mockup_view_browse' %}">
+        <i class="fa-solid fa-crow accent" aria-hidden="true"></i>
+        Yggdrasil
+      </a>
+      <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse"
+              data-bs-target="#hgNavbar" aria-controls="hgNavbar" aria-expanded="false"
+              aria-label="Toggle navigation">
+        <i class="fa-solid fa-bars text-white" aria-hidden="true"></i>
+      </button>
+      <div class="collapse navbar-collapse" id="hgNavbar">
+        <ul class="navbar-nav me-auto gap-1 ms-2">
+          <li class="nav-item">
+            <a class="nav-link {% block nav_browse %}{% endblock %}"
+               href="{% url 'mockup_view_browse' %}" data-testid="nav-view-browser">
+              <i class="fa-solid fa-layer-group me-1" aria-hidden="true"></i>View Browser
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% block nav_elements %}{% endblock %}"
+               href="{% url 'mockup_element_list' %}" data-testid="nav-elements">
+              <i class="fa-solid fa-circle-dot me-1" aria-hidden="true"></i>Elements
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% block nav_relationships %}{% endblock %}"
+               href="{% url 'mockup_relationship_list' %}" data-testid="nav-relationships">
+              <i class="fa-solid fa-link me-1" aria-hidden="true"></i>Relationships
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% block nav_changesets %}{% endblock %}"
+               href="{% url 'mockup_changeset_list' %}" data-testid="nav-changesets">
+              <i class="fa-solid fa-code-branch me-1" aria-hidden="true"></i>ChangeSets
+              <span class="badge rounded-pill ms-1" style="background:var(--hg-accent);font-size:0.6rem;">1</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% block nav_runs %}{% endblock %}"
+               href="{% url 'mockup_ratatosk_run_list' %}" data-testid="nav-runs">
+              <i class="fa-solid fa-terminal me-1" aria-hidden="true"></i>Runs
+            </a>
+          </li>
+        </ul>
+        <ul class="navbar-nav ms-auto align-items-lg-center">
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'mockup_auth_token' %}"
+               aria-label="Settings" data-bs-toggle="tooltip" title="Settings"
+               data-testid="nav-settings">
+              <i class="fa-solid fa-gear" aria-hidden="true"></i>
+            </a>
+          </li>
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle d-flex align-items-center gap-2"
+               href="#" role="button" data-bs-toggle="dropdown"
+               aria-expanded="false" data-testid="user-menu">
+              <i class="fa-solid fa-circle-user" aria-hidden="true"></i>
+              <span>Commander Donland</span>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+              <li>
+                <a class="dropdown-item" href="{% url 'mockup_auth_token' %}">
+                  <i class="fa-solid fa-key me-2 text-muted" aria-hidden="true"></i>API Access
+                </a>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <a class="dropdown-item" href="{% url 'mockup_auth_login' %}">
+                  <i class="fa-solid fa-right-from-bracket me-2 text-muted" aria-hidden="true"></i>Sign out
+                </a>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Page header -->
+  <div class="hg-page-header">
+    {% block page_header %}{% endblock %}
+  </div>
+
+  <!-- Main -->
+  <main class="container-fluid px-4 py-3" role="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Munin chat offcanvas -->
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="muninPanel"
+       aria-labelledby="muninPanelLabel">
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title" id="muninPanelLabel">
+        <i class="fa-solid fa-brain me-2" aria-hidden="true"></i>Munin
+      </h5>
+      <button type="button" class="btn-close btn-close-white"
+              data-bs-dismiss="offcanvas" aria-label="Close Munin panel"></button>
+    </div>
+    <div class="offcanvas-body d-flex flex-column gap-2 p-3"
+         style="background:var(--hg-bg-body);" id="muninThread">
+      <div class="munin-bubble-munin">
+        Model has <strong>6 elements</strong> and <strong>6 relationships</strong> across 3 packages.
+        1 changeset pending review.
+        <br><small class="text-muted">Ask me anything about the model.</small>
+      </div>
+      <div class="munin-bubble-user">Who owns Payment API?</div>
+      <div class="munin-bubble-munin">
+        <strong>Payment API</strong> is owned by <code>payments-team</code>.
+        Stereotype: Container · Package: Technology · Health: OK · Confidence: 0.92.
+        <br><a href="{% url 'mockup_element_view' id=1 %}" class="small">→ View element</a>
+      </div>
+    </div>
+    <div class="p-3 border-top bg-white">
+      <div class="input-group input-group-sm">
+        <input type="text" class="form-control" placeholder="Ask Munin…"
+               aria-label="Ask Munin" data-testid="munin-input" id="muninInput">
+        <button class="btn btn-primary" type="button" data-testid="munin-send"
+                onclick="sendMunin()">
+          <i class="fa-solid fa-paper-plane" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast container — §6.3, §14 -->
+  <div id="toast-container" class="toast-container position-fixed bottom-0 end-0 p-3"
+       aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Mockup nav -->
+  <div class="container-fluid px-4 pb-4 mt-3">
+    <div class="hg-mockup-nav">
+      <strong>Mockup screens:</strong>
+      <a href="{% url 'mockup_auth_login' %}">Login</a> ·
+      <a href="{% url 'mockup_auth_token' %}">Tokens</a> ·
+      <a href="{% url 'mockup_munin_briefing' %}">Briefing</a> ·
+      <a href="{% url 'mockup_view_browse' %}">View Browser</a> ·
+      <a href="{% url 'mockup_view_export' %}">Export</a> ·
+      <a href="{% url 'mockup_view_history' %}">History</a> ·
+      <a href="{% url 'mockup_element_list' %}">Elements</a> ·
+      <a href="{% url 'mockup_element_create' %}">Create Element</a> ·
+      <a href="{% url 'mockup_relationship_list' %}">Relationships</a> ·
+      <a href="{% url 'mockup_changeset_list' %}">ChangeSets</a> ·
+      <a href="{% url 'mockup_changeset_view' id=1 %}">ChangeSet review</a> ·
+      <a href="{% url 'mockup_ratatosk_run_list' %}">Runs</a>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (el) {
+        new bootstrap.Tooltip(el);
+      });
+    });
+    function sendMunin() {
+      var input = document.getElementById('muninInput');
+      var thread = document.getElementById('muninThread');
+      var val = input.value.trim();
+      if (!val) return;
+      var userBubble = document.createElement('div');
+      userBubble.className = 'munin-bubble-user';
+      userBubble.textContent = val;
+      thread.appendChild(userBubble);
+      var replyBubble = document.createElement('div');
+      replyBubble.className = 'munin-bubble-munin';
+      replyBubble.textContent = '[Mockup] Munin response to: "' + val + '"';
+      thread.appendChild(replyBubble);
+      input.value = '';
+      thread.scrollTop = thread.scrollHeight;
+      console.log('[mockup:chat-munin-1] message sent:', val);
+    }
+
+    /* Toast dispatch — §6.3, §14.2. Mockup helper mirroring the real
+       HX-Trigger: {"showToast": {...}} contract; call showMockToast() from
+       any mockup page to preview a toast without a live backend. */
+    function buildToast(type, message) {
+      var variantMap = {
+        success: 'text-bg-success',
+        error:   'text-bg-danger',
+        warning: 'text-bg-warning text-dark',
+        info:    'text-bg-info text-dark',
+      };
+      var iconMap = {
+        success: 'fa-circle-check',
+        error:   'fa-circle-exclamation',
+        warning: 'fa-triangle-exclamation',
+        info:    'fa-circle-info',
+      };
+      var autohide = type !== 'error';
+      var toast = document.createElement('div');
+      toast.className = 'toast align-items-center border-0 ' + (variantMap[type] || variantMap.info);
+      toast.setAttribute('role', 'alert');
+      toast.setAttribute('data-bs-autohide', autohide ? 'true' : 'false');
+      if (autohide) toast.setAttribute('data-bs-delay', type === 'warning' ? '6000' : '4000');
+      toast.setAttribute('data-testid', type + '-toast');
+      toast.innerHTML =
+        '<div class="d-flex">' +
+          '<div class="toast-body"><i class="fa-solid ' + (iconMap[type] || iconMap.info) + ' me-2" aria-hidden="true"></i>' + message + '</div>' +
+          '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>' +
+        '</div>';
+      return toast;
+    }
+    document.body.addEventListener('showToast', function (evt) {
+      var detail = evt.detail || {};
+      var toast = buildToast(detail.type || 'info', detail.message || '');
+      document.getElementById('toast-container').appendChild(toast);
+      bootstrap.Toast.getOrCreateInstance(toast).show();
+    });
+    function showMockToast(type, message) {
+      document.body.dispatchEvent(new CustomEvent('showToast', { detail: { type: type, message: message } }));
+    }
+  </script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

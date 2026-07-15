@@ -1,0 +1,79 @@
+{% extends "mockups/base.html" %}
+{% block screen_id %}RELATIONSHIP-EDIT_RELATIONSHIP-1{% endblock %}
+{% block title %}Edit Relationship{% endblock %}
+{% block nav_relationships %}active{% endblock %}
+
+{% block page_header %}
+<nav aria-label="breadcrumb" class="mb-1">
+  <ol class="breadcrumb mb-0 small">
+    <li class="breadcrumb-item"><a href="{% url 'mockup_relationship_list' %}">Relationships</a></li>
+    <li class="breadcrumb-item">
+      <a href="{% url 'mockup_relationship_view' id=relationship.id %}">
+        {{ relationship.from_element }} → {{ relationship.to_element }}
+      </a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page">Edit</li>
+  </ol>
+</nav>
+<h1 class="hg-page-title">Edit Relationship</h1>
+<p class="text-muted small mb-0">RELATIONSHIP-EDIT_RELATIONSHIP-1 · changes via Munin pipeline</p>
+{% endblock %}
+
+{% block content %}
+<div data-testid="relationship-edit-page" class="row justify-content-center">
+<div class="col-md-8 col-lg-6">
+  <form method="post" action="{% url 'mockup_changeset_view' id=1 %}"
+        data-testid="relationship-edit-form">
+    {% csrf_token %}
+    <div class="hg-card p-4">
+      <div class="row g-3">
+        <div class="col-12">
+          <label for="from_element" class="form-label" style="font-size:0.82rem;font-weight:600;">From element</label>
+          <input type="text" class="form-control" id="from_element" name="from_element"
+                 value="{{ relationship.from_element }}" list="elementsList"
+                 data-testid="from-element-input">
+          <datalist id="elementsList">
+            {% for el in elements %}<option value="{{ el.name }}">{% endfor %}
+          </datalist>
+        </div>
+        <div class="col-12">
+          <label for="edge_stereotype" class="form-label" style="font-size:0.82rem;font-weight:600;">Edge stereotype</label>
+          <select class="form-select" id="edge_stereotype" name="edge_stereotype"
+                  data-testid="edge-stereotype-select">
+            {% for s in edge_stereotype_options %}
+            <option {% if s == relationship.edge_stereotype %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Changing the stereotype re-validates allowed targets.</div>
+        </div>
+        <div class="col-12">
+          <label for="to_element" class="form-label" style="font-size:0.82rem;font-weight:600;">To element</label>
+          <input type="text" class="form-control" id="to_element" name="to_element"
+                 value="{{ relationship.to_element }}" list="elementsList"
+                 data-testid="to-element-input">
+        </div>
+      </div>
+    </div>
+    <div class="d-flex gap-2 mt-3">
+      <a href="{% url 'mockup_relationship_view' id=relationship.id %}" class="btn btn-outline-secondary">Cancel</a>
+      <button type="submit" class="btn btn-primary" data-testid="relationship-save-btn">
+        <i class="fa-solid fa-floppy-disk me-1" aria-hidden="true"></i>Submit changes to Munin
+      </button>
+    </div>
+  </form>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    console.log('[mockup:relationship-edit_relationship-1] page loaded, id={{ relationship.id }}');
+    document.querySelector('[data-testid="relationship-edit-form"]').addEventListener('submit', function (e) {
+      e.preventDefault();
+      console.log('[mockup:relationship-edit_relationship-1] submit clicked');
+      window.location.href = "{% url 'mockup_changeset_view' id=1 %}";
+    });
+  });
+</script>
+{% endblock %}

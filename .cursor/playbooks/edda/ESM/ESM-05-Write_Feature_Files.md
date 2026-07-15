@@ -15,9 +15,9 @@ APPEND TO GUIDANCE:
 
 ---
 
-## TAF Integration: Step Library Consumption
+## TFK Integration: Step Library Consumption
 
-Before writing new step definitions in .feature files, **consult the TAF Step Library Catalog** (produced by TAF-03).
+Before writing new step definitions in .feature files, **consult the TFK Step Library Catalog** (produced by TFK-03).
 
 ### Process
 
@@ -25,18 +25,18 @@ Before writing new step definitions in .feature files, **consult the TAF Step Li
 
 2. **Assemble from library**: Compose your scenarios using existing step patterns. This is the primary mode of operation — think of it as assembling building blocks.
 
-3. **If a step is missing**: Do NOT invent ad-hoc step definitions. Instead, invoke TAF-07 "Add Step and/or Fixture to Library" to create the new step following library conventions. TAF-07 will add it to the library and update the catalog.
+3. **If a step is missing**: Do NOT invent ad-hoc step definitions. Instead, invoke TFK-07 "Add Step and/or Fixture to Library" to create the new step following library conventions. TFK-07 will add it to the library and update the catalog.
 
-4. **If a fixture is missing**: Similarly, check the Fixture Library Catalog (produced by TAF-04). If the needed test data preset doesn't exist, invoke TAF-07.
+4. **If a fixture is missing**: Similarly, check the Fixture Library Catalog (produced by TFK-04). If the needed test data preset doesn't exist, invoke TFK-07.
 
 ### Why This Matters
 
-The step library is the shared vocabulary between ESM and TAF. When ESM writes `.feature` files using library steps, those scenarios become immediately executable by behave without additional step implementation work. Ad-hoc steps break this contract.
+The step library is the shared vocabulary between ESM and TFK. When ESM writes `.feature` files using library steps, those scenarios become immediately executable by behave without additional step implementation work. Ad-hoc steps break this contract.
 
 ## Inputs (additional)
 
-- **Step Library Catalog** (Document, Required) — produced by TAF-03 Build Step Library.
-- **Fixture Library Catalog** (Document, Required) — produced by TAF-04 Build Fixture Library.
+- **Step Library Catalog** (Document, Required) — produced by TFK-03 Build Step Library.
+- **Fixture Library Catalog** (Document, Required) — produced by TFK-04 Build Fixture Library.
 
 ## Agent
 

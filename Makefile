@@ -114,15 +114,19 @@ test-integration:  ## Run integration tests (requires DB)
 	$(UV) run pytest -m integration -q
 
 .PHONY: test-at
-test-at:  ## Run acceptance tests (behave-django)
-	$(UV) run behave features/at/
+test-at:  ## Run acceptance tests (behave-django, --simple: Django test client, atomic per-scenario rollback)
+	DJANGO_SETTINGS_MODULE=yggdrasil.test_settings $(MANAGE) behave --simple features/at/
 
 .PHONY: test-e2e
-test-e2e:  ## Run E2E tests (behave + Playwright)
-	$(UV) run behave features/e2e/
+test-e2e:  ## Run E2E tests (behave-django + Playwright, live server required)
+	DJANGO_SETTINGS_MODULE=yggdrasil.test_settings $(MANAGE) behave features/e2e/
 
 .PHONY: test-all
 test-all: test test-at  ## Run all tests (unit, integration, AT)
+
+.PHONY: watch
+watch:  ## Run tests continuously on file changes (unit + integration)
+	$(UV) run python continuous_test_runner.py
 
 # ---------------------------------------------------------------------------
 # Linting & formatting

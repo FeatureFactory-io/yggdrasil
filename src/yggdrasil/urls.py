@@ -7,8 +7,10 @@ URL namespacing convention:
   /mcp/       → MCP facade (FastMCP)
   /admin/     → Django admin
   /health/    → health check (no auth)
+  /mockups/   → HTML mockups, DEBUG only
 """
 
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 
@@ -20,3 +22,8 @@ urlpatterns = [
     path("api/v1/", include("yggdrasil.api.urls", namespace="api")),
     path("", include("yggdrasil.web.urls", namespace="web")),
 ]
+
+if settings.DEBUG:
+    urlpatterns += [
+        path("mockups/", include("mockups.urls")),
+    ]

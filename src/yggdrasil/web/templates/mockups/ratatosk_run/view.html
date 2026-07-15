@@ -1,0 +1,157 @@
+{% extends "mockups/base.html" %}
+{% block screen_id %}RATATOSK_RUN-VIEW_RATATOSK_RUN-1{% endblock %}
+{% block title %}Run {{ run.id }}{% endblock %}
+{% block nav_runs %}active{% endblock %}
+
+{% block page_header %}
+<div class="d-flex align-items-center gap-3">
+  <a href="{% url 'mockup_ratatosk_run_list' %}" class="text-muted" aria-label="Back">
+    <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+  </a>
+  <div>
+    <h1 class="hg-page-title d-flex align-items-center gap-2">
+      <code style="font-size:1rem;">run-{{ run.id|stringformat:"03d" }}</code>
+      <span class="badge" style="background:#d4edda;color:#155724;font-size:0.7rem;">{{ run.status }}</span>
+    </h1>
+    <p class="text-muted small mb-0">
+      RATATOSK_RUN-VIEW_RATATOSK_RUN-1 · {{ run.started }} · {{ run.duration }}
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div data-testid="ratatosk-run-view-page" class="row g-3">
+
+  <!-- Run metadata -->
+  <div class="col-md-3">
+    <div class="hg-card p-3">
+      <div class="hg-section-label mb-3">Run info</div>
+      <dl class="row mb-0" style="font-size:0.82rem;">
+        <dt class="col-6 text-muted fw-normal">Started</dt>
+        <dd class="col-6">{{ run.started }}</dd>
+        <dt class="col-6 text-muted fw-normal">Duration</dt>
+        <dd class="col-6">{{ run.duration }}</dd>
+        <dt class="col-6 text-muted fw-normal">Candidates</dt>
+        <dd class="col-6">{{ run.candidates }}</dd>
+        <dt class="col-6 text-muted fw-normal">Ops planned</dt>
+        <dd class="col-6">{{ run.operations }}</dd>
+      </dl>
+      {% if changeset %}
+      <hr>
+      <div class="hg-section-label mb-2">ChangeSet</div>
+      <a href="{% url 'mockup_changeset_view' id=changeset.id %}"
+         class="btn btn-outline-secondary btn-sm w-100"
+         data-testid="view-changeset-btn">
+        {{ changeset.run_id }}
+        <span class="hg-badge-source hg-badge-{{ changeset.status }} ms-1">{{ changeset.status }}</span>
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Trigger -->
+  <div class="col-md-9">
+    <div class="hg-card p-3 mb-3">
+      <div class="hg-section-label mb-2">Trigger command</div>
+      <pre class="bg-dark text-white rounded p-3 mb-0" style="font-size:0.78rem;">{{ run.trigger }}</pre>
+    </div>
+
+    <!-- Extraction log -->
+    <div class="accordion mb-3" id="accordionRun">
+      <div class="accordion-item hg-card">
+        <h2 class="accordion-header">
+          <button class="accordion-button" type="button" data-bs-toggle="collapse"
+                  data-bs-target="#extractionLog" aria-expanded="true"
+                  style="font-size:0.82rem;font-weight:600;">
+            <i class="fa-solid fa-terminal me-2 text-muted" aria-hidden="true"></i>Ratatosk extraction log
+          </button>
+        </h2>
+        <div id="extractionLog" class="accordion-collapse collapse show">
+          <div class="accordion-body p-0">
+            <pre class="bg-dark text-white p-3 mb-0 rounded-bottom" style="font-size:0.74rem;max-height:250px;overflow-y:auto;">[ratatosk] fetching existing model state via MCP …
+[ratatosk] found 16 existing elements, 18 relationships
+[ratatosk] scanning ./repo …
+[ratatosk] NER pass: 3 services, 12 modules, 4 external deps
+[ratatosk] delta: to_add=1 el, 2 rels · to_update=2 el · to_delete=1 el · unchanged=14 el
+[ratatosk] handing delta buckets to Munin …
+[munin] reading to_add bucket (1 element) …
+[munin] "Notification Service": stereotype=Container, package=Technology, conf=0.92
+[munin] reading to_update bucket (2 elements) …
+[munin] "Order Domain": owner drift detected, conf=0.88
+[munin] reading to_delete bucket (1 element) …
+[munin] "LegacyBatch": 0 active relationships, safe to delete, conf=0.95
+[munin] ChangeSet #1: 6 operations planned
+[ratatosk] run complete</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Munin reasoning trace -->
+      <div class="accordion-item hg-card mt-2">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                  data-bs-target="#muninTrace" aria-expanded="false"
+                  style="font-size:0.82rem;font-weight:600;">
+            <i class="fa-solid fa-brain me-2" style="color:var(--hg-accent);" aria-hidden="true"></i>
+            Munin reasoning trace
+          </button>
+        </h2>
+        <div id="muninTrace" class="accordion-collapse collapse">
+          <div class="accordion-body p-0">
+            <pre class="bg-dark text-white p-3 mb-0 rounded-bottom" style="font-size:0.74rem;max-height:250px;overflow-y:auto;">[munin] op 1: add Notification Service
+  → metamodel check: Container in Technology ✓
+  → allowed edges: calls, depends_on, serves ✓
+  → placement hint: Container Diagram C1 (conf=0.65, below threshold → queued)
+[munin] op 2: link Notification Service → Payment API (depends_on)
+  → edge rule: Container.depends_on.Container ✓ (conf=0.91)
+[munin] op 4: update Order Domain owner
+  → 4 files name fulfillment-team as owner; current model says payments-team
+  → confidence 0.88 → auto-apply
+[munin] op 5: delete LegacyBatch
+  → 0 incoming, 0 outgoing relationships → safe deletion
+  → confidence 0.95 → auto-apply
+[munin] ChangeSet finalised: 4 auto-apply, 2 queued (ops 1, 3)</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Munin blackboard -->
+      <div class="accordion-item hg-card mt-2">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                  data-bs-target="#blackboard" aria-expanded="false"
+                  style="font-size:0.82rem;font-weight:600;">
+            <i class="fa-solid fa-clipboard-list me-2 text-muted" aria-hidden="true"></i>
+            Munin blackboard (intent task list)
+          </button>
+        </h2>
+        <div id="blackboard" class="accordion-collapse collapse">
+          <div class="accordion-body p-0">
+            <pre class="bg-dark text-white p-3 mb-0 rounded-bottom" style="font-size:0.74rem;max-height:250px;overflow-y:auto;">{
+  "run_id": "run-003",
+  "intent": "plan graph operations from Ratatosk delta buckets",
+  "tasks": [
+    {"id": 1, "op": "process_to_add",    "status": "completed", "result": "1 element planned"},
+    {"id": 2, "op": "process_to_update", "status": "completed", "result": "2 elements planned"},
+    {"id": 3, "op": "process_to_delete", "status": "completed", "result": "1 element planned"},
+    {"id": 4, "op": "validate_edges",    "status": "completed", "result": "all edges valid"},
+    {"id": 5, "op": "classify_confidence","status": "completed", "result": "4 auto, 2 queued"},
+    {"id": 6, "op": "write_changeset",   "status": "completed", "result": "ChangeSet #1 created"}
+  ]
+}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    console.log('[mockup:ratatosk_run-view_ratatosk_run-1] page loaded, id={{ run.id }}');
+  });
+</script>
+{% endblock %}

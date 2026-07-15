@@ -1,0 +1,95 @@
+{% extends "mockups/base.html" %}
+{% block screen_id %}ELEMENT-EDIT_ELEMENT-1{% endblock %}
+{% block title %}Edit {{ element.name }}{% endblock %}
+{% block nav_elements %}active{% endblock %}
+
+{% block page_header %}
+<nav aria-label="breadcrumb" class="mb-1">
+  <ol class="breadcrumb mb-0 small">
+    <li class="breadcrumb-item"><a href="{% url 'mockup_element_list' %}">Elements</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'mockup_element_view' id=element.id %}">{{ element.name }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Edit</li>
+  </ol>
+</nav>
+<h1 class="hg-page-title">Edit Element</h1>
+<p class="text-muted small mb-0">ELEMENT-EDIT_ELEMENT-1 · {{ element.name }} · changes via Munin pipeline</p>
+{% endblock %}
+
+{% block content %}
+<div data-testid="element-edit-page" class="row justify-content-center">
+<div class="col-md-8 col-lg-6">
+  <form method="post" action="{% url 'mockup_changeset_view' id=1 %}"
+        data-testid="element-edit-form">
+    {% csrf_token %}
+    <div class="hg-card p-4">
+      <div class="row g-3">
+        <div class="col-12">
+          <label for="name" class="form-label" style="font-size:0.82rem;font-weight:600;">Name</label>
+          <input type="text" class="form-control" id="name" name="name"
+                 value="{{ element.name }}" required data-testid="element-name-input">
+        </div>
+        <div class="col-md-6">
+          <label for="stereotype" class="form-label" style="font-size:0.82rem;font-weight:600;">Stereotype</label>
+          <select class="form-select" id="stereotype" name="stereotype" data-testid="element-stereotype-select">
+            {% for s in stereotype_options %}
+            <option {% if s == element.stereotype %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label for="package" class="form-label" style="font-size:0.82rem;font-weight:600;">Package</label>
+          <select class="form-select" id="package" name="package" data-testid="element-package-select">
+            {% for p in package_options %}
+            <option {% if p == element.package %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12">
+          <label for="owner" class="form-label" style="font-size:0.82rem;font-weight:600;">Owner</label>
+          <input type="text" class="form-control" id="owner" name="owner"
+                 value="{{ element.owner }}" data-testid="element-owner-input">
+        </div>
+        <div class="col-12">
+          <div class="hg-section-label mb-2">Properties</div>
+          {% for k, v in element.properties.items %}
+          <div class="row g-2 align-items-center mb-2">
+            <div class="col-5">
+              <input type="text" class="form-control form-control-sm" value="{{ k }}" aria-label="Property name">
+            </div>
+            <div class="col-5">
+              <input type="text" class="form-control form-control-sm" value="{{ v }}" aria-label="Property value">
+            </div>
+            <div class="col-2">
+              <button type="button" class="btn btn-sm btn-outline-danger w-100" aria-label="Remove">
+                <i class="fa-solid fa-minus" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="d-flex gap-2 mt-3">
+      <a href="{% url 'mockup_element_view' id=element.id %}" class="btn btn-outline-secondary">Cancel</a>
+      <button type="submit" class="btn btn-primary" data-testid="element-save-btn"
+              onclick="console.log('[mockup:element-edit_element-1] save clicked')">
+        <i class="fa-solid fa-floppy-disk me-1" aria-hidden="true"></i>Submit changes to Munin
+      </button>
+    </div>
+  </form>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    console.log('[mockup:element-edit_element-1] page loaded, id={{ element.id }}');
+    document.querySelector('[data-testid="element-edit-form"]').addEventListener('submit', function (e) {
+      e.preventDefault();
+      console.log('[mockup:element-edit_element-1] submit clicked');
+      window.location.href = "{% url 'mockup_changeset_view' id=1 %}";
+    });
+  });
+</script>
+{% endblock %}

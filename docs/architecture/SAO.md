@@ -129,20 +129,18 @@ yggdrasil/
 ├── tests/
 │   ├── unit/
 │   ├── integration/
+│   ├── e2e/                 # behave + Playwright journey tests
 │   ├── infra/               # CDK assertion tests
 │   └── fixtures/
 │       ├── seed.json        # session-level base data
 │       ├── presets/         # suite-level presets
 │       └── factories/       # FactoryBoy
-├── features/                # behave AT + E2E runners (behave.ini paths = features)
-│   ├── at/                  # acceptance tests; Django test client in steps
-│   │   ├── steps/           # Step Library
-│   │   └── environment.py
-│   └── e2e/                 # journey tests; Playwright in steps
-│       ├── steps/
-│       └── environment.py
 ├── docs/
-│   ├── features/            # living BDD specs (ESM); promoted to features/ in BPE
+│   ├── features/            # BDD spec + AT runner (behave paths = docs/features)
+│   │   ├── act-*/           # .feature files per act
+│   │   ├── steps/           # Step Library
+│   │   ├── support/         # page registry, shared helpers
+│   │   └── environment.py
 │   └── architecture/
 │       ├── SAO.md           # this file
 │       └── decisions/       # ADR-NNN-title.md
@@ -256,38 +254,35 @@ E2E tests explicitly model user behavior: each scenario represents a goal a real
 **Test directory structure:**
 
 ```
+docs/features/                     # BDD spec + AT runner (behave.ini paths = docs/features)
+├── act-*/                         # .feature files per act (ESM-05)
+├── steps/                         # TAF Step Library
+│   ├── navigation_steps.py
+│   ├── form_steps.py
+│   ├── table_steps.py
+│   ├── auth_steps.py
+│   ├── assertion_steps.py
+│   └── dialog_steps.py
+├── support/                       # page registry (PAGE_REGISTRY)
+├── environment.py                 # behave-django AT lifecycle
+└── user_journey.md
+
 tests/
 ├── unit/
 ├── integration/
-├── infra/                       # CDK assertion tests
+├── e2e/                           # behave + Playwright
+│   ├── *.feature                  # @e2e tag
+│   ├── steps/
+│   └── environment.py             # Playwright browser setup, screenshot on every step
+├── infra/                         # CDK assertion tests
 ├── fixtures/
-│   ├── seed.json                # Session-level base data (loaded once in before_all)
-│   ├── presets/                 # Suite-level presets (team_preset.json, empty_preset.json)
-│   └── factories/               # FactoryBoy — test-level dynamic data
-│       ├── user_factory.py
-│       └── model_factories.py
+│   ├── seed.json
+│   ├── presets/
+│   └── factories/
 └── conftest.py
-
-features/                          # behave runners (behave.ini paths = features)
-├── at/                            # behave-django AT
-│   ├── *.feature
-│   ├── steps/                     # TAF Step Library
-│   │   ├── navigation_steps.py
-│   │   ├── form_steps.py
-│   │   ├── table_steps.py
-│   │   ├── auth_steps.py
-│   │   ├── assertion_steps.py
-│   │   └── dialog_steps.py
-│   └── environment.py
-└── e2e/                           # behave + Playwright
-    ├── *.feature                  # @e2e tag; excluded from default AT runs
-    ├── steps/
-    └── environment.py             # Playwright browser setup, screenshot on every step
-
-docs/features/act-*/               # living BDD specs (ESM); not run by CI directly
 ```
 
-**Spec vs runner:** Gherkin scenarios are authored in `docs/features/act-*/` (living spec, PIN contracts, pre-implementation gate). BPE-04/05 **promote (copy)** executable scenarios into `features/at/` or `features/e2e/`; both copies must stay in sync. CI (`make test-at`, `make test-e2e`) runs only `features/`. See [`test-architecture.md` §4 — Spec vs Runner](test-architecture.md#4-spec-vs-runner-gherkin-dual-location).
+**Single source of truth:** Gherkin scenarios in `docs/features/act-*/` are both the living spec and the CI AT runner. Tag not-yet-implemented scenarios `@wip` — CI excludes them via `behave.ini` `tags = ~@wip`. E2E journey tests live in `tests/e2e/` (separate Playwright lifecycle).
 
 **Fixture scopes:**
 
@@ -303,7 +298,7 @@ docs/features/act-*/               # living BDD specs (ESM); not run by CI direc
 - All pytest runs write to `tests.log` (`do-continuous-testing.mdc`)
 - `data-testid` on every interactive control, hierarchical naming (`do-semantic-versioning-on-ui-elements.mdc`)
 - BDD `.feature` file in `docs/features/act-X/` must exist before implementation begins (`do-write-scenarios.mdc`)
-- Promoted scenarios must exist in `features/at/` (or `features/e2e/` with `@e2e`) and pass before merge
+- `@wip` scenarios excluded from CI; all other `docs/features/` scenarios must pass AT before merge
 - Coverage quality over quantity — 90% coverage with useless tests is worse than 60% with real integration tests
 
 **Coverage targets:** thin unit coverage on pure logic only; 100% of CRUD + ChangeSet paths covered by integration tests; all `.feature` scenarios passing AT; 5 E2E journeys on staging before release.

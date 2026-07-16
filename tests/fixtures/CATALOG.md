@@ -10,7 +10,7 @@ See also: [`docs/architecture/test-architecture.md`](../architecture/test-archit
 ## Session scope — `seed.json`
 
 **File:** [`tests/fixtures/seed.json`](seed.json)
-**Loaded:** once per AT suite via `features/at/environment.py` → `context.fixtures = ["seed"]`
+**Loaded:** once per AT suite via `docs/features/environment.py` → `context.fixtures = ["seed"]`
 **Mechanism:** Django `loaddata` inside behave-django's per-scenario atomic block (rolled back after each scenario)
 
 | PK | Model | Identity | Role |

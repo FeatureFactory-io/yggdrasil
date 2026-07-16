@@ -50,9 +50,7 @@ Every Screen ID must appear in:
 2. **Screen Flow** (`docs/ux/2_dialogue-maps/screen-flow.drawio`) — box label
 3. **Feature File** (`docs/features/act-*/{entity}-{operation}.feature`) — feature title
 4. **Template** (`templates/...`) — HTML comment + `data-testid`
-5. **Tests** (`tests/...` for pytest; `features/at/` or `features/e2e/` for behave AT/E2E) — test names reference Screen ID
-
-**Gherkin dual-location:** specs live in `docs/features/`; CI-owned runners in `features/at/` (AT) and `features/e2e/` (E2E). BPE-04/05 promote (copy) and keep both in sync. See `docs/architecture/test-architecture.md` §4.
+5. **Tests** (`tests/...` for pytest; `docs/features/` for behave AT; `tests/e2e/` for E2E) — test names reference Screen ID
 
 ### Semantic URLs (API / MCP)
 

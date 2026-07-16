@@ -29,8 +29,8 @@ Integration tests hit the sweet spot — real thing, no browser overhead, fast e
 |---|---|---|
 | Unit | pytest + pytest-django | Thin — do not test framework behaviour or auto-generated views |
 | Integration | pytest + Django test client | Real PostgreSQL, real services; **no mocks ever** |
-| AT | behave + behave-django | Step Library; Django test client in steps; no browser |
-| E2E | behave + behave-django + Playwright | Playwright in steps; screenshots after every step |
+| AT | behave + behave-django | `docs/features/` — spec and runner; Step Library in `docs/features/steps/` |
+| E2E | behave + behave-django + Playwright | `tests/e2e/` — Playwright in steps; `@e2e` tag |
 | CDK infra | `aws_cdk.assertions` | Synthesise in-memory; no AWS credentials required |
 
 AT and E2E share the same `behave` / `behave-django` infrastructure.
@@ -56,36 +56,11 @@ The distinction is **scope and intent**, not tooling — see SAO.md for the full
 - All pytest runs write to `tests.log` (`do-continuous-testing.mdc`)
 - `data-testid` on every interactive control (`do-semantic-versioning-on-ui-elements.mdc`)
 - BDD `.feature` file must exist in `docs/features/act-X/` before implementation begins
-- Promoted scenarios must exist under `features/at/` (or `features/e2e/` with `@e2e`) and pass before merge
+- `@wip` scenarios are excluded from CI (`behave.ini` `tags = ~@wip`); all other scenarios must pass AT before merge
 
 ---
 
-## 4. Spec vs Runner (Gherkin dual-location)
-
-Gherkin scenarios live in **two locations** with different roles. CI never runs `docs/features/`.
-
-| Location | Role | When |
-|---|---|---|
-| `docs/features/act-*/` | Living BDD **spec** — ESM writes; PIN contracts; human review | Before implementation begins |
-| `features/at/` | **CI-owned AT runner** — behave-django, Django test client | Every PR (`make test-at`) |
-| `features/e2e/` | **CI-owned E2E runner** — behave + Playwright, `@e2e` tag | Staging before `make swap` |
-
-**Promote = copy + keep in sync** (do not delete from docs):
-
-1. ESM-05 authors scenarios in `docs/features/act-*/`.
-2. BPE-04 copies executable scenarios into `features/at/` (same scenario text).
-3. BPE-05 copies journey scenarios into `features/e2e/` when browser certification is required.
-4. After promotion, edits to scenario text must update **both** copies in the same change.
-
-Step definitions and behave lifecycle live under `features/at/steps/`, `features/e2e/steps/`, and `features/*/environment.py`. `behave.ini` sets `paths = features`.
-
-**Cursor hook:** `.cursor/hooks/sync-feature-spec.py` warns when a promoted twin drifts (see `.cursor/hooks/README.md`).
-
-See also: SAO.md §5 Test Strategy for the full AT vs E2E comparison table.
-
----
-
-## 5. Zero-Bug Policy
+## 4. Zero-Bug Policy
 
 A bug is a failing integration or AT scenario — it is a **specification gap**, not an isolated defect.
 
@@ -98,7 +73,7 @@ No bug is closed without a corresponding test. "Fixed but untested" is not fixed
 
 ---
 
-## 6. Zero-Length Feedback Workflow
+## 5. Zero-Length Feedback Workflow
 
 The goal: code change → test result in the **shortest possible loop**.
 

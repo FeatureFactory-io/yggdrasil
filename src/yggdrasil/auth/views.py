@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from django.contrib.auth import authenticate, login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect, render
 from django.views import View
@@ -61,11 +62,39 @@ class LoginView(View):
 
     def post(self, request: HttpRequest) -> HttpResponse:
         """
-        Validate credentials and start session.
+        Validate credentials and start a session.
 
+        Calls Django's ``authenticate()`` (never raw ORM) so pluggable
+        backends remain supported.  Session key is rotated by ``login()``
+        to prevent session fixation.
+
+        :param request: Incoming POST request with ``email`` and ``password``.
+        :return: 302 redirect on success; 200 re-render with error on failure.
         :raises N/A: Never raises — form errors are rendered in place.
+
+        :Example:
+
+        POST /auth/login/ email=elena@example.com password=… → 302 /
+        POST /auth/login/ email=bad@example.com password=wrong → 200 (error)
         """
-        raise NotImplementedError()
+        email = request.POST.get("email", "").strip()
+        password = request.POST.get("password", "")
+        logger.info(
+            "LoginView.post: attempt | email=%s ip=%s",
+            email,
+            request.META.get("REMOTE_ADDR"),
+        )
+        user = authenticate(request, username=email, password=password)
+        if user is None:
+            logger.warning("LoginView.post: authentication failed | email=%s", email)
+            return render(
+                request,
+                self.template_name,
+                {"error": "Invalid email or password."},
+            )
+        login(request, user)
+        logger.info("LoginView.post: login success | user_pk=%s", user.pk)
+        return self._redirect_after_login(request)
 
     def _redirect_after_login(self, request: HttpRequest) -> HttpResponse:
         """
@@ -79,8 +108,8 @@ class LoginView(View):
         ?next=/graph/ → redirect to /graph/
         (no next)     → redirect to /
         """
-        next_url = request.GET.get("next", _DEFAULT_REDIRECT)
-        if not next_url or not next_url.startswith("/"):
+        next_url = request.POST.get("next") or request.GET.get("next", _DEFAULT_REDIRECT)
+        if not next_url or not next_url.startswith("/") or next_url.startswith("//"):
             next_url = _DEFAULT_REDIRECT
         logger.info("LoginView._redirect_after_login: redirecting to %s", next_url)
         return redirect(next_url)

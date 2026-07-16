@@ -10,7 +10,7 @@ Personas from [PRD.MD](../../PRD.MD). Primary actors: **Priya** (Software Archit
 
 ## Act 0: Authentication & API Access
 
-**Context:** Any user opens Yggdrasil. Unauthenticated users see login; authenticated users land on the dashboard. Accounts are admin-provisioned (Groups/PBAC — Key Features 6/7), not self-registered. CLI (Ratatosk) and MCP clients authenticate with a personal access token instead of a session.
+**Context:** Any user opens Yggdrasil. Unauthenticated users see log,in; authenticated users land on the dashboard. Accounts are admin-provisioned (Groups/PBAC — Key Features 6/7), not self-registered. CLI (Ratatosk) and MCP clients authenticate with a personal access token instead of a session.
 
 #### Screen: AUTH-LOGIN-1
 

@@ -123,3 +123,44 @@ def test_token_list_empty_state(client, django_user_model):
 
     assert response.status_code == 200
     assert b"No tokens yet." in response.content
+
+
+@pytest.mark.django_db
+def test_token_page_shows_nav_settings_and_user_menu(client, django_user_model):
+    """
+    Authenticated GET /auth/tokens/ includes nav-settings and user-menu testids.
+
+    Both testids must be present so the navigation links to the settings page
+    and the user dropdown is accessible from the token management screen.
+
+    :Example:
+
+    force_login → GET /auth/tokens/ → 200, data-testid="nav-settings" present
+    """
+    user = django_user_model.objects.create_user(username="nav_user", password="p")
+    client.force_login(user)
+
+    response = client.get(reverse("auth:token_list"))
+
+    assert response.status_code == 200
+    assert b'data-testid="nav-settings"' in response.content
+    assert b'data-testid="user-menu"' in response.content
+
+
+@pytest.mark.django_db
+def test_login_page_has_no_navbar(client):
+    """
+    GET /auth/login/ does not include nav-settings or user-menu testids.
+
+    The login page is a standalone page with no active session, so the
+    navbar must be absent to avoid UI confusion.
+
+    :Example:
+
+    GET /auth/login/ → 200, no data-testid="nav-settings" in body
+    """
+    response = client.get(reverse("auth:login"))
+
+    assert response.status_code == 200
+    assert b'data-testid="nav-settings"' not in response.content
+    assert b'data-testid="user-menu"' not in response.content

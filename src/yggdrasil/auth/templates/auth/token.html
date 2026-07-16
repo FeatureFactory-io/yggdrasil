@@ -6,6 +6,14 @@
   <title>API Access — Yggdrasil</title>
 </head>
 <body>
+  <!-- Navbar — nav-settings links to AUTH-TOKEN-1; user-menu for profile/logout -->
+  <nav>
+    <a href="{% url 'auth:token_list' %}" data-testid="nav-settings">Settings</a>
+    <div data-testid="user-menu">
+      {% if user.is_authenticated %}{{ user.username }}{% endif %}
+    </div>
+  </nav>
+
   <!-- Screen: AUTH-TOKEN-1 -->
   <div data-testid="auth-token-page">
     <h1>API Access</h1>

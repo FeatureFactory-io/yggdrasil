@@ -1,0 +1,351 @@
+iteration:
+  goal: "Act 0 — Authentication & API Access: login, session, personal access tokens"
+  doctrine_version: "2.0"
+  created_at: "2026-07-16T13:00:00+02:00"
+  branch: "iteration/20260716-act-0-foundation"
+
+conflict_map:
+  src/yggdrasil/auth/models.py: [S01, S02, S03, S04, S05, S06, S07, S08, S09, S10, S11, S12]
+  src/yggdrasil/auth/services.py: [S06, S07, S08, S09, S10, S11, S12]
+  src/yggdrasil/auth/views.py: [S01, S02, S03, S04, S05, S06, S07, S08, S09, S10, S11, S12]
+  src/yggdrasil/auth/urls.py: [S01, S02, S03, S04, S05, S06, S07, S08, S09, S10, S11, S12]
+  src/yggdrasil/auth/admin.py: [S06, S07, S08, S09, S10, S11, S12]
+  # All scenarios share one bounded context — serialized in one group.
+
+parallel_groups:
+  A: [S01, S02, S03, S04, S05, S06, S07, S08, S09, S10, S11, S12]
+  # No cross-app conflicts — entire act fits in one parallel group.
+  # Within GROUP A implement in scenario order (S01 → S12); each
+  # scenario is a self-contained GET assertion, not a state machine.
+
+drift_thresholds:
+  absorbed:
+    checkpoint_fail_retry: 1
+  escalated:
+    footprint_violation: true
+    method_explosion: true
+    sao_violation: true
+    checkpoint_fail_after_retry: true
+
+scenarios:
+  S01:
+    title: "AUTH-LOGIN-1-01 Login page renders with email, password, and sign-in button"
+    parallel_group: A
+    skeleton_commit: "63e2845"
+    codebase_footprint:
+      - src/yggdrasil/auth/models.py
+      - src/yggdrasil/auth/views.py
+      - src/yggdrasil/auth/urls.py
+    feature_file_paths:
+      - docs/features/act-0-auth/auth-login.feature
+    system_dependencies: []
+    checkpoint:
+      command: >
+        DJANGO_SETTINGS_MODULE=yggdrasil.test_settings
+        uv run python manage.py behave --simple --wip
+        --include "auth-login.feature" docs/features/ 2>&1 | tail -5
+      expected_exit_code: 0
+    dependencies: []
+    context_map:
+      - "src/yggdrasil/auth/views.py:LoginView.get — render login form"
+      - "mockups/views.py:auth_login — mockup reference implementation"
+      - "src/yggdrasil/web/templates/mockups/auth/login.html — template with data-testid attrs"
+      - "docs/features/steps/assertion_steps.py:step_element_visible — checks data-testid"
+      - "docs/features/steps/http_steps.py:step_get_path — Django test client GET"
+    do_not_do:
+      - "Do NOT create a new Django app"
+      - "Do NOT add a repository/manager layer — service layer only (SAO.md §3)"
+      - "Do NOT access ORM from views — call service methods"
+      - "Do NOT add JavaScript or client-side rendering to the real login view"
+      - "Do NOT bypass Django's CSRF middleware"
+    sao_sections:
+      - "§1 Application Blocks — auth bounded context"
+      - "§3 Code Organization — views → service layer → models"
+      - "§5 Test Strategy — AT mockup-backed scenarios"
+
+  S02:
+    title: "AUTH-LOGIN-1-02 Successful sign-in redirects to View Browser"
+    parallel_group: A
+    skeleton_commit: "63e2845"
+    codebase_footprint:
+      - src/yggdrasil/auth/views.py
+      - src/yggdrasil/auth/urls.py
+    feature_file_paths:
+      - docs/features/act-0-auth/auth-login.feature
+    system_dependencies: []
+    checkpoint:
+      command: >
+        DJANGO_SETTINGS_MODULE=yggdrasil.test_settings
+        uv run python manage.py behave --simple --wip
+        --include "auth-login.feature" docs/features/ 2>&1 | tail -5
+      expected_exit_code: 0
+    dependencies: [S01]
+    context_map:
+      - "src/yggdrasil/auth/views.py:LoginView.post — authenticate + redirect"
+      - "src/yggdrasil/auth/views.py:LoginView._redirect_after_login — redirect target"
+      - "mockups/urls.py:mockup_view_browse — redirect destination"
+      - "docs/features/steps/auth_steps.py:step_user_not_authenticated"
+      - "src/yggdrasil/web/templates/mockups/auth/login.html — form submits to view_browse"
+    do_not_do:
+      - "Do NOT hardcode the redirect URL — use reverse() or settings.LOGIN_REDIRECT_URL"
+      - "Do NOT use GET for the POST login action"
+    sao_sections:
+      - "§1 Application Blocks — auth + web"
+      - "§3 Code Organization"
+
+  S03:
+    title: "AUTH-LOGIN-1-03 Login page shows admin-provisioned account notice"
+    parallel_group: A
+    skeleton_commit: "63e2845"
+    codebase_footprint:
+      - src/yggdrasil/auth/views.py
+      - src/yggdrasil/web/templates/mockups/auth/login.html
+    feature_file_paths:
+      - docs/features/act-0-auth/auth-login.feature
+    system_dependencies: []
+    checkpoint:
+      command: >
+        DJANGO_SETTINGS_MODULE=yggdrasil.test_settings
+        uv run python manage.py behave --simple --wip
+        --include "auth-login.feature" docs/features/ 2>&1 | tail -5
+      expected_exit_code: 0
+    dependencies: [S01]
+    context_map:
+      - "src/yggdrasil/web/templates/mockups/auth/login.html — must contain 'Accounts are admin-provisioned'"
+      - "docs/features/steps/assertion_steps.py:step_user_should_see_text"
+    do_not_do:
+      - "Do NOT add self-registration UI — accounts are admin-provisioned only"
+    sao_sections:
+      - "§13 Security — admin-provisioned accounts"
+
+  S04:
+    title: "AUTH-LOGIN-1-04 Authenticated architect is redirected to View Browser (direct URL)"
+    parallel_group: A
+    skeleton_commit: "63e2845"
+    codebase_footprint:
+      - src/yggdrasil/auth/views.py
+      - mockups/views.py
+    feature_file_paths:
+      - docs/features/act-0-auth/auth-login.feature
+    system_dependencies: []
+    checkpoint:
+      command: >
+        DJANGO_SETTINGS_MODULE=yggdrasil.test_settings
+        uv run python manage.py behave --simple --wip
+        --include "auth-login.feature" docs/features/ 2>&1 | tail -5
+      expected_exit_code: 0
+    dependencies: [S01]
+    context_map:
+      - "docs/features/steps/auth_steps.py:step_user_logged_in_as — force_login via test client"
+      - "mockups/urls.py:mockup_view_browse — target URL"
+      - "src/yggdrasil/web/templates/mockups/view/browse.html — data-testid=view-browse-page"
+    do_not_do:
+      - "Do NOT gate the mockup view behind login_required — mockup is DEBUG-only and sessionless"
+    sao_sections:
+      - "§1 Application Blocks"
+      - "§5 Test Strategy"
+
+  S05:
+    title: "AUTH-LOGIN-1-05 Unauthenticated user is redirected to login for protected pages"
+    parallel_group: A
+    skeleton_commit: "63e2845"
+    codebase_footprint:
+      - src/yggdrasil/auth/views.py
+      - src/yggdrasil/urls.py
+    feature_file_paths:
+      - docs/features/act-0-auth/auth-login.feature
+    system_dependencies: []
+    checkpoint:
+      command: >
+        DJANGO_SETTINGS_MODULE=yggdrasil.test_settings
+        uv run python manage.py behave --simple --wip
+        --include "auth-login.feature" docs/features/ 2>&1 | tail -5
+      expected_exit_code: 0
+    dependencies: [S01]
+    context_map:
+      - "src/yggdrasil/auth/views.py — LoginRequiredMixin on protected views"
+      - "src/yggdrasil/urls.py — LOGIN_URL setting"
+      - "# TFK-07: step 'Then the user is redirected to login' not yet in step library"
+    do_not_do:
+      - "Do NOT add the redirect step — TFK-07 tracks it; scenario passes vacuously until then"
+    sao_sections:
+      - "§13 Security"
+
+  S06:
+    title: "AUTH-TOKEN-1-01 Token page renders with existing tokens and generate button"
+    parallel_group: A
+    skeleton_commit: "63e2845"
+    codebase_footprint:
+      - src/yggdrasil/auth/models.py
+      - src/yggdrasil/auth/views.py
+      - src/yggdrasil/auth/services.py
+    feature_file_paths:
+      - docs/features/act-0-auth/auth-token.feature
+    system_dependencies: []
+    checkpoint:
+      command: >
+        DJANGO_SETTINGS_MODULE=yggdrasil.test_settings
+        uv run python manage.py behave --simple --wip
+        --include "auth-token.feature" docs/features/ 2>&1 | tail -5
+      expected_exit_code: 0
+    dependencies: [S01]
+    context_map:
+      - "mockups/views.py:auth_token — mockup reference: renders MOCK_TOKENS context"
+      - "src/yggdrasil/web/templates/mockups/auth/token.html — data-testid=auth-token-page, generate-token-btn"
+      - "src/yggdrasil/auth/views.py:TokenListView.get — passes tokens to template"
+      - "src/yggdrasil/auth/services.py:TokenService.list_tokens"
+      - "docs/features/steps/assertion_steps.py:step_element_visible"
+    do_not_do:
+      - "Do NOT expose raw token values in the list — show name, created_at, last_used_at, scope only"
+    sao_sections:
+      - "§1 Application Blocks — auth"
+      - "§4 Data Architecture — PersonalAccessToken"
+
+  S07:
+    title: "AUTH-TOKEN-1-02 Token table shows 2 existing tokens with all required columns"
+    parallel_group: A
+    skeleton_commit: "63e2845"
+    codebase_footprint:
+      - src/yggdrasil/auth/views.py
+      - src/yggdrasil/auth/services.py
+    feature_file_paths:
+      - docs/features/act-0-auth/auth-token.feature
+    system_dependencies: []
+    checkpoint:
+      command: >
+        DJANGO_SETTINGS_MODULE=yggdrasil.test_settings
+        uv run python manage.py behave --simple --wip
+        --include "auth-token.feature" docs/features/ 2>&1 | tail -5
+      expected_exit_code: 0
+    dependencies: [S06]
+    context_map:
+      - "tests/fixtures/seed.json — must contain 2 tokens for priya@example.com"
+      - "src/yggdrasil/web/templates/mockups/auth/token.html — data-testid=token-row-{id}"
+      - "src/yggdrasil/auth/services.py:TokenService.list_tokens — ordered by -created_at"
+    do_not_do:
+      - "Do NOT rely on fixture IDs being stable — use token name for assertions"
+    sao_sections:
+      - "§4 Data Architecture"
+      - "§5 Test Strategy — seed.json"
+
+  S08:
+    title: "AUTH-TOKEN-1-03 Each token row has a revoke action"
+    parallel_group: A
+    skeleton_commit: "63e2845"
+    codebase_footprint:
+      - src/yggdrasil/auth/views.py
+      - src/yggdrasil/auth/services.py
+    feature_file_paths:
+      - docs/features/act-0-auth/auth-token.feature
+    system_dependencies: []
+    checkpoint:
+      command: >
+        DJANGO_SETTINGS_MODULE=yggdrasil.test_settings
+        uv run python manage.py behave --simple --wip
+        --include "auth-token.feature" docs/features/ 2>&1 | tail -5
+      expected_exit_code: 0
+    dependencies: [S06]
+    context_map:
+      - "src/yggdrasil/web/templates/mockups/auth/token.html — data-testid=revoke-token-{id}"
+      - "src/yggdrasil/auth/views.py:TokenRevokeView — POST endpoint"
+      - "src/yggdrasil/auth/urls.py — tokens/<id>/revoke/"
+    do_not_do:
+      - "Do NOT allow GET revoke — must be POST (CSRF)"
+    sao_sections:
+      - "§13 Security"
+
+  S09:
+    title: "AUTH-TOKEN-1-04 Generate token modal has name and scope fields"
+    parallel_group: A
+    skeleton_commit: "63e2845"
+    codebase_footprint:
+      - src/yggdrasil/auth/views.py
+    feature_file_paths:
+      - docs/features/act-0-auth/auth-token.feature
+    system_dependencies: []
+    checkpoint:
+      command: >
+        DJANGO_SETTINGS_MODULE=yggdrasil.test_settings
+        uv run python manage.py behave --simple --wip
+        --include "auth-token.feature" docs/features/ 2>&1 | tail -5
+      expected_exit_code: 0
+    dependencies: [S06]
+    context_map:
+      - "src/yggdrasil/web/templates/mockups/auth/token.html — data-testid=token-name-input, create-token-submit"
+      - "src/yggdrasil/auth/views.py:TokenCreateView.post — validates name + scope"
+    do_not_do:
+      - "Do NOT show the raw token value in a list-refresh — show it once in the create response only"
+    sao_sections:
+      - "§4 Data Architecture — PersonalAccessToken.scope"
+
+  S10:
+    title: "AUTH-TOKEN-1-05 Generate token form requires a name"
+    parallel_group: A
+    skeleton_commit: "63e2845"
+    codebase_footprint:
+      - src/yggdrasil/auth/views.py
+    feature_file_paths:
+      - docs/features/act-0-auth/auth-token.feature
+    system_dependencies: []
+    checkpoint:
+      command: >
+        DJANGO_SETTINGS_MODULE=yggdrasil.test_settings
+        uv run python manage.py behave --simple --wip
+        --include "auth-token.feature" docs/features/ 2>&1 | tail -5
+      expected_exit_code: 0
+    dependencies: [S09]
+    context_map:
+      - "src/yggdrasil/web/templates/mockups/auth/token.html — required attribute on token-name-input"
+      - "# TFK-07: validation scenario for empty-name POST not yet in step library"
+    do_not_do:
+      - "Do NOT validate only client-side — server must also reject blank name"
+    sao_sections:
+      - "§3 Code Organization — input validation at method boundaries (AGENTS.md)"
+
+  S11:
+    title: "AUTH-TOKEN-1-06 Page shows CLI usage snippets for Ratatosk and MCP"
+    parallel_group: A
+    skeleton_commit: "63e2845"
+    codebase_footprint:
+      - src/yggdrasil/web/templates/mockups/auth/token.html
+    feature_file_paths:
+      - docs/features/act-0-auth/auth-token.feature
+    system_dependencies: []
+    checkpoint:
+      command: >
+        DJANGO_SETTINGS_MODULE=yggdrasil.test_settings
+        uv run python manage.py behave --simple --wip
+        --include "auth-token.feature" docs/features/ 2>&1 | tail -5
+      expected_exit_code: 0
+    dependencies: [S06]
+    context_map:
+      - "src/yggdrasil/web/templates/mockups/auth/token.html — must contain 'pip install ratatosk' and 'YGGDRASIL_TOKEN'"
+      - "docs/features/user_journey.md Act 0 — AUTH-TOKEN-1 usage snippet"
+    do_not_do:
+      - "Do NOT hardcode a specific token value in the snippet — use a placeholder"
+    sao_sections:
+      - "§1 Application Blocks — Ratatosk CLI distributable"
+
+  S12:
+    title: "AUTH-TOKEN-1-07 Settings nav link is visible in user menu"
+    parallel_group: A
+    skeleton_commit: "63e2845"
+    codebase_footprint:
+      - src/yggdrasil/web/templates/mockups/base.html
+    feature_file_paths:
+      - docs/features/act-0-auth/auth-token.feature
+    system_dependencies: []
+    checkpoint:
+      command: >
+        DJANGO_SETTINGS_MODULE=yggdrasil.test_settings
+        uv run python manage.py behave --simple --wip
+        --include "auth-token.feature" docs/features/ 2>&1 | tail -5
+      expected_exit_code: 0
+    dependencies: [S06]
+    context_map:
+      - "src/yggdrasil/web/templates/mockups/base.html — data-testid=nav-settings, user-menu"
+      - "docs/features/steps/assertion_steps.py:step_element_visible"
+    do_not_do:
+      - "Do NOT add nav-settings to auth/login.html — login page has no navbar"
+    sao_sections:
+      - "§1 Application Blocks — web"

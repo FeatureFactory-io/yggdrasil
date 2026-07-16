@@ -48,7 +48,7 @@ is not here, invoke **TFK-07** — do not invent ad-hoc steps.
 **E2E implementation:** `context.page.goto(url)` via Playwright.
 
 **PAGE_REGISTRY current entries:** `"landing"` → `web:index`, `"health"` → `health`.
-Additional entries added by BPE-04 when AT scenarios move to `features/at/`.
+Additional entries added by BPE-04 when AT scenarios are promoted (copied) to `features/at/`; keep in sync with `docs/features/`.
 
 ---
 

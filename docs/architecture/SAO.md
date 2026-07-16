@@ -129,18 +129,24 @@ yggdrasil/
 ├── tests/
 │   ├── unit/
 │   ├── integration/
-│   ├── acceptance/          # behave-django AT; Step Library
-│   ├── e2e/                 # behave + Playwright
 │   ├── infra/               # CDK assertion tests
 │   └── fixtures/
 │       ├── seed.json        # session-level base data
 │       ├── presets/         # suite-level presets
 │       └── factories/       # FactoryBoy
-├── scripts/                 # deploy-staging.sh, promote-prod.sh
+├── features/                # behave AT + E2E runners (behave.ini paths = features)
+│   ├── at/                  # acceptance tests; Django test client in steps
+│   │   ├── steps/           # Step Library
+│   │   └── environment.py
+│   └── e2e/                 # journey tests; Playwright in steps
+│       ├── steps/
+│       └── environment.py
 ├── docs/
+│   ├── features/            # living BDD specs (ESM); promoted to features/ in BPE
 │   └── architecture/
 │       ├── SAO.md           # this file
 │       └── decisions/       # ADR-NNN-title.md
+├── scripts/                 # deploy-staging.sh, promote-prod.sh
 ├── logs/                    # app.log (gitignored)
 ├── Dockerfile               # backend (web + Celery worker)
 ├── Dockerfile.mcp           # MCP facade (FastMCP + httpx only)
@@ -253,29 +259,35 @@ E2E tests explicitly model user behavior: each scenario represents a goal a real
 tests/
 ├── unit/
 ├── integration/
-├── acceptance/                  # behave-django AT
-│   ├── features/
-│   │   └── steps/               # TAF Step Library
-│   │       ├── navigation_steps.py
-│   │       ├── form_steps.py
-│   │       ├── table_steps.py
-│   │       ├── auth_steps.py
-│   │       ├── assertion_steps.py
-│   │       └── dialog_steps.py
-│   └── environment.py
-├── e2e/                         # behave + Playwright
-│   ├── features/
-│   │   └── steps/
-│   └── environment.py           # Playwright browser setup, screenshot on every step
+├── infra/                       # CDK assertion tests
 ├── fixtures/
 │   ├── seed.json                # Session-level base data (loaded once in before_all)
 │   ├── presets/                 # Suite-level presets (team_preset.json, empty_preset.json)
 │   └── factories/               # FactoryBoy — test-level dynamic data
 │       ├── user_factory.py
 │       └── model_factories.py
-├── infra/                       # CDK assertion tests
 └── conftest.py
+
+features/                          # behave runners (behave.ini paths = features)
+├── at/                            # behave-django AT
+│   ├── *.feature
+│   ├── steps/                     # TAF Step Library
+│   │   ├── navigation_steps.py
+│   │   ├── form_steps.py
+│   │   ├── table_steps.py
+│   │   ├── auth_steps.py
+│   │   ├── assertion_steps.py
+│   │   └── dialog_steps.py
+│   └── environment.py
+└── e2e/                           # behave + Playwright
+    ├── *.feature                  # @e2e tag; excluded from default AT runs
+    ├── steps/
+    └── environment.py             # Playwright browser setup, screenshot on every step
+
+docs/features/act-*/               # living BDD specs (ESM); not run by CI directly
 ```
+
+**Spec vs runner:** Gherkin scenarios are authored in `docs/features/act-*/` (living spec, PIN contracts, pre-implementation gate). BPE-04/05 **promote (copy)** executable scenarios into `features/at/` or `features/e2e/`; both copies must stay in sync. CI (`make test-at`, `make test-e2e`) runs only `features/`. See [`test-architecture.md` §4 — Spec vs Runner](test-architecture.md#4-spec-vs-runner-gherkin-dual-location).
 
 **Fixture scopes:**
 
@@ -291,6 +303,7 @@ tests/
 - All pytest runs write to `tests.log` (`do-continuous-testing.mdc`)
 - `data-testid` on every interactive control, hierarchical naming (`do-semantic-versioning-on-ui-elements.mdc`)
 - BDD `.feature` file in `docs/features/act-X/` must exist before implementation begins (`do-write-scenarios.mdc`)
+- Promoted scenarios must exist in `features/at/` (or `features/e2e/` with `@e2e`) and pass before merge
 - Coverage quality over quantity — 90% coverage with useless tests is worse than 60% with real integration tests
 
 **Coverage targets:** thin unit coverage on pure logic only; 100% of CRUD + ChangeSet paths covered by integration tests; all `.feature` scenarios passing AT; 5 E2E journeys on staging before release.

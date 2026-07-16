@@ -3,12 +3,16 @@ Personal access token authentication for DRF.
 
 Placeholder implementation — full token hashing and RBAC in a later sprint.
 """
+
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from rest_framework.authentication import BaseAuthentication
-from rest_framework.request import Request
+
+if TYPE_CHECKING:
+    from rest_framework.request import Request
 
 logger = logging.getLogger("yggdrasil.auth")
 

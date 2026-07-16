@@ -26,14 +26,12 @@ Journey certification tests that require browser-based Playwright execution now 
 
 ### Using TAF E2E Infrastructure
 
-1. **Locate journey intent**: Read user journey and `docs/features/` for the multi-screen goal.
-2. **Promote (copy) to runner**: Write or copy the E2E `.feature` file into `features/e2e/` (same scenario text where applicable).
-3. **Tag with @e2e**: E2E features use the `@e2e` tag, excluded from default behave runs.
-4. **Write as multi-phase .feature**: One long sequential `.feature` file with multiple scenarios.
-5. **Environment targeting**: Use `--base-url` to point at any environment.
-6. **Screenshots**: `features/e2e/environment.py` automatically captures screenshots after every step.
-7. **Data preparation**: E2E tests use `--db-uri` to load initial data via loaddump.
-8. **Keep in sync**: After promotion, edits to scenario text must update both `docs/features/` and `features/e2e/` in the same change.
+1. **Locate journey intent**: Read `docs/features/user_journey.md` for the multi-screen goal.
+2. **Write E2E `.feature`**: Add journey scenarios to `tests/e2e/` with `@e2e` tag.
+3. **Write as multi-phase .feature**: One long sequential `.feature` file with multiple scenarios.
+4. **Environment targeting**: Use `--base-url` to point at any environment.
+5. **Screenshots**: `tests/e2e/environment.py` automatically captures screenshots after every step.
+6. **Data preparation**: E2E tests use `--db-uri` to load initial data via loaddump.
 
 ## Inputs (additional)
 

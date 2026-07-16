@@ -39,8 +39,6 @@ Load `feature_file_paths[]` from the ITER-*.yaml manifest for each scenario ship
 
 Do NOT search `docs/features/act-*/` blindly — use only the paths declared in the manifest.
 
-Human acceptance demos use manifest paths under `docs/features/` (living spec). Automated AT/E2E (`make test-at`, `make test-e2e`) run promoted copies under `features/`.
-
 Build the guided walkthrough:
 ```
 === ACCEPTANCE DEMO PATH ===

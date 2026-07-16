@@ -29,23 +29,21 @@ tests/
 │   └── conftest.py
 ├── integration/             # pytest -m integration
 │   └── conftest.py
+├── e2e/                     # behave + Playwright (E2E)
+│   ├── *.feature            # @e2e tag
+│   ├── steps/
+│   └── environment.py
 ├── infra/                   # CDK assertion tests
 ├── fixtures/                # Shared fixture data
-│   ├── seed.json            # Base seed data
-│   └── presets/             # Suite-level fixture presets
-└── conftest.py              # Root shared fixtures
+│   ├── seed.json
+│   └── presets/
+└── conftest.py
 
-features/                    # behave runners (behave.ini paths = features)
-├── at/                      # behave-django AT
-│   ├── *.feature
-│   ├── steps/               # Step definitions (TFK Step Library)
-│   └── environment.py       # behave lifecycle hooks
-└── e2e/                     # behave + Playwright (E2E)
-    ├── *.feature            # @e2e tag
-    ├── steps/               # E2E-specific steps
-    └── environment.py       # Playwright browser setup
-
-docs/features/act-*/         # living BDD specs (ESM); promoted to features/ in BPE
+docs/features/               # BDD spec + AT runner (behave.ini paths = docs/features)
+├── act-*/                   # .feature files per act
+├── steps/                   # Step definitions (TFK Step Library)
+├── support/                 # page registry
+└── environment.py           # behave lifecycle hooks
 ```
 
 ### 2. Configure pytest
@@ -73,13 +71,13 @@ markers =
 ```ini
 # behave.ini
 [behave]
-paths = features
+paths = docs/features
 format = pretty
 logging_level = INFO
-tags = ~@e2e
+tags = ~@wip
 ```
 
-Create `features/at/environment.py` and `features/e2e/environment.py` with:
+Create `docs/features/environment.py` and `tests/e2e/environment.py` with:
 - `before_all`: Django setup, database connection, load session-level fixtures
 - `before_scenario`: Transaction savepoint for test isolation
 - `after_scenario`: Rollback to savepoint

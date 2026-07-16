@@ -24,7 +24,6 @@ Before declaring an iteration closed, invoke TAF activities to validate test hea
 - Run full coverage analysis across all test levels
 - Quality audit: flag useless tests, mocking violations, fat controllers, tests > 10 lines
 - Verify all test levels pass: `make test` + `make test-at` + `make test-e2e`
-- `make test-at` and `make test-e2e` run only `features/` (not `docs/features/`)
 - Produce health summary with CRITICAL/WARNING/INFO findings
 
 ### 2. Invoke TAF-09 "Prepare Test Report"

@@ -17,7 +17,7 @@ APPEND TO GUIDANCE:
 
 ## TAF Integration: E2E Staging Gate in CD
 
-AT and E2E runners live under `features/` (`features/at/`, `features/e2e/`); CI never runs `docs/features/`.
+AT runner: `docs/features/` (`make test-at`). E2E runner: `tests/e2e/` (`make test-e2e`).
 
 Add an E2E test stage in the CD pipeline that runs after deploying to the idle/staging environment and before the release/swap:
 

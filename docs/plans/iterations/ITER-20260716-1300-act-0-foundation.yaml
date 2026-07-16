@@ -29,6 +29,7 @@ drift_thresholds:
 
 scenarios:
   S01:
+    github_issue: 1
     title: "AUTH-LOGIN-1-01 Login page renders with email, password, and sign-in button"
     parallel_group: A
     skeleton_commit: "63e2845"
@@ -64,6 +65,7 @@ scenarios:
       - "§5 Test Strategy — AT mockup-backed scenarios"
 
   S02:
+    github_issue: 2
     title: "AUTH-LOGIN-1-02 Successful sign-in redirects to View Browser"
     parallel_group: A
     skeleton_commit: "63e2845"
@@ -94,6 +96,7 @@ scenarios:
       - "§3 Code Organization"
 
   S03:
+    github_issue: 3
     title: "AUTH-LOGIN-1-03 Login page shows admin-provisioned account notice"
     parallel_group: A
     skeleton_commit: "63e2845"
@@ -119,6 +122,7 @@ scenarios:
       - "§13 Security — admin-provisioned accounts"
 
   S04:
+    github_issue: 4
     title: "AUTH-LOGIN-1-04 Authenticated architect is redirected to View Browser (direct URL)"
     parallel_group: A
     skeleton_commit: "63e2845"
@@ -146,6 +150,7 @@ scenarios:
       - "§5 Test Strategy"
 
   S05:
+    github_issue: 5
     title: "AUTH-LOGIN-1-05 Unauthenticated user is redirected to login for protected pages"
     parallel_group: A
     skeleton_commit: "63e2845"
@@ -172,6 +177,7 @@ scenarios:
       - "§13 Security"
 
   S06:
+    github_issue: 6
     title: "AUTH-TOKEN-1-01 Token page renders with existing tokens and generate button"
     parallel_group: A
     skeleton_commit: "63e2845"
@@ -202,6 +208,7 @@ scenarios:
       - "§4 Data Architecture — PersonalAccessToken"
 
   S07:
+    github_issue: 7
     title: "AUTH-TOKEN-1-02 Token table shows 2 existing tokens with all required columns"
     parallel_group: A
     skeleton_commit: "63e2845"
@@ -229,6 +236,7 @@ scenarios:
       - "§5 Test Strategy — seed.json"
 
   S08:
+    github_issue: 8
     title: "AUTH-TOKEN-1-03 Each token row has a revoke action"
     parallel_group: A
     skeleton_commit: "63e2845"
@@ -255,6 +263,7 @@ scenarios:
       - "§13 Security"
 
   S09:
+    github_issue: 9
     title: "AUTH-TOKEN-1-04 Generate token modal has name and scope fields"
     parallel_group: A
     skeleton_commit: "63e2845"
@@ -279,6 +288,7 @@ scenarios:
       - "§4 Data Architecture — PersonalAccessToken.scope"
 
   S10:
+    github_issue: 10
     title: "AUTH-TOKEN-1-05 Generate token form requires a name"
     parallel_group: A
     skeleton_commit: "63e2845"
@@ -303,6 +313,7 @@ scenarios:
       - "§3 Code Organization — input validation at method boundaries (AGENTS.md)"
 
   S11:
+    github_issue: 11
     title: "AUTH-TOKEN-1-06 Page shows CLI usage snippets for Ratatosk and MCP"
     parallel_group: A
     skeleton_commit: "63e2845"
@@ -327,6 +338,7 @@ scenarios:
       - "§1 Application Blocks — Ratatosk CLI distributable"
 
   S12:
+    github_issue: 12
     title: "AUTH-TOKEN-1-07 Settings nav link is visible in user menu"
     parallel_group: A
     skeleton_commit: "63e2845"

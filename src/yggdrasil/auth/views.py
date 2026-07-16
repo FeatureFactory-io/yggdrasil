@@ -12,12 +12,15 @@ import logging
 from typing import TYPE_CHECKING
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.shortcuts import redirect, render
 from django.views import View
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 logger = logging.getLogger("yggdrasil.auth")
+
+_DEFAULT_REDIRECT = "/"
 
 
 class LoginView(View):
@@ -34,8 +37,27 @@ class LoginView(View):
     template_name = "auth/login.html"
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        """Render login form. Redirect to dashboard if already authenticated."""
-        raise NotImplementedError()
+        """
+        Render the login form, or redirect if the user is already authenticated.
+
+        :param request: Incoming HTTP request.
+        :return: 200 with login template, or 302 redirect to dashboard.
+
+        :Example:
+
+        GET /auth/login/ (unauthenticated) → 200 login form
+        GET /auth/login/ (authenticated)   → 302 to dashboard
+        """
+        logger.info(
+            "LoginView.get: entry | ip=%s authenticated=%s",
+            request.META.get("REMOTE_ADDR"),
+            request.user.is_authenticated,
+        )
+        if request.user.is_authenticated:
+            logger.info("LoginView.get: user already authenticated, redirecting")
+            return self._redirect_after_login(request)
+        logger.info("LoginView.get: rendering login form")
+        return render(request, self.template_name)
 
     def post(self, request: HttpRequest) -> HttpResponse:
         """
@@ -46,8 +68,22 @@ class LoginView(View):
         raise NotImplementedError()
 
     def _redirect_after_login(self, request: HttpRequest) -> HttpResponse:
-        """Redirect to ``next`` param or default dashboard."""
-        raise NotImplementedError()
+        """
+        Redirect to the ``next`` query parameter or the default dashboard.
+
+        :param request: Incoming HTTP request; may contain ``?next=`` param.
+        :return: HTTP 302 redirect response.
+
+        :Example:
+
+        ?next=/graph/ → redirect to /graph/
+        (no next)     → redirect to /
+        """
+        next_url = request.GET.get("next", _DEFAULT_REDIRECT)
+        if not next_url or not next_url.startswith("/"):
+            next_url = _DEFAULT_REDIRECT
+        logger.info("LoginView._redirect_after_login: redirecting to %s", next_url)
+        return redirect(next_url)
 
 
 class LogoutView(LoginRequiredMixin, View):

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — Yggdrasil</title>
+</head>
+<body>
+  <!-- Screen: AUTH-LOGIN-1 -->
+  <div data-testid="auth-login-page">
+    <h1>Yggdrasil</h1>
+    <form method="post" action="{% url 'auth:login' %}" data-testid="login-form">
+      {% csrf_token %}
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" autocomplete="email"
+             data-testid="login-email" required>
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password"
+             autocomplete="current-password" data-testid="login-password" required>
+      <button type="submit" data-testid="login-submit">Sign in</button>
+    </form>
+    <p>Accounts are admin-provisioned. Contact your administrator.</p>
+  </div>
+</body>
+</html>

@@ -361,3 +361,33 @@ scenarios:
       - "Do NOT add nav-settings to auth/login.html — login page has no navbar"
     sao_sections:
       - "§1 Application Blocks — web"
+
+  S13:
+    github_issue: 13
+    title: "Graph app ORM models skeleton + Django admin (C4 metamodel foundational infrastructure)"
+    parallel_group: A
+    skeleton_commit: "c505d3a"
+    codebase_footprint:
+      - src/yggdrasil/graph/models.py
+      - src/yggdrasil/graph/admin.py
+      - src/yggdrasil/graph/migrations/0001_initial.py
+      - tests/fixtures/factories/model_factories.py
+      - tests/fixtures/seed_c4.json
+    feature_file_paths: []
+    system_dependencies: []
+    checkpoint:
+      command: "DJANGO_SETTINGS_MODULE=yggdrasil.test_settings uv run python manage.py migrate --run-syncdb 2>&1 | tail -3"
+      expected_exit_code: 0
+    dependencies: []
+    context_map:
+      - "docs/architecture/SAO.md §1 — graph app owns 6 models; changeset owns ChangeSet"
+      - "docs/architecture/SAO.md §4 — JSONB via models.JSONField; default=dict/list"
+      - "src/yggdrasil/auth/models.py — follow ClassVar + save() slug pattern"
+    do_not_do:
+      - "Do NOT put ChangeSet in graph app — belongs in changeset (SAO §1)"
+      - "Do NOT validate property_schema at ORM level — ChangeSet pipeline handles this"
+      - "Do NOT name the model class Model — use YggdrasilModel"
+    sao_sections:
+      - "§1 Application Blocks — graph bounded context"
+      - "§3 Code Organization — ClassVar annotations, service layer"
+      - "§4 Data Architecture — JSONB, unique_together"

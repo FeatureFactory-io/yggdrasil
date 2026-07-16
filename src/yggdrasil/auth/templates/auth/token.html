@@ -42,5 +42,40 @@
       </tbody>
     </table>
   </div>
+
+  <!-- Usage snippets -->
+  <div data-testid="usage-snippets">
+    <h2>Usage snippets</h2>
+    <h3>Shell</h3>
+    <pre>export YGGDRASIL_TOKEN=&lt;token&gt;</pre>
+    <h3>Ratatosk CLI</h3>
+    <pre>pip install ratatosk
+ratatosk bootstrap ./repo --token=$YGGDRASIL_TOKEN</pre>
+    <h3>MCP via Docker</h3>
+    <pre>{
+  "mcpServers": {
+    "yggdrasil": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "YGGDRASIL_TOKEN=&lt;token&gt;",
+        "-e", "YGGDRASIL_SERVER_URL=https://yggdrasil.featurefactory.io",
+        "featurefactory-io/yggdrasil-mcp:latest"
+      ]
+    }
+  }
+}</pre>
+    <h3>MCP direct</h3>
+    <pre>{
+  "mcpServers": {
+    "yggdrasil": {
+      "url": "https://yggdrasil.featurefactory.io/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer &lt;token&gt;"
+      }
+    }
+  }
+}</pre>
+  </div>
 </body>
 </html>

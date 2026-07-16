@@ -86,6 +86,28 @@ def test_token_list_does_not_leak_other_users_tokens(client, django_user_model):
 
 
 @pytest.mark.django_db
+def test_token_page_shows_usage_snippets(client, django_user_model):
+    """
+    Authenticated GET /auth/tokens/ includes CLI usage snippets for Ratatosk and MCP.
+
+    Verifies that the page contains the install command and the token env-var
+    name so users can copy-paste without consulting external docs.
+
+    :Example:
+
+    force_login → GET /auth/tokens/ → 200, "pip install ratatosk" in body
+    """
+    user = django_user_model.objects.create_user(username="snippet_user", password="p")
+    client.force_login(user)
+
+    response = client.get(reverse("auth:token_list"))
+
+    assert response.status_code == 200
+    assert b"pip install ratatosk" in response.content
+    assert b"YGGDRASIL_TOKEN" in response.content
+
+
+@pytest.mark.django_db
 def test_token_list_empty_state(client, django_user_model):
     """
     Authenticated GET with no tokens renders the empty-state row.

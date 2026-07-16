@@ -14,7 +14,7 @@ import json
 import logging
 
 from behave import given, then, when
-from features.at.steps.common_steps import get_client
+from steps.common_steps import get_client
 
 logger = logging.getLogger(__name__)
 

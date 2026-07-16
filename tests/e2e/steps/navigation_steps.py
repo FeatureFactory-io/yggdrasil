@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 
 from behave import given, then, when
-from features.support.pages import PAGE_REGISTRY
+from support.pages import PAGE_REGISTRY
 
 logger = logging.getLogger(__name__)
 

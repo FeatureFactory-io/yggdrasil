@@ -1,7 +1,7 @@
 """
 behave-django environment hooks for Acceptance Tests (AT).
 
-Run via: ``make test-at`` (``manage.py behave --simple features/at/``).
+Run via: ``make test-at`` (``manage.py behave --simple docs/features/``).
 
 The ``--simple`` flag selects behave-django's ``SimpleTestRunner``, which
 attaches a ``DjangoSimpleTestCase`` (a ``django.test.TestCase`` subclass) to
@@ -13,8 +13,15 @@ which matches the AT contract: single screen/feature, no browser overhead.
 """
 
 import logging
+import sys
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Ensure step/support imports resolve when behave loads docs/features/steps/*.py
+_FEATURES_ROOT = Path(__file__).resolve().parent
+if str(_FEATURES_ROOT) not in sys.path:
+    sys.path.insert(0, str(_FEATURES_ROOT))
 
 
 def before_all(context):

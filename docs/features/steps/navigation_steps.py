@@ -12,8 +12,8 @@ from __future__ import annotations
 import logging
 
 from behave import given, then, when
-from features.at.steps.common_steps import get_client
-from features.support.pages import resolve_page_path
+from steps.common_steps import get_client
+from support.pages import resolve_page_path
 
 logger = logging.getLogger(__name__)
 

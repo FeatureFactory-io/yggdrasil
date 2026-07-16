@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 
 from behave import given
-from features.at.steps.common_steps import get_client
+from steps.common_steps import get_client
 from tests.fixtures.factories import UserFactory
 
 logger = logging.getLogger(__name__)

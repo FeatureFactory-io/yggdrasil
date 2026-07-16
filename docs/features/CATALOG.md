@@ -22,14 +22,14 @@ is not here, invoke **TFK-07** — do not invent ad-hoc steps.
 
 | Domain | AT runner | E2E runner |
 |--------|-----------|-----------|
-| Navigation | `features/at/steps/navigation_steps.py` | `features/e2e/steps/navigation_steps.py` |
-| Auth | `features/at/steps/auth_steps.py` (works) | `features/e2e/steps/auth_steps.py` (**stub** — NotImplementedError) |
-| Forms | `features/at/steps/form_steps.py` | `features/e2e/steps/form_steps.py` |
-| Tables | `features/at/steps/table_steps.py` | `features/e2e/steps/table_steps.py` |
-| Assertions | `features/at/steps/assertion_steps.py` | `features/e2e/steps/assertion_steps.py` |
-| Dialogs | `features/at/steps/dialog_steps.py` | `features/e2e/steps/dialog_steps.py` |
-| HTTP | `features/at/steps/http_steps.py` | **AT only** |
-| Common/Wait | `features/at/steps/common_steps.py` | `features/e2e/steps/common_steps.py` |
+| Navigation | `docs/features/steps/navigation_steps.py` | `tests/e2e/steps/navigation_steps.py` |
+| Auth | `docs/features/steps/auth_steps.py` (works) | `tests/e2e/steps/auth_steps.py` (**stub** — NotImplementedError) |
+| Forms | `docs/features/steps/form_steps.py` | `tests/e2e/steps/form_steps.py` |
+| Tables | `docs/features/steps/table_steps.py` | `tests/e2e/steps/table_steps.py` |
+| Assertions | `docs/features/steps/assertion_steps.py` | `tests/e2e/steps/assertion_steps.py` |
+| Dialogs | `docs/features/steps/dialog_steps.py` | `tests/e2e/steps/dialog_steps.py` |
+| HTTP | `docs/features/steps/http_steps.py` | **AT only** |
+| Common/Wait | `docs/features/steps/common_steps.py` | `tests/e2e/steps/common_steps.py` |
 
 ---
 
@@ -48,7 +48,7 @@ is not here, invoke **TFK-07** — do not invent ad-hoc steps.
 **E2E implementation:** `context.page.goto(url)` via Playwright.
 
 **PAGE_REGISTRY current entries:** `"landing"` → `web:index`, `"health"` → `health`.
-Additional entries added by BPE-04 when AT scenarios are promoted (copied) to `features/at/`; keep in sync with `docs/features/`.
+Additional entries added by BPE-04 when new AT scenarios are added to `docs/features/`.
 
 ---
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 
 from behave import when
-from features.at.steps.common_steps import get_client
+from steps.common_steps import get_client
 
 logger = logging.getLogger(__name__)
 

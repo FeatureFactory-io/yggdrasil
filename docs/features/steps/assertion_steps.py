@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 
 from behave import then
-from features.at.steps.common_steps import get_response_content
+from steps.common_steps import get_response_content
 
 logger = logging.getLogger(__name__)
 

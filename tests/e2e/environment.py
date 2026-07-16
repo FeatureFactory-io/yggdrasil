@@ -1,7 +1,7 @@
 """
 behave-django environment hooks for End-to-End (E2E) tests.
 
-Run via: ``make test-e2e`` (``manage.py behave features/e2e/``).
+Run via: ``make test-e2e`` (``manage.py behave tests/e2e/``).
 
 Uses behave-django's default ``BehaviorDrivenTestRunner``, which attaches a
 ``StaticLiveServerTestCase`` to ``context.test`` for every scenario — this
@@ -17,6 +17,7 @@ Screenshots are captured after every step for visual audit trail (SAO.md
 import logging
 import os
 import re
+import sys
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -24,6 +25,14 @@ from playwright.sync_api import sync_playwright
 logger = logging.getLogger(__name__)
 
 SCREENSHOT_DIR = Path("test-results/e2e")
+
+# E2E steps resolve locally; shared page registry lives in docs/features/support/
+_E2E_ROOT = Path(__file__).resolve().parent
+_FEATURES_ROOT = Path(__file__).resolve().parents[2] / "docs" / "features"
+if str(_E2E_ROOT) not in sys.path:
+    sys.path.insert(0, str(_E2E_ROOT))
+if str(_FEATURES_ROOT) not in sys.path:
+    sys.path.insert(0, str(_FEATURES_ROOT))
 
 
 def before_all(context):

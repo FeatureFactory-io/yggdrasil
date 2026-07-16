@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 
 from behave import then, when
-from features.e2e.steps.common_steps import test_id
+from step_helpers import test_id
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ Tests prove behavior. You **cannot claim** a scenario, class, or method is imple
 - Write tests **before** implementation. Do not write tests whose only purpose is to hit `NotImplementedError`—write assertions that **should pass** once real behavior exists.
 - Cover **success** (returns) **and** **failure** (`raises`, errors, edge cases) for each unit of behavior.
 - If implementation contradicts docstring, ask the user which wins.
-- Use `docs/features/` to align scenarios with tests.
+- Use `docs/features/` to align scenarios with tests; promote executable scenarios to `features/at/` or `features/e2e/` during BPE-04/05 (keep both copies in sync).
 - Order: method-level → API → integration. For integration, follow `.windsurf/rules/do-not-mock-in-integration-tests.md`.
 - Red–green: make the test fail, then implement until green.
 - Use pytest; avoid mocks unless unavoidable.
@@ -20,5 +20,6 @@ Tests prove behavior. You **cannot claim** a scenario, class, or method is imple
 | Unit | `tests/unit/` |
 | Integration | `tests/integration/` |
 | API | `tests/api/` |
-| E2E | `tests/e2e/` |
+| AT (behave) | `features/at/` |
+| E2E (behave + Playwright) | `features/e2e/` |
 | Service | `tests/services/` |

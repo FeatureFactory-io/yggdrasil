@@ -1,0 +1,103 @@
+"""
+Integration tests for TokenListView (GET /auth/tokens/).
+
+Tests use the Django test client against the real view — no mocks.
+"""
+
+from __future__ import annotations
+
+import pytest
+from django.urls import reverse
+
+from yggdrasil.auth.models import PersonalAccessToken
+
+
+@pytest.mark.django_db
+def test_token_list_requires_login(client):
+    """
+    Unauthenticated GET /auth/tokens/ redirects to login.
+
+    :Example:
+
+    GET /auth/tokens/ (anon) → 302 → /auth/login/?next=/auth/tokens/
+    """
+    response = client.get(reverse("auth:token_list"))
+    assert response.status_code == 302
+    assert "/auth/login/" in response["Location"]
+
+
+@pytest.mark.django_db
+def test_token_list_shows_users_tokens(client, django_user_model):
+    """
+    Authenticated GET /auth/tokens/ renders only the logged-in user's tokens.
+
+    Verifies name and scope columns appear in the response; token_hash must
+    never appear (security: hash is not a template variable).
+
+    :Example:
+
+    force_login → GET /auth/tokens/ → 200, body contains "laptop-ratatosk"
+    """
+    secret_hash_a = "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899"
+    secret_hash_b = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100"
+    user = django_user_model.objects.create_user(username="priya", password="p")
+    PersonalAccessToken.objects.create(
+        user=user, name="laptop-ratatosk", token_hash=secret_hash_a, scope="read-write"
+    )
+    PersonalAccessToken.objects.create(
+        user=user, name="cursor-mcp", token_hash=secret_hash_b, scope="read-only"
+    )
+    client.force_login(user)
+
+    response = client.get(reverse("auth:token_list"))
+
+    assert response.status_code == 200
+    assert b"laptop-ratatosk" in response.content
+    assert b"cursor-mcp" in response.content
+    assert b"read-write" in response.content
+    assert b"read-only" in response.content
+    # token_hash must never reach the template context
+    assert secret_hash_a.encode() not in response.content
+    assert secret_hash_b.encode() not in response.content
+
+
+@pytest.mark.django_db
+def test_token_list_does_not_leak_other_users_tokens(client, django_user_model):
+    """
+    Tokens belonging to other users are never included in the response.
+
+    Verifies strict owner filtering in TokenService.list_tokens.
+
+    :Example:
+
+    user_a has token "secret-a"; user_b logs in → "secret-a" not in response
+    """
+    user_a = django_user_model.objects.create_user(username="ua", password="p")
+    user_b = django_user_model.objects.create_user(username="ub", password="p")
+    PersonalAccessToken.objects.create(
+        user=user_a, name="secret-a", token_hash="ha", scope="read-only"
+    )
+    client.force_login(user_b)
+
+    response = client.get(reverse("auth:token_list"))
+
+    assert response.status_code == 200
+    assert b"secret-a" not in response.content
+
+
+@pytest.mark.django_db
+def test_token_list_empty_state(client, django_user_model):
+    """
+    Authenticated GET with no tokens renders the empty-state row.
+
+    :Example:
+
+    force_login (no tokens) → 200, body contains "No tokens yet."
+    """
+    user = django_user_model.objects.create_user(username="empty", password="p")
+    client.force_login(user)
+
+    response = client.get(reverse("auth:token_list"))
+
+    assert response.status_code == 200
+    assert b"No tokens yet." in response.content

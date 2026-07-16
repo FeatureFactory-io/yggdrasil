@@ -27,23 +27,25 @@ Set up the complete test infrastructure: directory structure, pytest configurati
 tests/
 ├── unit/                    # pytest -m unit
 │   └── conftest.py
-├── integration/             # pytest -m integration  
+├── integration/             # pytest -m integration
 │   └── conftest.py
-├── acceptance/              # behave (AT)
-│   ├── features/
-│   │   └── steps/           # Step definitions (TAF Step Library)
-│   ├── environment.py       # behave lifecycle hooks
-│   └── conftest.py
-├── e2e/                     # behave + Playwright (E2E)
-│   ├── features/
-│   │   └── steps/           # E2E-specific steps
-│   ├── environment.py       # Playwright browser setup
-│   └── conftest.py
+├── infra/                   # CDK assertion tests
 ├── fixtures/                # Shared fixture data
 │   ├── seed.json            # Base seed data
 │   └── presets/             # Suite-level fixture presets
-├── conftest.py              # Root shared fixtures
-└── pytest.ini
+└── conftest.py              # Root shared fixtures
+
+features/                    # behave runners (behave.ini paths = features)
+├── at/                      # behave-django AT
+│   ├── *.feature
+│   ├── steps/               # Step definitions (TFK Step Library)
+│   └── environment.py       # behave lifecycle hooks
+└── e2e/                     # behave + Playwright (E2E)
+    ├── *.feature            # @e2e tag
+    ├── steps/               # E2E-specific steps
+    └── environment.py       # Playwright browser setup
+
+docs/features/act-*/         # living BDD specs (ESM); promoted to features/ in BPE
 ```
 
 ### 2. Configure pytest
@@ -55,7 +57,7 @@ python_files = test_*.py
 python_classes = Test*
 python_functions = test_*
 testpaths = tests
-addopts = 
+addopts =
     -v --strict-markers --tb=short
     --log-file=tests.log --log-file-level=INFO
 markers =
@@ -71,13 +73,13 @@ markers =
 ```ini
 # behave.ini
 [behave]
-paths = tests/acceptance/features
+paths = features
 format = pretty
 logging_level = INFO
 tags = ~@e2e
 ```
 
-Create `environment.py` with:
+Create `features/at/environment.py` and `features/e2e/environment.py` with:
 - `before_all`: Django setup, database connection, load session-level fixtures
 - `before_scenario`: Transaction savepoint for test isolation
 - `after_scenario`: Rollback to savepoint

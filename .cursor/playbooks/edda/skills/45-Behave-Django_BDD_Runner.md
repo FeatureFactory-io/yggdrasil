@@ -22,7 +22,7 @@ Patterns for running BDD acceptance and E2E tests using behave-django with Playw
 
 ```ini
 [behave]
-paths = tests/acceptance/features
+paths = features
 format = pretty
 logging_level = INFO
 tags = ~@e2e
@@ -34,7 +34,7 @@ log_capture = false
 ### Pattern 2: environment.py Lifecycle (Acceptance Tests)
 
 ```python
-# tests/acceptance/environment.py
+# features/at/environment.py
 import django
 from django.test.utils import setup_test_environment, teardown_test_environment
 from django.core.management import call_command

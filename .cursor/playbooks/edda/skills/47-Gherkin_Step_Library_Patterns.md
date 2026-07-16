@@ -21,7 +21,7 @@ Patterns for organizing, versioning, and composing reusable Gherkin step definit
 ### Pattern 1: Step Library Organization
 
 ```
-tests/acceptance/features/steps/
+features/at/steps/
 ├── navigation_steps.py      # Given/When/Then for page navigation
 ├── form_steps.py            # Form interactions (fill, select, submit)
 ├── table_steps.py           # Table verification (rows, columns, sorting)
@@ -29,7 +29,7 @@ tests/acceptance/features/steps/
 ├── assertion_steps.py       # Generic assertions (visible, contains, count)
 ├── dialog_steps.py          # Modal/dialog interactions
 ├── common_steps.py          # Utility (wait, screenshot, context)
-└── CATALOG.md               # Step Library Catalog
+└── CATALOG.md               # Step Library Catalog (features/CATALOG.md)
 ```
 
 ### Pattern 2: Step Naming Convention

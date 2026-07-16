@@ -21,15 +21,17 @@ Feature acceptance tests are now executed via **behave-django** runner against .
 
 ### Updated Process
 
-1. **Locate .feature file**: Find the feature's BDD scenarios in `docs/features/`.
-2. **Verify steps exist**: Check that all steps used in the .feature file have implementations in `tests/acceptance/features/steps/`. If any are missing, invoke TAF-07.
-3. **Prepare fixtures**: Check the Fixture Library Catalog for needed test data. If presets are missing, invoke TAF-07.
-4. **Run acceptance tests**: `make test-at`
-5. **The dual approach remains**: Django test client tests (existing BPE-04 approach) are still valuable for fast feedback. Behave AT runs the same scenarios through the BDD layer. Both must pass.
+1. **Locate spec**: Find the feature's BDD scenarios in `docs/features/act-*/`.
+2. **Verify steps exist**: Check that all steps used in the spec have implementations in `features/at/steps/`. If any are missing, invoke TFK-07.
+3. **Promote (copy) to runner**: Copy executable scenarios into `features/at/` (same scenario text). Do not delete from `docs/features/`.
+4. **Prepare fixtures**: Check the Fixture Library Catalog for needed test data. If presets are missing, invoke TFK-07.
+5. **Run acceptance tests**: `make test-at` (runs only `features/` via `behave.ini`).
+6. **Keep in sync**: After promotion, edits to scenario text must update both `docs/features/` and `features/at/` in the same change.
+7. **The dual approach remains**: Django test client tests (existing BPE-04 approach) are still valuable for fast feedback. Behave AT runs the same scenarios through the BDD layer. Both must pass.
 
 ### Key Principle
 
-Acceptance tests are the real thing minus the GUI. No mocking. The .feature file IS the executable requirements document.
+Acceptance tests are the real thing minus the GUI. No mocking. The promoted `.feature` file in `features/at/` is the CI-executable requirements document; `docs/features/` remains the living spec.
 
 ## Skills (additional)
 

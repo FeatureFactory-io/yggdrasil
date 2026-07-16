@@ -24,7 +24,7 @@ Create a reusable library of Gherkin step definitions that ESM can compose scena
 ### 1. Organize Steps by Domain
 
 ```
-tests/acceptance/features/steps/
+features/at/steps/
 ├── navigation_steps.py      # Page navigation, URL verification
 ├── form_steps.py            # Form filling, submission, validation
 ├── table_steps.py           # Table rendering, sorting, filtering
@@ -33,6 +33,8 @@ tests/acceptance/features/steps/
 ├── dialog_steps.py          # Modal/dialog interactions
 ├── common_steps.py          # Wait, screenshot, context helpers
 └── __init__.py
+
+features/e2e/steps/          # E2E counterparts (Playwright-backed)
 ```
 
 ### 2. Generic Step Patterns

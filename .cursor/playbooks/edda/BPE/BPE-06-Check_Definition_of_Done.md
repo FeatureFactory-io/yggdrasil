@@ -19,6 +19,8 @@ Validate that feature/story implementation complies with all project rules and s
 ### Test-First Development
 - [ ] Every function/method has corresponding test(s)
 - [ ] Feature files in `docs/features/` exist and comply with scenarios
+- [ ] Promoted AT scenarios exist under `features/at/` and pass `make test-at`
+- [ ] Journey E2E scenarios (if in scope) exist under `features/e2e/` and pass `make test-e2e` when required
 - [ ] Tests use pytest framework
 - [ ] Mocking is minimal
 

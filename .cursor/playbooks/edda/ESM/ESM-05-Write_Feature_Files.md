@@ -33,6 +33,10 @@ Before writing new step definitions in .feature files, **consult the TFK Step Li
 
 The step library is the shared vocabulary between ESM and TFK. When ESM writes `.feature` files using library steps, those scenarios become immediately executable by behave without additional step implementation work. Ad-hoc steps break this contract.
 
+### Spec vs Runner
+
+Write `.feature` files **only** to `docs/features/act-*/`. These are living BDD specs — not run by CI directly. BPE-04/05 promote (copy) executable scenarios into `features/at/` or `features/e2e/` when implementation begins. See `docs/architecture/test-architecture.md` §4.
+
 ## Inputs (additional)
 
 - **Step Library Catalog** (Document, Required) — produced by TFK-03 Build Step Library.

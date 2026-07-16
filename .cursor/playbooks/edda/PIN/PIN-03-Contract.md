@@ -36,6 +36,8 @@ Read the BDD feature spec for this scenario. Note the exact `.feature` file path
 
 Record: `feature_file_path: docs/features/act-{N}/{filename}.feature`
 
+Manifest paths point at the **living spec** in `docs/features/` (used for human demos and contracts). CI green requires the same scenarios promoted to `features/at/` (BPE-04) or `features/e2e/` (BPE-05) before merge — no separate manifest field required.
+
 Read `docs/architecture/SAO.md`. Note governing sections.
 
 ### Step 3: Identify System Dependencies

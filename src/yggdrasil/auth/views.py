@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING
 
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import HttpResponseForbidden, HttpResponseNotFound
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views import View
 
 from yggdrasil.auth.services import TokenService
@@ -177,7 +179,37 @@ class TokenRevokeView(LoginRequiredMixin, View):
         """
         Permanently revoke *token_id* owned by the current user.
 
+        Ownership is verified inside :meth:`TokenService.revoke_token` so
+        cross-user revocation returns 403 without leaking existence info.
+
+        :param request: Authenticated POST request.
         :param token_id: PK of the token to revoke.
-        :raises PermissionError: If token belongs to another user (returns 403).
+        :return: 302 redirect to token list on success; 403/404 on error.
+        :raises N/A: Errors are returned as HTTP responses, never raised.
+
+        :Example:
+
+        POST /auth/tokens/1/revoke/ → 302 /auth/tokens/
+        POST /auth/tokens/99/revoke/ (other user) → 403
         """
-        raise NotImplementedError()
+        from yggdrasil.auth.models import PersonalAccessToken
+
+        logger.info(
+            "TokenRevokeView.post: entry | user_pk=%s token_id=%s",
+            request.user.pk,
+            token_id,
+        )
+        try:
+            TokenService().revoke_token(request.user, token_id)
+        except PersonalAccessToken.DoesNotExist:
+            logger.warning("TokenRevokeView.post: token not found | token_id=%s", token_id)
+            return HttpResponseNotFound("Token not found")
+        except PermissionError:
+            logger.warning(
+                "TokenRevokeView.post: forbidden | user_pk=%s token_id=%s",
+                request.user.pk,
+                token_id,
+            )
+            return HttpResponseForbidden("Not your token")
+        logger.info("TokenRevokeView.post: revoked | token_id=%s", token_id)
+        return redirect(reverse("auth:token_list"))

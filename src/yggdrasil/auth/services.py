@@ -7,7 +7,9 @@ neither touches ORM directly (SAO.md §3 — layer separation).
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import secrets
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -60,8 +62,25 @@ class TokenService:
         :param token_id: Primary key of the token to delete.
         :raises PermissionError: If the token does not belong to *user*.
         :raises PersonalAccessToken.DoesNotExist: If token not found.
+
+        :Example:
+
+        >>> svc = TokenService()
+        >>> svc.revoke_token(user, token_id=1)  # raises PermissionError if wrong owner
         """
-        raise NotImplementedError()
+        from yggdrasil.auth.models import PersonalAccessToken
+
+        logger.info("TokenService.revoke_token | user_pk=%s token_id=%s", user.pk, token_id)
+        token = PersonalAccessToken.objects.get(pk=token_id)
+        if token.user_id != user.pk:
+            logger.warning(
+                "TokenService.revoke_token: ownership mismatch | user_pk=%s token.user_pk=%s",
+                user.pk,
+                token.user_id,
+            )
+            raise PermissionError(f"Token {token_id} does not belong to user {user.pk}")
+        token.delete()
+        logger.info("TokenService.revoke_token: deleted | token_id=%s", token_id)
 
     def list_tokens(self, user: AbstractBaseUser) -> QuerySet[PersonalAccessToken]:
         """
@@ -98,8 +117,19 @@ class TokenService:
     # ── private helpers ──────────────────────────────────────────────────────
 
     def _generate_raw_token(self) -> str:
-        """Return a URL-safe random token string of ``_TOKEN_BYTES`` bytes."""
-        raise NotImplementedError()
+        """
+        Return a URL-safe random token string of ``_TOKEN_BYTES`` bytes.
+
+        :return: 43-char URL-safe base64 string (256 bits of entropy).
+
+        :Example:
+
+        >>> svc = TokenService()
+        >>> raw = svc._generate_raw_token()
+        >>> len(raw) > 30
+        True
+        """
+        return secrets.token_urlsafe(_TOKEN_BYTES)
 
     def _hash_token(self, raw: str) -> str:
         """
@@ -107,5 +137,12 @@ class TokenService:
 
         :param raw: Plaintext token.
         :return: 64-char hex string.
+
+        :Example:
+
+        >>> svc = TokenService()
+        >>> digest = svc._hash_token("abc")
+        >>> len(digest)
+        64
         """
-        raise NotImplementedError()
+        return hashlib.sha256(raw.encode()).hexdigest()

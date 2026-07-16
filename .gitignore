@@ -35,6 +35,7 @@ logs/*.log.*
 
 # Testing
 .pytest_cache/
+.cursor/hooks/.feature-sync-state.json
 .coverage
 htmlcov/
 coverage.xml
@@ -71,3 +72,7 @@ deploy-bundle.zip
 staging.env
 docker-compose.yml
 !docker-compose.yml
+
+# Local test / agent artifacts
+test-results/
+progress2.output

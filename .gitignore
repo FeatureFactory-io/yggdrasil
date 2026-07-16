@@ -35,7 +35,6 @@ logs/*.log.*
 
 # Testing
 .pytest_cache/
-.cursor/hooks/.feature-sync-state.json
 .coverage
 htmlcov/
 coverage.xml

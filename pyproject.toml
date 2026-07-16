@@ -132,7 +132,7 @@ plugins = ["mypy_django_plugin.main"]
 mypy_path = "src"
 
 [[tool.mypy.overrides]]
-module = ["*.migrations.*", "*.tests.*", "tests.*", "features.*", "conftest"]
+module = ["*.migrations.*", "*.tests.*", "tests.*", "conftest"]
 ignore_errors = true
 
 [tool.django-stubs]
@@ -144,7 +144,7 @@ django_settings_module = "yggdrasil.settings"
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "yggdrasil.test_settings"
 pythonpath = ["src"]
-testpaths = ["src", "features", "tests"]
+testpaths = ["src", "docs/features", "tests"]
 addopts = "--strict-markers -q --log-file=tests.log --log-file-level=INFO"
 markers = [
     "unit: pure unit tests, no DB",

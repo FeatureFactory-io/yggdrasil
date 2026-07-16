@@ -115,11 +115,11 @@ test-integration:  ## Run integration tests (requires DB)
 
 .PHONY: test-at
 test-at:  ## Run acceptance tests (behave-django, --simple: Django test client, atomic per-scenario rollback)
-	DJANGO_SETTINGS_MODULE=yggdrasil.test_settings $(MANAGE) behave --simple features/at/
+	DJANGO_SETTINGS_MODULE=yggdrasil.test_settings $(MANAGE) behave --simple docs/features/
 
 .PHONY: test-e2e
 test-e2e:  ## Run E2E tests (behave-django + Playwright, live server required)
-	DJANGO_SETTINGS_MODULE=yggdrasil.test_settings $(MANAGE) behave features/e2e/
+	DJANGO_SETTINGS_MODULE=yggdrasil.test_settings $(MANAGE) behave tests/e2e/
 
 .PHONY: test-all
 test-all: test test-at  ## Run all tests (unit, integration, AT)

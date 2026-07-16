@@ -84,8 +84,8 @@ web      → api (via service layer), graph, changeset
 |------|-------|--------------|
 | System architecture (all decisions) | `docs/architecture/SAO.md` | Before any non-trivial change |
 | User journey / all Acts | `docs/features/user_journey.md` | Feature planning |
-| Feature specs (BDD) | `docs/features/act-*/` | Before implementing any feature |
-| Runnable AT / E2E | `features/at/`, `features/e2e/` | CI (`make test-at`, `make test-e2e`); promoted from docs in BPE-04/05 |
+| Feature specs (BDD) | `docs/features/act-*/` | Before implementing any feature; also CI AT runner (`make test-at`) |
+| E2E journeys | `tests/e2e/` | Staging certification (`make test-e2e`) |
 | UI patterns & IA | `docs/ux/IA_guidelines.md` | Before building UI |
 | Screen flow & domain model | `docs/ux/2_dialogue-maps/screen-flow.md` | UI navigation and Screen IDs |
 | Screen ID conventions | `docs/conventions.md` | Whenever touching UI routes or IDs |
@@ -178,14 +178,13 @@ Workflow files: `.cursor/playbooks/edda/{WORKFLOW}/`
 ## How to Build Features (BPE Summary)
 
 1. Read the feature spec in `docs/features/act-*/` (Gherkin)
-2. Promote executable scenarios to `features/at/` or `features/e2e/` during BPE-04/05 (keep in sync with docs)
-3. Read `docs/architecture/SAO.md` for the relevant bounded context
-4. Check `docs/ux/2_dialogue-maps/screen-flow.md` for Screen IDs and navigation
-5. Skeleton first: docstrings + type hints + stubs
-6. Write failing tests (red)
-7. Implement minimum code to pass (green)
-8. Refactor; all tests green
-9. PR with conventional commit message
+2. Read `docs/architecture/SAO.md` for the relevant bounded context
+3. Check `docs/ux/2_dialogue-maps/screen-flow.md` for Screen IDs and navigation
+4. Skeleton first: docstrings + type hints + stubs
+5. Write failing tests (red)
+6. Implement minimum code to pass (green)
+7. Refactor; all tests green
+8. PR with conventional commit message
 
 ---
 

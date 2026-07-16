@@ -158,9 +158,13 @@ yggdrasil/
 │   └── web/                # Django views, HTMX partials, templates, Cytoscape.js
 ├── ratatosk/               # Ratatosk CLI package (published to PyPI)
 ├── infra/                  # AWS CDK stacks (Python)
-├── features/               # BDD feature files (behave)
-│   ├── at/                 # Acceptance tests — single-page/feature scope
-│   └── e2e/                # E2E tests — full user journey scope (Playwright)
+├── docs/
+│   └── features/           # BDD spec + AT runner (behave)
+│       ├── act-*/          # .feature files per act (@wip until implemented)
+│       ├── steps/          # Step Library
+│       └── environment.py
+├── tests/
+│   └── e2e/                # E2E journey tests (Playwright)
 ├── scripts/                # deploy-staging.sh, promote-prod.sh
 ├── logs/                   # app.log, gui.log, consumption.log (gitignored)
 ├── docker-compose.yml      # Local: db + redis + web + worker + mcp (+ ollama)

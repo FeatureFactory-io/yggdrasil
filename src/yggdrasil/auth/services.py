@@ -44,15 +44,57 @@ class TokenService:
         Create a new hashed token; return the ORM instance and raw value.
 
         The raw token is the only moment it is visible — callers must
-        surface it immediately and discard it.
+        surface it immediately and discard it.  The SHA-256 hash is stored;
+        the plaintext is never persisted or logged.
 
         :param user: Token owner.
         :param name: Human-readable label (e.g. "laptop-ratatosk").
         :param scope: "read-only" or "read-write".
         :return: ``(PersonalAccessToken instance, raw_token_string)``.
-        :raises ValueError: If scope is not a valid choice.
+        :raises ValueError: If scope is not a valid choice or name is blank.
+
+        :Example:
+
+        >>> svc = TokenService()
+        >>> token, raw = svc.create_token(user, "laptop", "read-write")
+        >>> token.pk is not None
+        True
         """
-        raise NotImplementedError()
+        from yggdrasil.auth.models import PersonalAccessToken
+
+        self._validate_create_params(name, scope)
+        raw = self._generate_raw_token()
+        token_hash = self._hash_token(raw)
+        logger.info(
+            "TokenService.create_token | user_pk=%s name=%s scope=%s",
+            user.pk,
+            name,
+            scope,
+        )
+        token = PersonalAccessToken.objects.create(
+            user=user,
+            name=name.strip(),
+            token_hash=token_hash,
+            scope=scope,
+        )
+        logger.info("TokenService.create_token: created | token_pk=%s", token.pk)
+        return token, raw
+
+    def _validate_create_params(self, name: str, scope: str) -> None:
+        """
+        Validate token name and scope before creation.
+
+        :param name: Token label supplied by the user.
+        :param scope: Requested scope string.
+        :raises ValueError: If name is blank or scope is not a known value.
+        """
+        from yggdrasil.auth.models import PersonalAccessToken
+
+        if not name or not name.strip():
+            raise ValueError("Token name cannot be blank")
+        valid_scopes = {PersonalAccessToken.SCOPE_READ_ONLY, PersonalAccessToken.SCOPE_READ_WRITE}
+        if scope not in valid_scopes:
+            raise ValueError(f"Invalid scope {scope!r}. Expected one of {sorted(valid_scopes)}")
 
     def revoke_token(self, user: AbstractBaseUser, token_id: int) -> None:
         """

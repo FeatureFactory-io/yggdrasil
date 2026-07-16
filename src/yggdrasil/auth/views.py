@@ -163,13 +163,63 @@ class TokenListView(LoginRequiredMixin, View):
 class TokenCreateView(LoginRequiredMixin, View):
     """POST /auth/tokens/create/ — generate a new token (shown once)."""
 
+    template_name = "auth/token.html"
+
     def post(self, request: HttpRequest) -> HttpResponse:
         """
-        Create token, surface the raw value in a one-time response.
+        Validate form data, delegate to service, render the raw value once.
 
-        :raises ValueError: If scope is invalid (returns 400).
+        The raw token is included in the response context as ``new_token_raw``
+        and must not be stored or logged.  A redirect would lose the raw value
+        so we re-render the template instead.
+
+        :param request: Authenticated POST with ``name`` and ``scope`` fields.
+        :return: 200 with ``new_token_raw`` on success; 400 on validation error.
+        :raises N/A: Validation errors are returned as 400 responses.
+
+        :Example:
+
+        POST /auth/tokens/create/ name=ci-bot scope=read-write → 200
+        POST /auth/tokens/create/ name= scope=read-write → 400
         """
-        raise NotImplementedError()
+        from yggdrasil.auth.models import PersonalAccessToken
+
+        name = request.POST.get("name", "").strip()
+        scope = request.POST.get("scope", PersonalAccessToken.SCOPE_READ_ONLY)
+        logger.info(
+            "TokenCreateView.post: entry | user_pk=%s name=%s scope=%s",
+            request.user.pk,
+            name,
+            scope,
+        )
+        try:
+            token, raw = TokenService().create_token(request.user, name, scope)
+        except ValueError as exc:
+            logger.warning("TokenCreateView.post: validation error | %s", exc)
+            return self._render_with_error(request, str(exc))
+        logger.info("TokenCreateView.post: created | token_pk=%s", token.pk)
+        return self._render_with_new_token(request, token.name, raw)
+
+    def _render_with_error(self, request: HttpRequest, error: str) -> HttpResponse:
+        """Re-render the token page with a 400 status and validation error."""
+        tokens = TokenService().list_tokens(request.user)
+        return render(
+            request,
+            self.template_name,
+            {"tokens": tokens, "error": error},
+            status=400,
+        )
+
+    def _render_with_new_token(
+        self, request: HttpRequest, token_name: str, raw: str
+    ) -> HttpResponse:
+        """Re-render the token page including the one-time raw token value."""
+        tokens = TokenService().list_tokens(request.user)
+        return render(
+            request,
+            self.template_name,
+            {"tokens": tokens, "new_token_raw": raw, "new_token_name": token_name},
+        )
 
 
 class TokenRevokeView(LoginRequiredMixin, View):

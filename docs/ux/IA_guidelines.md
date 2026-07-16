@@ -249,8 +249,8 @@ The navbar is `position: fixed; top: 0`. Add `padding-top: calc(56px + 1px)` to 
 
 | Pattern | Used by | Bootstrap structure |
 |---|---|---|
-| **Full-width table** | LIST+FIND screens | `table-responsive` inside `col-12` |
-| **View Browser** | `VIEW-BROWSE-1` | Filter panel (top, collapsible) + results area + detail drawer (offcanvas right) + Munin panel (collapsible right) |
+| **Full-width table** | LIST+FIND screens | `table-responsive` inside `col-12` — table always fills 100% of its container |
+| **View Browser** | `VIEW-BROWSE-1` | Filter panel (top, collapsible) + results area (`col-12` → `col-lg-9` when drawer open) + inline detail drawer (`col-lg-3`, hidden by default) |
 | **Single-column form** | CREATE / EDIT screens | `col-md-8 col-lg-6`, centred in `row justify-content-center` |
 | **Detail 2-pane** | VIEW screens | `col-lg-8` (properties) + `col-lg-4` (ego-graph + state panel) |
 | **Chat 2-pane** | `CHAT-MUNIN-1` | `col-lg-8` (thread) + `col-lg-4` (context panel), fixed height with scroll |
@@ -297,6 +297,22 @@ The navbar is `position: fixed; top: 0`. Add `padding-top: calc(56px + 1px)` to 
 | Runs | `/runs/` | `RATATOSK_RUN-LIST+FIND-1` | `fa-solid fa-terminal` |
 
 **Right side of navbar**: `fa-solid fa-gear` Settings (→ `AUTH-TOKEN-1`) · `fa-solid fa-circle-user` username.
+
+**Navbar tooltip convention** (see `.cursor/rules/tooltips.mdc`): every primary nav link and icon-only control must carry `data-bs-toggle="tooltip"` and a descriptive `title`. Use the two-sentence pattern:
+
+> Enables you to [purpose]. Use it to [achieve goals].
+
+Example:
+
+```html
+<a class="nav-link" href="{% url 'mockup_ratatosk_run_list' %}"
+   data-bs-toggle="tooltip"
+   title="Enables you to track Ratatosk extraction runs and their output. Use it to see what the CLI scanned, how many candidates it found and which ChangeSets it produced.">
+  <i class="fa-solid fa-terminal me-1" aria-hidden="true"></i>Runs
+</a>
+```
+
+Tooltips are initialised globally in `base.html` via `bootstrap.Tooltip` on `DOMContentLoaded`. Placement defaults to `top` — no override needed on the navbar.
 
 **Default landing after login**: `VIEW-BROWSE-1` (View Browser).
 
@@ -1283,10 +1299,25 @@ The subtitle line (directly below the title) follows these conventions:
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Column layout**: Full-width `col-12`. No side rail.
+- **Column layout**: Full-width `col-12`. No side rail. Never constrain with `max-width` inline styles.
+- **Responsive table**: always wrap `<table>` in `<div class="table-responsive">` so that wide tables scroll horizontally on small viewports rather than breaking layout. The table itself uses `w-100` (Bootstrap default) to fill 100% of the wrapper.
 - **Actions column**: always last, `text-end`. Contains btn-group-sm with View / Edit / Delete icon buttons.
 - **Pagination**: Bootstrap `.pagination` below the table when result count > page size.
 - **Empty state**: centred inside the results area (see §5.2).
+
+#### View Browser table (VIEW-BROWSE-1)
+
+The results card starts in `col-12` so the table fills the full page width. When a row is clicked the inline detail drawer (`col-lg-3`) appears and the results column narrows to `col-lg-9` via JavaScript. When the drawer is closed the results column returns to `col-12`. Never hard-code `col-lg-9` as the default results width.
+
+```javascript
+// open drawer
+resultsCol.className = 'col-lg-9';
+detailDrawer.style.display = 'block';
+
+// close drawer
+resultsCol.className = 'col-12';
+detailDrawer.style.display = 'none';
+```
 
 ### 12.2 View (Detail)
 

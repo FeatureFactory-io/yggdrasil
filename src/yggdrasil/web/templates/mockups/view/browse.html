@@ -148,7 +148,7 @@
 
   <!-- Results -->
   <div class="row g-3">
-    <div class="col-lg-9">
+    <div class="col-12" id="resultsCol">
       <div class="hg-card">
         <div class="d-flex align-items-center justify-content-between px-3 py-2 border-bottom">
           <span style="font-size:0.82rem;color:var(--hg-ink-muted);">
@@ -225,7 +225,11 @@
     <!-- Detail drawer -->
     <div class="col-lg-3" id="detailDrawer" style="display:none;">
       <div class="hg-detail-drawer">
-        <div class="hg-section-label mb-2">Element detail</div>
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <div class="hg-section-label mb-0">Element detail</div>
+          <button type="button" class="btn-close" style="font-size:0.65rem;"
+                  aria-label="Close detail" onclick="closeDetail()"></button>
+        </div>
         <div id="drawerName" class="fw-semibold mb-1" style="font-size:0.95rem;"></div>
         <div id="drawerMeta" class="text-muted small mb-3"></div>
         <div class="d-flex gap-2">
@@ -258,12 +262,22 @@
     console.log('[mockup:view-browse-1] view toggled to ' + mode);
   }
   function showDetail(id, name, stereotype, owner, health) {
-    document.getElementById('detailDrawer').style.display = 'block';
+    var drawer = document.getElementById('detailDrawer');
+    var resultsCol = document.getElementById('resultsCol');
+    drawer.style.display = 'block';
+    resultsCol.className = 'col-lg-9';
     document.getElementById('drawerName').textContent = name;
     document.getElementById('drawerMeta').textContent = stereotype + ' · ' + owner;
     document.getElementById('drawerViewLink').href = '/mockups/element/' + id + '/';
     document.getElementById('drawerEditLink').href = '/mockups/element/' + id + '/edit/';
     console.log('[mockup:view-browse-1] element selected, id=' + id);
+  }
+  function closeDetail() {
+    var drawer = document.getElementById('detailDrawer');
+    var resultsCol = document.getElementById('resultsCol');
+    drawer.style.display = 'none';
+    resultsCol.className = 'col-12';
+    console.log('[mockup:view-browse-1] detail drawer closed');
   }
 </script>
 {% endblock %}

@@ -218,32 +218,42 @@
         <ul class="navbar-nav me-auto gap-1 ms-2">
           <li class="nav-item">
             <a class="nav-link {% block nav_browse %}{% endblock %}"
-               href="{% url 'mockup_view_browse' %}" data-testid="nav-view-browser">
+               href="{% url 'mockup_view_browse' %}" data-testid="nav-view-browser"
+               data-bs-toggle="tooltip"
+               title="Enables you to explore the living architecture graph. Use it to filter, search and navigate all elements across any point in time.">
               <i class="fa-solid fa-layer-group me-1" aria-hidden="true"></i>View Browser
             </a>
           </li>
           <li class="nav-item">
             <a class="nav-link {% block nav_elements %}{% endblock %}"
-               href="{% url 'mockup_element_list' %}" data-testid="nav-elements">
+               href="{% url 'mockup_element_list' %}" data-testid="nav-elements"
+               data-bs-toggle="tooltip"
+               title="Enables you to manage C4 elements (Systems, Containers, Components, Persons). Use it to create, search, view and edit individual nodes in the graph.">
               <i class="fa-solid fa-circle-dot me-1" aria-hidden="true"></i>Elements
             </a>
           </li>
           <li class="nav-item">
             <a class="nav-link {% block nav_relationships %}{% endblock %}"
-               href="{% url 'mockup_relationship_list' %}" data-testid="nav-relationships">
+               href="{% url 'mockup_relationship_list' %}" data-testid="nav-relationships"
+               data-bs-toggle="tooltip"
+               title="Enables you to manage directed edges between elements. Use it to create, inspect and edit calls / depends_on / serves relationships.">
               <i class="fa-solid fa-link me-1" aria-hidden="true"></i>Relationships
             </a>
           </li>
           <li class="nav-item">
             <a class="nav-link {% block nav_changesets %}{% endblock %}"
-               href="{% url 'mockup_changeset_list' %}" data-testid="nav-changesets">
+               href="{% url 'mockup_changeset_list' %}" data-testid="nav-changesets"
+               data-bs-toggle="tooltip"
+               title="Enables you to review Munin's proposed graph changes. Use it to accept, reject or replan each operation before it updates the live graph.">
               <i class="fa-solid fa-code-branch me-1" aria-hidden="true"></i>ChangeSets
               <span class="badge rounded-pill ms-1" style="background:var(--hg-accent);font-size:0.6rem;">1</span>
             </a>
           </li>
           <li class="nav-item">
             <a class="nav-link {% block nav_runs %}{% endblock %}"
-               href="{% url 'mockup_ratatosk_run_list' %}" data-testid="nav-runs">
+               href="{% url 'mockup_ratatosk_run_list' %}" data-testid="nav-runs"
+               data-bs-toggle="tooltip"
+               title="Enables you to track Ratatosk extraction runs and their output. Use it to see what the CLI scanned, how many candidates it found and which ChangeSets it produced.">
               <i class="fa-solid fa-terminal me-1" aria-hidden="true"></i>Runs
             </a>
           </li>
@@ -251,7 +261,8 @@
         <ul class="navbar-nav ms-auto align-items-lg-center">
           <li class="nav-item">
             <a class="nav-link" href="{% url 'mockup_auth_token' %}"
-               aria-label="Settings" data-bs-toggle="tooltip" title="Settings"
+               aria-label="Settings" data-bs-toggle="tooltip"
+               title="Enables you to manage API access tokens. Use it to generate tokens for the Ratatosk CLI and MCP clients."
                data-testid="nav-settings">
               <i class="fa-solid fa-gear" aria-hidden="true"></i>
             </a>

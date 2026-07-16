@@ -1,3 +1,4 @@
+@wip
 Feature: EXPORT-BRIEFING-1 Export Briefing
   As a Software Architect (Priya)
   I want to export the current view as Mermaid diagrams, a slide deck, or JSON

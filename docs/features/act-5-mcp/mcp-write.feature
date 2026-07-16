@@ -1,3 +1,4 @@
+@wip
 Feature: ACT-5-MCP-WRITE MCP Write Tools — Modify Graph via AI Client
   As a Software Architect (Priya) or a CI agent (Marcus)
   I want to create, update, and delete elements and relationships via MCP

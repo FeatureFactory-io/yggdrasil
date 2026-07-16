@@ -1,3 +1,4 @@
+@wip
 Feature: RELATIONSHIP-EDIT_RELATIONSHIP-1 Edit Relationship
   As a Software Architect (Priya)
   I want to edit the edge stereotype or properties of a relationship

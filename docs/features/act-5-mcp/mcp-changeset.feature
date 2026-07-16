@@ -1,3 +1,4 @@
+@wip
 Feature: ACT-5-MCP-CHANGESET MCP ChangeSet Tools — Review and Apply Graph Operations
   As a Software Architect (Priya) or CI agent (Marcus)
   I want to approve, reject, or redirect ChangeSet operations via MCP

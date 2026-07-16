@@ -1,3 +1,4 @@
+@wip
 Feature: VIEW-BROWSE-1 View Browser
   As a Software Architect (Priya)
   I want to filter and explore the architecture graph

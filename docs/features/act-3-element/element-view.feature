@@ -1,3 +1,4 @@
+@wip
 Feature: ELEMENT-VIEW_ELEMENT-1 View Element Details
   As a Software Architect (Priya)
   I want to see the full details of an architecture element

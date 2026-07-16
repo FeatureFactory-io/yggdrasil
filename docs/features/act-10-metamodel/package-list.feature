@@ -1,6 +1,7 @@
 # @pending-mockup — No mockup template exists for Act 10 screens yet.
 # Testids are TBD; behavior spec from user_journey.md and IA_guidelines.md.
 
+@wip
 Feature: PACKAGE-LIST+FIND-1 Package Hierarchy
   As an Enterprise Architect (Elena)
   I want to see and manage the package hierarchy

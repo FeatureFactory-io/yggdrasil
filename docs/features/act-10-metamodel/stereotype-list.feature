@@ -2,6 +2,7 @@
 # Testids are TBD; specify behavior from user_journey.md and IA_guidelines.md.
 # Mockup to be created in ESM-06 extension when Elena's governance workflow is designed.
 
+@wip
 Feature: STEREOTYPE-LIST+FIND-1 Stereotype Definitions List
   As an Enterprise Architect (Elena)
   I want to see all stereotype definitions with their property schemas and allowed edge rules

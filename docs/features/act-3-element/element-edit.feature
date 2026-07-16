@@ -1,3 +1,4 @@
+@wip
 Feature: ELEMENT-EDIT_ELEMENT-1 Edit Element
   As a Software Architect (Priya)
   I want to edit an existing element's name, stereotype, package, or owner

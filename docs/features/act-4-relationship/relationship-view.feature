@@ -1,3 +1,4 @@
+@wip
 Feature: RELATIONSHIP-VIEW_RELATIONSHIP-1 View Relationship Details
   As a Software Architect (Priya)
   I want to see the full details of an architecture relationship

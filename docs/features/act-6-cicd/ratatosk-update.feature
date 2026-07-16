@@ -1,3 +1,4 @@
+@wip
 Feature: ACT-6-CICD Ratatosk CI/CD Update
   As a Development Team Lead (Marcus)
   I want Ratatosk to run automatically on every merge and update the model with the diff

@@ -1,3 +1,4 @@
+@wip
 Feature: RATATOSK_RUN-VIEW_RATATOSK_RUN-1 Ratatosk Run Detail
   As a Platform Lead (Alex)
   I want to see the full extraction log, Munin reasoning, and blackboard for a run

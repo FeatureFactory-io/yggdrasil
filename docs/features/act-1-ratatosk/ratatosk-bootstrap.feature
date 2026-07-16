@@ -1,3 +1,4 @@
+@wip
 Feature: ACT-1-CLI Ratatosk Bootstrap
   As a Software Architect (Priya)
   I want to run ratatosk bootstrap against my repository

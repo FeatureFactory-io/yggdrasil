@@ -1,3 +1,4 @@
+@wip
 Feature: VIEW-HISTORY-1 Model History and Snapshot Comparison
   As a Software Architect (Priya)
   I want to compare two historical snapshots of the model

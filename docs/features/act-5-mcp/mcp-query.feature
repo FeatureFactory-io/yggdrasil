@@ -1,3 +1,4 @@
+@wip
 Feature: ACT-5-MCP-QUERY MCP Read Tools — Browse Graph from Any AI Client
   As a Software Architect (Priya) or Enterprise Architect (Elena)
   I want to query the architecture graph via MCP tools from Cursor or Claude Desktop

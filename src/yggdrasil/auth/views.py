@@ -16,6 +16,8 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect, render
 from django.views import View
 
+from yggdrasil.auth.services import TokenService
+
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
@@ -133,8 +135,27 @@ class TokenListView(LoginRequiredMixin, View):
     template_name = "auth/token.html"
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        """Render token management page with existing tokens."""
-        raise NotImplementedError()
+        """
+        Render the token management page with the authenticated user's tokens.
+
+        Delegates to :meth:`TokenService.list_tokens` — never queries ORM
+        directly (SAO.md §3 layer separation).  ``token_hash`` is NOT passed
+        to the template.
+
+        :param request: Incoming authenticated GET request.
+        :return: 200 response with ``tokens`` QuerySet in context.
+
+        :Example:
+
+        GET /auth/tokens/ (authenticated) → 200, renders auth/token.html
+        """
+        tokens = TokenService().list_tokens(request.user)
+        logger.info(
+            "TokenListView.get | user_pk=%s token_count=%d",
+            request.user.pk,
+            tokens.count(),
+        )
+        return render(request, self.template_name, {"tokens": tokens})
 
 
 class TokenCreateView(LoginRequiredMixin, View):

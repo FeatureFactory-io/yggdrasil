@@ -67,10 +67,21 @@ class TokenService:
         """
         Return all active tokens for *user*, newest first.
 
+        Filters strictly by owner so cross-user token leakage is impossible.
+
         :param user: Token owner.
-        :return: QuerySet of PersonalAccessToken.
+        :return: QuerySet of :class:`PersonalAccessToken` ordered by
+            ``-created_at``.
+
+        :Example:
+
+        >>> svc = TokenService()
+        >>> qs = svc.list_tokens(user)  # returns only user's tokens
         """
-        raise NotImplementedError()
+        from yggdrasil.auth.models import PersonalAccessToken  # avoid circular at module level
+
+        logger.info("TokenService.list_tokens | user_pk=%s", user.pk)
+        return PersonalAccessToken.objects.filter(user=user).order_by("-created_at")
 
     def authenticate(self, raw_token: str) -> AbstractBaseUser | None:
         """

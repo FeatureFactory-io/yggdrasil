@@ -1,4 +1,3 @@
-@wip
 Feature: AUTH-LOGIN-1 Sign in
   As an Enterprise Architect (Elena)
   I want to sign in with my email and password

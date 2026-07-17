@@ -572,7 +572,11 @@ def step_elena_wants_historical(context, date):
 @given("Elena has a valid read-only token in Claude Desktop")
 def step_elena_has_ro_token(context):
     """Set up a read-only token for Elena."""
-    raise NotImplementedError()
+    user = UserFactory(username="elena", is_architect=True)
+    context.current_user = user
+    context.mcp_token_scope = "read-only"
+    _ensure_query_fixture(context)
+    logger.info("step_elena_has_ro_token | user=%s", user.pk)
 
 
 @given("Priya is in Cursor and wants to know what depends on Payment API")

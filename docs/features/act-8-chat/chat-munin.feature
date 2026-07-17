@@ -1,4 +1,3 @@
-@wip
 Feature: CHAT-MUNIN-1 Chat with Munin (Embedded Panel in View Browser)
   As a Development Team Lead (Marcus)
   I want to ask Munin questions and give it instructions in natural language

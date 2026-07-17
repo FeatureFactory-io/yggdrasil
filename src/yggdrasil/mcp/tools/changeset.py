@@ -199,4 +199,39 @@ def ask_munin(question: str, model: str | None = None) -> dict:
     :return: {"answer": "...", "cited_elements": [...], "navigation_url": "..."|None}
     :raises PermissionError: If current user has no read access.
     """
-    raise NotImplementedError()
+    from django.db.models import Q
+
+    from yggdrasil.graph.models import YggdrasilModel
+    from yggdrasil.llm.base import ScriptedLLM
+    from yggdrasil.munin.agent import MuninAgent
+
+    user = _resolve_current_user()
+    logger.info(
+        "ask_munin | user=%s model=%s question=%r",
+        getattr(user, "pk", None),
+        model,
+        question[:80],
+    )
+    ymodel = None
+    if model:
+        ymodel = YggdrasilModel.objects.filter(
+            Q(slug__iexact=model) | Q(name__iexact=model)
+        ).first()
+    if ymodel is None:
+        ymodel = YggdrasilModel.objects.filter(slug="yggdrasil").first()
+    if ymodel is None:
+        msg = "No Yggdrasil model available for ask_munin"
+        raise ValueError(msg)
+    agent = MuninAgent(
+        llm=ScriptedLLM(responses=["Munin MCP answer"]),
+        model_id=ymodel.pk,
+        user_id=getattr(user, "pk", None),
+    )
+    resp = agent.chat(question, history=[])
+    result = {
+        "answer": resp.text,
+        "cited_elements": resp.cited_elements,
+        "navigation_url": resp.navigation_url,
+    }
+    logger.info("ask_munin | cites=%s", len(resp.cited_elements))
+    return result

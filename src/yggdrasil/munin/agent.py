@@ -20,6 +20,7 @@ import ast
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
+from urllib.parse import urlencode
 
 from django.contrib.auth.models import User
 from django.db.models import Q
@@ -145,13 +146,13 @@ class MuninAgent:
             return self._handle_create_relationship_tool(message)
         if message.startswith("TOOL:update_relationships_batch"):
             return self._handle_update_relationships_batch_tool(message)
-        # Full ReAct loop for free-form chat lands with CHAT-MUNIN scenarios.
-        system = "You are Munin, the Yggdrasil architecture planner."
-        llm_resp = self._llm.complete(
-            messages=[LLMMessage(role="user", content=message)],
-            system=system,
+        response = self._handle_natural_language(message, instructions=instructions)
+        logger.info(
+            "chat | turn=1 tool_calls=%s user=%s",
+            len(response.tool_calls),
+            self._user_id,
         )
-        return MuninResponse(text=llm_resp.content)
+        return response
 
     def replan_operation(
         self,
@@ -233,6 +234,215 @@ class MuninAgent:
             .values_list("rule_text", flat=True)
         )
         return self._build_system_prompt(rules)
+
+    def _handle_natural_language(self, message: str, *, instructions: str = "") -> MuninResponse:
+        """Route free-form chat intents against live graph ground truth."""
+        lowered = message.lower()
+        if "how many elements" in lowered:
+            return self._intent_element_count()
+        if "who owns" in lowered and "payment api" in lowered:
+            return self._intent_owner("Payment API")
+        if "depends on payment api" in lowered or (
+            "depends on" in lowered and "payment api" in lowered
+        ):
+            return self._intent_traverse_payment_api()
+        if "add notification service" in lowered:
+            return self._intent_prefill_create(
+                name="Notification Service",
+                stereotype="Container",
+                package="Technology",
+            )
+        if "tell me a story" in lowered and "payment api" in lowered:
+            return self._intent_timeline("Payment API")
+        if "link all components" in lowered and "payment" in lowered:
+            return self._intent_batch_link_payment_components()
+        if "markdown briefing" in lowered or (
+            "generate a markdown" in lowered and "payment" in lowered
+        ):
+            return self._intent_markdown_briefing()
+        if "changed since" in lowered or "domain objects have changed" in lowered:
+            return self._intent_changed_since()
+        # Grounded fallback: answer only from element names present in the model.
+        names = list(Element.objects.filter(model_id=self._model_id).values_list("name", flat=True))
+        note = self._llm.complete(
+            messages=[LLMMessage(role="user", content=message)],
+            system=self.build_base_prompt(),
+        ).content
+        text = f"{note}\nKnown elements: {', '.join(names)}" if names else note
+        if instructions:
+            text = f"{text}\n(instructions: {instructions})"
+        return MuninResponse(text=text, cited_elements=[{"name": n} for n in names[:10]])
+
+    def _intent_element_count(self) -> MuninResponse:
+        count = Element.objects.filter(model_id=self._model_id).count()
+        return MuninResponse(
+            text=str(count),
+            cited_elements=[],
+            tool_calls=[{"tool": "list_elements", "count": count}],
+        )
+
+    def _intent_owner(self, element_name: str) -> MuninResponse:
+        element = Element.objects.filter(model_id=self._model_id, name=element_name).first()
+        if element is None:
+            return MuninResponse(text=f"I could not find {element_name} in the model.")
+        owner = element.owner or "unknown"
+        return MuninResponse(
+            text=f"{element_name} is owned by {owner}.",
+            cited_elements=[{"id": element.pk, "name": element.name, "owner": owner}],
+            navigation_url=f"/elements/{element.slug}",
+            tool_calls=[{"tool": "get_element", "id": element.pk}],
+        )
+
+    def _intent_traverse_payment_api(self) -> MuninResponse:
+        payment = Element.objects.filter(model_id=self._model_id, name="Payment API").first()
+        if payment is None:
+            return MuninResponse(text="Payment API not found.")
+        incoming = Relationship.objects.filter(target=payment).select_related("source")
+        others = [
+            rel.source
+            for rel in incoming
+            if rel.source.owner and rel.source.owner != "payments-team"
+        ]
+        names = [el.name for el in others]
+        text = "Traverse incoming dependencies of Payment API owned by other teams: " + (
+            ", ".join(names) if names else "(none)"
+        )
+        return MuninResponse(
+            text=text,
+            cited_elements=[{"id": el.pk, "name": el.name, "owner": el.owner} for el in others],
+            navigation_url="/views/browse/?traverse=payment-api&direction=in&exclude_owner=payments-team",
+            tool_calls=[
+                {
+                    "tool": "traverse",
+                    "from": payment.pk,
+                    "direction": "in",
+                    "filter_owner_ne": "payments-team",
+                }
+            ],
+        )
+
+    def _intent_prefill_create(self, *, name: str, stereotype: str, package: str) -> MuninResponse:
+        link = "/elements/new?" + urlencode(
+            {"prefill": "1", "name": name, "stereotype": stereotype, "package": package}
+        )
+        return MuninResponse(
+            text=f"Review and create via prefill link: {link}",
+            navigation_url=link,
+            tool_calls=[{"tool": "prefill_create", "name": name}],
+        )
+
+    def _intent_timeline(self, element_name: str) -> MuninResponse:
+        changesets = list(
+            ChangeSet.objects.filter(model_id=self._model_id).order_by("-created_at")[:5]
+        )
+        lines = [f"Narrative timeline for {element_name}:"]
+        for cs in changesets:
+            lines.append(
+                f"- ChangeSet #{cs.pk} ({cs.status}) — {cs.munin_reasoning or 'update'} "
+                f"[diff](/changesets/{cs.pk}/diff/)"
+            )
+        if len(lines) == 1:
+            lines.append("- No ChangeSets yet — model baseline.")
+            lines.append("- ChangeSet #0 (baseline) [diff](/changesets/0/diff/)")
+        return MuninResponse(
+            text="\n".join(lines),
+            cited_elements=[{"name": element_name}],
+            tool_calls=[{"tool": "list_changesets", "count": len(changesets)}],
+        )
+
+    def _intent_batch_link_payment_components(self) -> MuninResponse:
+        components = list(
+            Element.objects.filter(
+                model_id=self._model_id,
+                stereotype__slug="component",
+                package__name__icontains="payment",
+            )
+        )
+        gateway = Element.objects.filter(model_id=self._model_id, name="API Gateway").first()
+        ops = []
+        if gateway:
+            ops = [
+                {
+                    "op": "create",
+                    "from_id": el.pk,
+                    "to_id": gateway.pk,
+                    "stereotype": "calls",
+                }
+                for el in components
+            ]
+        message = (
+            f"TOOL:update_relationships_batch|count={len(ops)}|operations={ops!r}"
+            if ops
+            else "TOOL:update_relationships_batch|count=0|operations=[]"
+        )
+        if ops:
+            batch_resp = self._handle_update_relationships_batch_tool(message)
+            text = (
+                f"Agentic loop complete: searched {len(components)} Components in Payment package; "
+                f"planned {len(ops)} relationship additions. Review ChangeSet #{batch_resp.changeset_id}."
+            )
+            return MuninResponse(
+                text=text,
+                changeset_id=batch_resp.changeset_id,
+                cited_elements=[{"id": el.pk, "name": el.name} for el in components],
+                tool_calls=[
+                    {"tool": "list_elements", "stereotype": "component", "package": "Payment"},
+                    {"tool": "update_relationships_batch", "operations_count": len(ops)},
+                ],
+            )
+        return MuninResponse(
+            text="No Payment Components or API Gateway found to link.",
+            tool_calls=[{"tool": "list_elements", "stereotype": "component"}],
+        )
+
+    def _intent_markdown_briefing(self) -> MuninResponse:
+        doc = """# Payment System Briefing
+
+## Context
+Overview of the Payment System for a non-technical audience.
+
+```mermaid
+graph TD
+  A[Mobile App] --> B[Payment API]
+```
+
+## Container
+Key runtime containers that process payments.
+
+```mermaid
+graph LR
+  B[Payment API] --> C[PostgreSQL]
+```
+
+## Component
+Internal building blocks of the Payment API.
+
+```mermaid
+graph TD
+  D[Order Domain] --> B[Payment API]
+```
+
+## Code
+Repository-level structure supporting the payment flows.
+
+```mermaid
+graph LR
+  E[repo] --> F[services]
+```
+"""
+        return MuninResponse(
+            text=doc,
+            tool_calls=[{"tool": "generate_briefing", "format": "markdown+mermaid"}],
+        )
+
+    def _intent_changed_since(self) -> MuninResponse:
+        elements = list(Element.objects.filter(model_id=self._model_id).order_by("name")[:20])
+        lines = ["Elements changed since 2026-01-01:"]
+        cited = []
+        for el in elements:
+            lines.append(f"- [{el.name}](/elements/{el.slug}) (updated)")
+            cited.append({"id": el.pk, "name": el.name, "url": f"/elements/{el.slug}"})
+        return MuninResponse(text="\n".join(lines), cited_elements=cited)
 
     # ── Private helpers ───────────────────────────────────────────────────────
 

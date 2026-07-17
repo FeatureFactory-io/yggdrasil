@@ -12,7 +12,7 @@ import logging
 
 from django.contrib.auth.models import User
 
-from yggdrasil.changeset.models import ChangeSetItem
+from yggdrasil.changeset.models import ChangeSetItem, MuninRule
 from yggdrasil.changeset.services import ChangeSetService
 from yggdrasil.mcp.server import get_current_user_id
 
@@ -95,7 +95,42 @@ def reject_changeset(
     :raises PermissionError: If current user lacks write access.
     :raises ValueError: If ChangeSet not found.
     """
-    raise NotImplementedError()
+    user = _resolve_current_user()
+    logger.info(
+        "reject_changeset | id=%s user=%s item_ids=%s reason=%r",
+        id,
+        getattr(user, "pk", None),
+        item_ids,
+        reason[:80] if reason else "",
+    )
+    before_rules = MuninRule.objects.filter(source_item__changeset_id=id).count() if reason else 0
+    changeset = _service.reject(
+        changeset_id=id,
+        item_ids=item_ids,
+        reason=reason,
+        user=user,
+        learn=bool(reason),
+    )
+    rejected_qs = changeset.items.filter(status=ChangeSetItem.ITEM_STATUS_REJECTED)
+    if item_ids is not None:
+        rejected_qs = rejected_qs.filter(pk__in=item_ids)
+    rejected_count = rejected_qs.count()
+    rule_created = False
+    if reason:
+        after_rules = MuninRule.objects.filter(source_item__changeset_id=id).count()
+        rule_created = after_rules > before_rules
+    result = {
+        "changeset_id": changeset.pk,
+        "rejected_count": rejected_count,
+        "rule_created": rule_created,
+    }
+    logger.info(
+        "reject_changeset | id=%s user=%s result=%s",
+        id,
+        getattr(user, "pk", None),
+        result,
+    )
+    return result
 
 
 def do_other_changeset(

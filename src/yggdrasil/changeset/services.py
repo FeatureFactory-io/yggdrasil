@@ -168,7 +168,32 @@ class ChangeSetService:
         >>> MuninRule.objects.filter(source_item__changeset_id=1).count()
         1
         """
-        raise NotImplementedError()
+        user_label = getattr(user, "pk", None)
+        logger.info(
+            "reject | changeset_id=%s item_ids=%s learn=%s user=%s",
+            changeset_id,
+            item_ids,
+            learn,
+            user_label,
+        )
+        with transaction.atomic():
+            changeset = self._get_pending_changeset(changeset_id)
+            targets = self._select_pending_items(changeset, item_ids)
+            for item in targets:
+                item.status = ChangeSetItem.ITEM_STATUS_REJECTED
+                item.rejection_reason = reason
+                item.save(update_fields=["status", "rejection_reason"])
+                if learn and reason:
+                    self._create_munin_rule(item, reason, user)
+            self._finalize_changeset_status(changeset, user)
+        logger.info(
+            "reject | changeset_id=%s rejected_count=%s status=%s user=%s",
+            changeset.pk,
+            len(targets),
+            changeset.status,
+            user_label,
+        )
+        return changeset
 
     def do_other(
         self,
@@ -323,7 +348,20 @@ class ChangeSetService:
 
     def _create_munin_rule(self, item: ChangeSetItem, reason: str, user: User | None) -> MuninRule:
         """Create a MuninRule from a rejected item and reason."""
-        raise NotImplementedError()
+        rule = MuninRule.objects.create(
+            model=item.changeset.model,
+            rule_text=reason,
+            source_item=item,
+            created_by=user,
+            is_active=True,
+        )
+        logger.info(
+            "_create_munin_rule | rule_id=%s item=%s user=%s",
+            rule.pk,
+            item.pk,
+            getattr(user, "pk", None),
+        )
+        return rule
 
     def _get_applied_changeset(self, changeset_id: int) -> ChangeSet:
         """Load ChangeSet for rollback; require status=applied."""

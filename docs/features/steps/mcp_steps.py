@@ -447,7 +447,13 @@ def step_specific_ops_pending(context, item_ids):
 @then("all {count:d} operations are rejected")
 def step_all_ops_rejected(context, count):
     """Assert all operations are rejected."""
-    raise NotImplementedError()
+    cs_id = context.changeset_id
+    rejected = ChangeSetItem.objects.filter(
+        changeset_id=cs_id,
+        status=ChangeSetItem.ITEM_STATUS_REJECTED,
+    ).count()
+    assert rejected == count, f"Expected {count} rejected ops on ChangeSet {cs_id}, got {rejected}"
+    logger.info("step_all_ops_rejected | changeset_id=%s rejected=%s", cs_id, rejected)
 
 
 @then("a MuninRule is created with the provided reason text")

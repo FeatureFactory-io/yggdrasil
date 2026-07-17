@@ -18,8 +18,10 @@ import logging
 
 from django.db.models import Q
 
-from yggdrasil.graph.models import Element, YggdrasilModel
+from yggdrasil.changeset.models import ChangeSet
+from yggdrasil.graph.models import Element, Stereotype, YggdrasilModel
 from yggdrasil.mcp.server import get_current_user_id
+from yggdrasil.ratatosk.models import RataskRun
 
 logger = logging.getLogger("yggdrasil.mcp.tools.query")
 
@@ -102,7 +104,17 @@ def search(
     :return: {"items": [...], "query": "Payment"}
     :raises PermissionError: If current user has no read access.
     """
-    raise NotImplementedError()
+    user_id = get_current_user_id()
+    logger.info("search | query=%r model=%s user=%s", query, model, user_id)
+    ymodel = _resolve_model(model)
+    page_limit = min(max(limit, 1), _MAX_LIMIT)
+    qs = Element.objects.filter(model=ymodel, name__icontains=query).select_related(
+        "stereotype", "package"
+    )[:page_limit]
+    items = [_element_summary(el) for el in qs]
+    result = {"items": items, "query": query}
+    logger.info("search | query=%r count=%s user=%s", query, len(items), user_id)
+    return result
 
 
 def get_element(
@@ -119,7 +131,12 @@ def get_element(
     :raises ValueError: If element not found.
     :raises PermissionError: If current user has no read access.
     """
-    raise NotImplementedError()
+    user_id = get_current_user_id()
+    logger.info("get_element | id_or_name=%r model=%s user=%s", id_or_name, model, user_id)
+    element = _resolve_element(id_or_name, model)
+    result = _element_detail(element)
+    logger.info("get_element | id=%s name=%s user=%s", element.pk, element.name, user_id)
+    return result
 
 
 def traverse(
@@ -138,7 +155,33 @@ def traverse(
     :return: {"source": {...}, "edges": [...], "nodes": [...]}
     :raises ValueError: If from_ element not found.
     """
-    raise NotImplementedError()
+    user_id = get_current_user_id()
+    logger.info(
+        "traverse | from=%s direction=%s depth=%s user=%s",
+        from_,
+        direction,
+        depth,
+        user_id,
+    )
+    source = _resolve_element(from_, model)
+    edges: list[dict] = []
+    nodes: dict[int, dict] = {}
+    if direction in {"outgoing", "both"}:
+        for rel in source.outgoing_relationships.select_related("target", "stereotype"):
+            edges.append(_edge_dict(rel, "outgoing"))
+            nodes[rel.target_id] = _element_summary(rel.target)
+    if direction in {"incoming", "both"}:
+        for rel in source.incoming_relationships.select_related("source", "stereotype"):
+            edges.append(_edge_dict(rel, "incoming"))
+            nodes[rel.source_id] = _element_summary(rel.source)
+    result = {
+        "source": _element_summary(source),
+        "edges": edges,
+        "nodes": list(nodes.values()),
+        "depth": depth,
+    }
+    logger.info("traverse | from=%s nodes=%s user=%s", from_, len(nodes), user_id)
+    return result
 
 
 def list_changesets(
@@ -155,7 +198,20 @@ def list_changesets(
     :return: {"items": [...], "total": N}
     :raises PermissionError: If current user has no read access.
     """
-    raise NotImplementedError()
+    user_id = get_current_user_id()
+    logger.info("list_changesets | model=%s status=%s user=%s", model, status, user_id)
+    qs = ChangeSet.objects.all().prefetch_related("items")
+    if model:
+        ymodel = _resolve_model(model)
+        qs = qs.filter(model=ymodel)
+    if status:
+        qs = qs.filter(status=status)
+    page_limit = min(max(limit, 1), _MAX_LIMIT)
+    total = qs.count()
+    items = [_changeset_summary(cs) for cs in qs.order_by("-created_at")[:page_limit]]
+    result = {"items": items, "total": total}
+    logger.info("list_changesets | count=%s user=%s", len(items), user_id)
+    return result
 
 
 def get_changeset(id: int) -> dict:
@@ -167,7 +223,16 @@ def get_changeset(id: int) -> dict:
     :raises ValueError: If ChangeSet not found.
     :raises PermissionError: If current user has no read access.
     """
-    raise NotImplementedError()
+    user_id = get_current_user_id()
+    logger.info("get_changeset | id=%s user=%s", id, user_id)
+    try:
+        changeset = ChangeSet.objects.prefetch_related("items").get(pk=id)
+    except ChangeSet.DoesNotExist as exc:
+        msg = f"ChangeSet id={id} not found"
+        raise ValueError(msg) from exc
+    result = _changeset_detail(changeset)
+    logger.info("get_changeset | id=%s ops=%s user=%s", id, len(result["operations"]), user_id)
+    return result
 
 
 def list_stereotypes(model: str) -> dict:
@@ -178,7 +243,21 @@ def list_stereotypes(model: str) -> dict:
     :return: {"items": [{"name": ..., "slug": ..., "is_edge": ..., "property_schema": ...}]}
     :raises ValueError: If model not found.
     """
-    raise NotImplementedError()
+    user_id = get_current_user_id()
+    logger.info("list_stereotypes | model=%s user=%s", model, user_id)
+    ymodel = _resolve_model(model)
+    items = [
+        {
+            "name": st.name,
+            "slug": st.slug,
+            "is_edge": st.is_edge,
+            "property_schema": st.property_schema,
+        }
+        for st in Stereotype.objects.filter(model=ymodel).order_by("name")
+    ]
+    result = {"items": items}
+    logger.info("list_stereotypes | model=%s count=%s user=%s", model, len(items), user_id)
+    return result
 
 
 def list_ratatosk_runs(model: str, limit: int = 20) -> dict:
@@ -190,7 +269,24 @@ def list_ratatosk_runs(model: str, limit: int = 20) -> dict:
     :return: {"items": [{"id": ..., "status": ..., "changeset_id": ..., "created_at": ...}]}
     :raises PermissionError: If current user has no read access.
     """
-    raise NotImplementedError()
+    user_id = get_current_user_id()
+    logger.info("list_ratatosk_runs | model=%s user=%s", model, user_id)
+    ymodel = _resolve_model(model)
+    page_limit = min(max(limit, 1), _MAX_LIMIT)
+    runs = RataskRun.objects.filter(model=ymodel).order_by("-created_at")[:page_limit]
+    items = [
+        {
+            "id": run.pk,
+            "run_id": run.run_id,
+            "status": run.status,
+            "changeset_id": run.changeset_id,
+            "created_at": run.created_at.isoformat() if run.created_at else None,
+        }
+        for run in runs
+    ]
+    result = {"items": items}
+    logger.info("list_ratatosk_runs | count=%s user=%s", len(items), user_id)
+    return result
 
 
 # ─── Private helpers ──────────────────────────────────────────────────────────
@@ -221,3 +317,82 @@ def _element_summary(element: Element) -> dict:
         "confidence": element.confidence,
         "properties": element.properties,
     }
+
+
+def _element_detail(element: Element) -> dict:
+    """Serialize a full element including relationship lists."""
+    detail = _element_summary(element)
+    detail["incoming_relationships"] = [
+        _edge_dict(rel, "incoming")
+        for rel in element.incoming_relationships.select_related("source", "stereotype")
+    ]
+    detail["outgoing_relationships"] = [
+        _edge_dict(rel, "outgoing")
+        for rel in element.outgoing_relationships.select_related("target", "stereotype")
+    ]
+    return detail
+
+
+def _resolve_element(id_or_name: str, model: str | None) -> Element:
+    """Resolve element by PK, slug, or exact name."""
+    qs = Element.objects.select_related("stereotype", "package")
+    if model:
+        ymodel = _resolve_model(model)
+        qs = qs.filter(model=ymodel)
+    if id_or_name.isdigit():
+        try:
+            return qs.get(pk=int(id_or_name))
+        except Element.DoesNotExist as exc:
+            msg = f"Element id={id_or_name} not found"
+            raise ValueError(msg) from exc
+    try:
+        return qs.get(Q(slug__iexact=id_or_name) | Q(name__iexact=id_or_name))
+    except Element.DoesNotExist as exc:
+        msg = f"Element {id_or_name!r} not found"
+        raise ValueError(msg) from exc
+    except Element.MultipleObjectsReturned as exc:
+        msg = f"Element {id_or_name!r} is ambiguous — pass model="
+        raise ValueError(msg) from exc
+
+
+def _edge_dict(rel, direction: str) -> dict:
+    """Serialize a Relationship for traverse/get_element."""
+    other = rel.target if direction == "outgoing" else rel.source
+    return {
+        "id": rel.pk,
+        "direction": direction,
+        "stereotype": rel.stereotype.name if rel.stereotype_id else "",
+        "element_id": other.pk,
+        "element_name": other.name,
+        "owner": other.owner,
+        "confidence": other.confidence,
+    }
+
+
+def _changeset_summary(changeset: ChangeSet) -> dict:
+    """Serialize a ChangeSet for list responses."""
+    return {
+        "id": changeset.pk,
+        "status": changeset.status,
+        "source": changeset.source,
+        "run_id": changeset.run_id,
+        "munin_reasoning": changeset.munin_reasoning,
+        "operations_count": changeset.items.count(),
+    }
+
+
+def _changeset_detail(changeset: ChangeSet) -> dict:
+    """Serialize a ChangeSet with full operations list."""
+    summary = _changeset_summary(changeset)
+    summary["operations"] = [
+        {
+            "id": item.pk,
+            "order": item.order,
+            "op_type": item.op_type,
+            "detail": item.detail,
+            "status": item.status,
+            "confidence": item.confidence,
+        }
+        for item in changeset.items.all()
+    ]
+    return summary

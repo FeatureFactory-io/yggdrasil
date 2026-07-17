@@ -22,17 +22,20 @@ from behave import given, then, when  # type: ignore[import]
 from django.utils.text import slugify
 from tests.fixtures.factories import UserFactory
 from tests.fixtures.factories.model_factories import (
+    EdgeStereotypeFactory,
     ElementFactory,
     PackageFactory,
+    RelationshipFactory,
     StereotypeFactory,
     YggdrasilModelFactory,
 )
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
-from yggdrasil.graph.models import YggdrasilModel
+from yggdrasil.graph.models import Element, YggdrasilModel
 from yggdrasil.mcp import server as mcp_server
 from yggdrasil.mcp.tools import changeset as changeset_tools
 from yggdrasil.mcp.tools import query as query_tools
+from yggdrasil.ratatosk.models import RataskRun
 
 logger = logging.getLogger("yggdrasil.at.mcp_steps")
 
@@ -56,7 +59,8 @@ _SEED_ELEMENTS: list[tuple[str, str, str]] = [
     ("Mobile App", "System", "Context"),
     ("Order Domain", "Component", "Application"),
     ("Notification Service", "Container", "Technology"),
-    ("PostgreSQL", "Container", "Technology"),
+    # Not a Container — QUERY-05 expects Container filter to exclude it.
+    ("PostgreSQL", "System", "Technology"),
     ("LegacyBatch", "Container", "Technology"),
 ]
 
@@ -70,6 +74,7 @@ def step_priya_has_rw_token(context):
     user = UserFactory(username="priya", is_architect=True)
     context.current_user = user
     context.mcp_token_scope = "read-write"
+    _ensure_query_fixture(context)
     logger.info("step_priya_has_rw_token | user=%s", user.pk)
 
 
@@ -124,13 +129,81 @@ def step_model_has_n_elements(context, model_name, count):
 @given("the model has ChangeSet id={cs_id:d} (run-{run_id}, pending, {op_count:d} operations)")
 def step_model_has_changeset(context, cs_id, run_id, op_count):
     """Create a pending ChangeSet with N operations in the test DB."""
-    raise NotImplementedError()
+    model = _ensure_model()
+    context.current_user = getattr(context, "current_user", None) or UserFactory(
+        username="priya", is_architect=True
+    )
+    changeset = ChangeSet(
+        pk=cs_id,
+        model=model,
+        source=ChangeSet.SOURCE_RATATOSK,
+        status=ChangeSet.STATUS_PENDING,
+        review_mode=ChangeSet.REVIEW_MANUAL,
+        run_id=f"run-{run_id}",
+        munin_reasoning="I analysed 3 services and proposed graph updates",
+    )
+    changeset.save()
+    ChangeSetItem.objects.filter(changeset=changeset).delete()
+    names = [
+        "Notification Service",
+        "Payment API",
+        "Mobile App",
+        "Order Domain",
+        "LegacyBatch",
+        "PostgreSQL",
+    ]
+    for order in range(1, op_count + 1):
+        item_kwargs: dict[str, Any] = {
+            "changeset": changeset,
+            "order": order,
+            "op_type": ChangeSetItem.OP_ADD_ELEMENT,
+            "detail": {
+                "name": names[order - 1] if order <= len(names) else f"Element {order}",
+                "stereotype_slug": "container",
+            },
+            "status": ChangeSetItem.ITEM_STATUS_PENDING,
+            "confidence": 0.9,
+        }
+        if cs_id == 1:
+            item_kwargs["pk"] = order
+        ChangeSetItem.objects.create(**item_kwargs)
+    context.changeset_id = cs_id
+    logger.info(
+        "step_model_has_changeset | id=%s run=%s ops=%s",
+        cs_id,
+        run_id,
+        op_count,
+    )
 
 
 @given("the model has {count:d} completed Ratatosk runs")
 def step_model_has_ratatosk_runs(context, count):
     """Create N completed RataskRun records."""
-    raise NotImplementedError()
+    model = _ensure_model()
+    context.current_user = getattr(context, "current_user", None) or UserFactory(
+        username="ci-agent", is_architect=True
+    )
+    cs = ChangeSet.objects.filter(pk=1).first()
+    if cs is None:
+        cs = ChangeSet.objects.create(
+            pk=1,
+            model=model,
+            source=ChangeSet.SOURCE_RATATOSK,
+            status=ChangeSet.STATUS_APPLIED,
+            run_id="run-linked",
+        )
+    RataskRun.objects.filter(model=model).delete()
+    for i in range(1, count + 1):
+        RataskRun.objects.create(
+            pk=i,
+            model=model,
+            run_id=f"run-{i:03d}",
+            repo_path="./repo",
+            status=RataskRun.STATUS_COMPLETE,
+            changeset=cs if i == 3 else None,
+        )
+    context.mcp_model = model
+    logger.info("step_model_has_ratatosk_runs | count=%s", count)
 
 
 @given("ChangeSet id={cs_id:d} has {count:d} pending operations")
@@ -258,7 +331,11 @@ def step_model_currently_in_mode(context, mode):
 @given("Elena wants to see the domain model as of {date}")
 def step_elena_wants_historical(context, date):
     """Set up historical context for Elena's query."""
-    raise NotImplementedError()
+    user = UserFactory(username="elena", is_architect=True)
+    context.current_user = user
+    context.as_of = date
+    _ensure_query_fixture(context)
+    logger.info("step_elena_wants_historical | as_of=%s user=%s", date, user.pk)
 
 
 @given("Elena has a valid read-only token in Claude Desktop")
@@ -269,8 +346,11 @@ def step_elena_has_ro_token(context):
 
 @given("Priya is in Cursor and wants to know what depends on Payment API")
 def step_priya_in_cursor(context):
-    """No-op setup — Cursor is the MCP client in AT, not actually present."""
-    pass
+    """Set up Priya + query fixture for traverse scenarios."""
+    user = UserFactory(username="priya", is_architect=True)
+    context.current_user = user
+    _ensure_query_fixture(context)
+    logger.info("step_priya_in_cursor | user=%s", user.pk)
 
 
 @given("Marcus has a Python script to wire a new service's relationships")
@@ -294,7 +374,11 @@ def step_call_mcp_tool_with_table(context, tool_name):
 @when('Priya calls MCP tool "{tool_name}" with no params')
 def step_call_mcp_tool_no_params(context, tool_name):
     """Call an MCP tool with no parameters."""
-    raise NotImplementedError()
+    user = getattr(context, "current_user", None) or UserFactory(
+        username="priya", is_architect=True
+    )
+    context.table = None
+    _call_mcp_tool(context, tool_name, user=user)
 
 
 @when('the CI agent calls MCP tool "{tool_name}" with:')
@@ -304,16 +388,22 @@ def step_ci_agent_calls_tool(context, tool_name):
     _call_mcp_tool(context, tool_name, user=user)
 
 
-@when('Elena calls MCP tool "{tool_name}" with')
+@when('Elena calls MCP tool "{tool_name}" with:')
 def step_elena_calls_tool(context, tool_name):
     """Elena calls an MCP tool."""
-    raise NotImplementedError()
+    user = getattr(context, "current_user", None) or UserFactory(
+        username="elena", is_architect=True
+    )
+    _call_mcp_tool(context, tool_name, user=user)
 
 
-@when('Marcus calls MCP tool "{tool_name}" with')
+@when('Marcus calls MCP tool "{tool_name}" with:')
 def step_marcus_calls_tool(context, tool_name):
     """Marcus calls an MCP tool."""
-    raise NotImplementedError()
+    user = getattr(context, "current_user", None) or UserFactory(
+        username="marcus", is_architect=True
+    )
+    _call_mcp_tool(context, tool_name, user=user)
 
 
 @when('Priya calls MCP tool "{tool_name}" with name "{element_name}"')
@@ -377,91 +467,136 @@ def step_element_in_response(context, name, stereotype):
 @then('the response contains "{value}"')
 def step_response_contains_str(context, value):
     """Assert the response contains the given string or field value."""
-    raise NotImplementedError()
+    blob = repr(context.mcp_response)
+    assert value in blob, f"Expected {value!r} in response {context.mcp_response!r}"
+    logger.info("step_response_contains_str | value=%s", value)
 
 
 @then('the response does not contain "{value}"')
 def step_response_not_contain(context, value):
     """Assert the response does not contain the value."""
-    raise NotImplementedError()
+    blob = repr(context.mcp_response)
+    assert value not in blob, f"Did not expect {value!r} in response {context.mcp_response!r}"
+    logger.info("step_response_not_contain | value=%s", value)
 
 
-@then("the response contains")
+@then("the response contains:")
 def step_response_contains_table(context):
     """Assert the response contains all field/value pairs from the table."""
-    raise NotImplementedError()
+    response = context.mcp_response
+    for row in context.table:
+        field = row["field"]
+        expected = row["value"]
+        actual = response.get(field)
+        assert str(actual) == expected, f"field {field}: expected {expected!r}, got {actual!r}"
+    logger.info("step_response_contains_table | ok")
 
 
 @then('the response contains a "{field}" field with "{key}": "{value}"')
 def step_response_has_field_key(context, field, key, value):
     """Assert a nested field exists with a specific key/value pair."""
-    raise NotImplementedError()
+    nested = context.mcp_response.get(field)
+    assert isinstance(nested, dict), f"Expected dict at {field!r}, got {nested!r}"
+    assert str(nested.get(key)) == value, f"{field}.{key}={nested.get(key)!r}, expected {value!r}"
+    logger.info("step_response_has_field_key | %s.%s=%s", field, key, value)
 
 
 @then('the response contains a "{field}" field')
 def step_response_has_field(context, field):
     """Assert the response contains the named field."""
-    raise NotImplementedError()
+    assert field in context.mcp_response, f"Missing field {field!r} in {context.mcp_response!r}"
+    logger.info("step_response_has_field | field=%s", field)
 
 
 @then("the response reflects the model state as of {date}")
 def step_response_is_historical(context, date):
     """Assert the response is scoped to the historical timestamp."""
-    raise NotImplementedError()
+    assert (
+        context.mcp_response.get("as_of") == date
+    ), f"Expected as_of={date!r}, got {context.mcp_response!r}"
+    logger.info("step_response_is_historical | as_of=%s", date)
 
 
 @then("the response header or metadata indicates the historical timestamp")
 def step_response_has_timestamp(context):
     """Assert the response carries a historical timestamp."""
-    raise NotImplementedError()
+    assert "as_of" in context.mcp_response, f"Missing as_of in {context.mcp_response!r}"
+    logger.info("step_response_has_timestamp | as_of=%s", context.mcp_response.get("as_of"))
 
 
 @then('the response contains a ChangeSet with status "{status}"')
 def step_response_has_changeset_status(context, status):
     """Assert a ChangeSet with the given status is in the response."""
-    raise NotImplementedError()
+    items = context.mcp_response.get("items", [])
+    assert any(
+        item.get("status") == status for item in items
+    ), f"No ChangeSet with status={status!r} in {items!r}"
+    logger.info("step_response_has_changeset_status | status=%s", status)
 
 
 @then('the response contains ChangeSets with status "{status}"')
 def step_response_has_changesets_status(context, status):
     """Assert ChangeSets with the given status are in the response."""
-    raise NotImplementedError()
+    step_response_has_changeset_status(context, status)
 
 
 @then("the response contains {count:d} operations")
 def step_response_has_n_ops(context, count):
     """Assert the response contains N operations."""
-    raise NotImplementedError()
+    ops = context.mcp_response.get("operations", [])
+    assert len(ops) == count, f"Expected {count} ops, got {len(ops)}"
+    logger.info("step_response_has_n_ops | count=%s", count)
 
 
 @then('the response contains "{name}" in an Add Element operation')
 def step_response_has_add_element(context, name):
     """Assert an Add Element operation for the named element is present."""
-    raise NotImplementedError()
+    ops = context.mcp_response.get("operations", [])
+    match = next(
+        (op for op in ops if op.get("op_type") == "add_element" and name in repr(op.get("detail"))),
+        None,
+    )
+    assert match is not None, f"No add_element for {name!r} in {ops!r}"
+    logger.info("step_response_has_add_element | name=%s", name)
 
 
 @then('the response contains stereotype "{name}"')
 def step_response_has_stereotype(context, name):
     """Assert a stereotype is in the response."""
-    raise NotImplementedError()
+    items = context.mcp_response.get("items", [])
+    assert any(item.get("name") == name for item in items), f"Stereotype {name!r} not in {items!r}"
+    logger.info("step_response_has_stereotype | name=%s", name)
 
 
 @then("each entry includes the property_schema")
 def step_entries_have_property_schema(context):
     """Assert each entry has a property_schema field."""
-    raise NotImplementedError()
+    items = context.mcp_response.get("items", [])
+    assert items, "No stereotype items in response"
+    for item in items:
+        assert "property_schema" in item, f"Missing property_schema in {item!r}"
+    logger.info("step_entries_have_property_schema | count=%s", len(items))
 
 
 @then("the response contains {count:d} runs")
 def step_response_has_n_runs(context, count):
     """Assert the response contains N runs."""
-    raise NotImplementedError()
+    items = context.mcp_response.get("items", [])
+    assert len(items) == count, f"Expected {count} runs, got {len(items)}"
+    logger.info("step_response_has_n_runs | count=%s", count)
 
 
 @then('run id={run_id:d} has status "{status}" and changeset_id={cs_id:d}')
 def step_run_has_status(context, run_id, status, cs_id):
     """Assert a specific run has the given status and changeset_id."""
-    raise NotImplementedError()
+    items = context.mcp_response.get("items", [])
+    run = next((item for item in items if item.get("id") == run_id), None)
+    assert run is not None, f"Run id={run_id} not in {items!r}"
+    assert run.get("status") == status, f"status={run.get('status')!r}, expected {status!r}"
+    assert (
+        run.get("changeset_id") == cs_id
+    ), f"changeset_id={run.get('changeset_id')!r}, expected {cs_id}"
+    logger.info("step_run_has_status | id=%s status=%s cs=%s", run_id, status, cs_id)
 
 
 @then("all {count:d} operations are applied to the model")
@@ -650,7 +785,12 @@ def step_error_contains(context, text):
 @then("each entry includes the element owner and confidence")
 def step_entries_have_owner_confidence(context):
     """Assert each traversal result has owner and confidence fields."""
-    raise NotImplementedError()
+    nodes = context.mcp_response.get("nodes", [])
+    assert nodes, "No traverse nodes in response"
+    for node in nodes:
+        assert "owner" in node, f"Missing owner in {node!r}"
+        assert "confidence" in node, f"Missing confidence in {node!r}"
+    logger.info("step_entries_have_owner_confidence | nodes=%s", len(nodes))
 
 
 @then("operation {op_id:d} remains pending for human review")
@@ -676,6 +816,53 @@ def _ensure_model() -> YggdrasilModel:
     )
     logger.info("_ensure_model | model_id=%s created=%s", model.pk, created)
     return model
+
+
+def _ensure_query_fixture(context) -> None:
+    """
+    Ensure the canonical Act-5 graph fixture exists for query scenarios.
+
+    Creates 6 elements, incoming deps on Payment API, stereotypes, and
+    one pending + one applied ChangeSet when the model is empty.
+    """
+    model = _ensure_model()
+    context.mcp_model = model
+    if Element.objects.filter(model=model).count() < 6:
+        step_model_has_n_elements(context, "Yggdrasil", 6)
+    payment = Element.objects.filter(model=model, slug="payment-api").first()
+    mobile = Element.objects.filter(model=model, slug="mobile-app").first()
+    order = Element.objects.filter(model=model, slug="order-domain").first()
+    if payment and mobile and order and not payment.incoming_relationships.exists():
+        edge_st = EdgeStereotypeFactory(model=model, name="depends_on", slug="depends_on")
+        RelationshipFactory(
+            model=model, source=mobile, target=payment, stereotype=edge_st, confidence=0.9
+        )
+        RelationshipFactory(
+            model=model, source=order, target=payment, stereotype=edge_st, confidence=0.88
+        )
+        mobile.owner = "mobile-team"
+        mobile.confidence = 0.95
+        mobile.save(update_fields=["owner", "confidence"])
+        order.owner = "orders-team"
+        order.confidence = 0.91
+        order.save(update_fields=["owner", "confidence"])
+    if not ChangeSet.objects.filter(model=model, status=ChangeSet.STATUS_PENDING).exists():
+        ChangeSet.objects.create(
+            model=model,
+            source=ChangeSet.SOURCE_RATATOSK,
+            status=ChangeSet.STATUS_PENDING,
+            run_id="run-pending",
+            munin_reasoning="pending fixture",
+        )
+    if not ChangeSet.objects.filter(model=model, status=ChangeSet.STATUS_APPLIED).exists():
+        ChangeSet.objects.create(
+            model=model,
+            source=ChangeSet.SOURCE_RATATOSK,
+            status=ChangeSet.STATUS_APPLIED,
+            run_id="run-applied",
+            munin_reasoning="applied fixture",
+        )
+    logger.info("_ensure_query_fixture | model_id=%s", model.pk)
 
 
 def _call_mcp_tool(context, tool_name: str, *, user) -> None:

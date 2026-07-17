@@ -119,7 +119,40 @@ def step_changeset_has_pending_ops(context, cs_id, count):
 @given("ChangeSet id={cs_id:d} has operations {item_ids}")
 def step_changeset_has_operations(context, cs_id, item_ids):
     """Create a ChangeSet with specific item IDs."""
-    raise NotImplementedError()
+    ids = _parse_id_list(item_ids)
+    model = _ensure_model()
+    changeset = ChangeSet(
+        pk=cs_id,
+        model=model,
+        source=ChangeSet.SOURCE_RATATOSK,
+        status=ChangeSet.STATUS_PENDING,
+        review_mode=ChangeSet.REVIEW_MANUAL,
+        run_id=f"run-{cs_id:03d}",
+        munin_reasoning="Pending ChangeSet for MCP partial-approve AT",
+    )
+    changeset.save()
+    ChangeSetItem.objects.filter(changeset=changeset).delete()
+    for order, declared_id in enumerate(ids, start=1):
+        ChangeSetItem.objects.create(
+            pk=declared_id,
+            changeset=changeset,
+            order=order,
+            op_type=ChangeSetItem.OP_ADD_ELEMENT,
+            detail={
+                "name": f"Element {declared_id}",
+                "stereotype_slug": "container",
+                "package_slug": "technology",
+            },
+            status=ChangeSetItem.ITEM_STATUS_PENDING,
+            confidence=0.9,
+        )
+    context.changeset_id = cs_id
+    context.mcp_changeset = changeset
+    logger.info(
+        "step_changeset_has_operations | changeset_id=%s item_ids=%s",
+        cs_id,
+        ids,
+    )
 
 
 @given('the model contains element "{name}" with owner "{owner}"')
@@ -194,7 +227,8 @@ def step_marcus_has_script(context):
 @when('Priya calls MCP tool "{tool_name}" with:')
 def step_call_mcp_tool_with_table(context, tool_name):
     """Call an MCP tool with parameters from a table."""
-    raise NotImplementedError()
+    user = UserFactory(username="priya", is_architect=True)
+    _call_mcp_tool(context, tool_name, user=user)
 
 
 @when('Priya calls MCP tool "{tool_name}" with no params')
@@ -385,13 +419,29 @@ def step_changeset_status(context, status):
 @then("operations {item_ids} are applied")
 def step_specific_ops_applied(context, item_ids):
     """Assert specific operations are applied."""
-    raise NotImplementedError()
+    ids = _parse_id_list(item_ids)
+    for item_id in ids:
+        item = ChangeSetItem.objects.get(pk=item_id)
+        assert (
+            item.status == ChangeSetItem.ITEM_STATUS_ACCEPTED
+        ), f"Expected item {item_id} accepted, got {item.status!r}"
+    logger.info("step_specific_ops_applied | item_ids=%s", ids)
 
 
 @then("operations {item_ids} remain pending")
 def step_specific_ops_pending(context, item_ids):
     """Assert specific operations remain pending."""
-    raise NotImplementedError()
+    ids = _parse_id_list(item_ids)
+    for item_id in ids:
+        item = ChangeSetItem.objects.get(pk=item_id)
+        assert (
+            item.status == ChangeSetItem.ITEM_STATUS_PENDING
+        ), f"Expected item {item_id} pending, got {item.status!r}"
+    cs = ChangeSet.objects.get(pk=context.changeset_id)
+    assert (
+        cs.status == ChangeSet.STATUS_PENDING
+    ), f"Expected ChangeSet still pending, got {cs.status!r}"
+    logger.info("step_specific_ops_pending | item_ids=%s", ids)
 
 
 @then("all {count:d} operations are rejected")
@@ -603,3 +653,12 @@ def _coerce_param(raw: str) -> Any:
         return int(raw)
     except ValueError:
         return raw
+
+
+def _parse_id_list(raw: str) -> list[int]:
+    """Parse '[1, 2]', '1 and 2', or '3, 4, 5, 6' into a list of ints."""
+    text = raw.strip()
+    if text.startswith("[") and text.endswith("]"):
+        return [int(x) for x in ast.literal_eval(text)]
+    normalized = text.replace(" and ", ",")
+    return [int(part.strip()) for part in normalized.split(",") if part.strip()]

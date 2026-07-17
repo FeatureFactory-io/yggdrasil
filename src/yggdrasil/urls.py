@@ -19,6 +19,7 @@ from yggdrasil.web.views import health
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("health/", health, name="health"),
+    path("auth/", include("yggdrasil.auth.urls", namespace="auth")),
     path("api/v1/", include("yggdrasil.api.urls", namespace="api")),
     path("", include("yggdrasil.web.urls", namespace="web")),
 ]

@@ -15,7 +15,7 @@ Write SAO.md
 
 ## Objective
 
-Compile all architectural decisions from DTA-02 through DTA-17 into a single, authoritative document: `docs/architecture/SAO.md`.
+Compile all architectural decisions from DTA-02 through DTA-17 (and optionally DTA-19 and DTA-20 if applicable) into a single, authoritative document: `docs/architecture/SAO.md`.
 
 ---
 
@@ -40,6 +40,8 @@ Collect the recorded decisions from each domain activity:
 - DTA-15: Backup & Recovery
 - DTA-16: Developer Experience
 - DTA-17: Documentation Strategy
+- DTA-19: AI Agent Architecture (if applicable)
+- DTA-20: MCP Architecture (if applicable)
 
 ### 2. Write SAO.md
 
@@ -100,6 +102,12 @@ Structure:
 ## 16. Documentation Strategy
 [Decision from DTA-17]
 
+## 17. AI Agent Architecture
+[Decision from DTA-19 — skip section if no in-app agent]
+
+## 18. MCP Architecture
+[Decision from DTA-20 — skip section if no MCP interface]
+
 ## Technology Stack Table
 Machine-readable table consumed by Bootstrap Project (BSP) for automated provisioning.
 
@@ -154,6 +162,8 @@ Domain                   | Covered Skills           | Gaps
 Application Blocks       | [list] ✅               | [list] ❌
 Integration & API        | [list] ✅               | [list] ❌
 ...
+AI Agent Architecture    | [list] ✅               | [list] ❌
+MCP Architecture         | [list] ✅               | [list] ❌
 ```
 
 For each gap: estimated impact on project timeline and cost.
@@ -178,7 +188,7 @@ Each update should reference the original DTA decision and explain what changed 
 ## Deliverables
 
 - ✅ **SAO.md written** at `docs/architecture/SAO.md`
-- ✅ **All 16 domain decisions** compiled into single document
+- ✅ **All domain decisions** (16 core + up to 2 optional: AI Agent, MCP) compiled into single document
 - ✅ **Skill coverage report** included
 - ✅ **Key decisions summary** with rationale
 - ✅ **User approval** obtained

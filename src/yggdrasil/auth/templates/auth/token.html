@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API Access — Yggdrasil</title>
+</head>
+<body>
+  <!-- Navbar — nav-settings links to AUTH-TOKEN-1; user-menu for profile/logout -->
+  <nav>
+    <a href="{% url 'auth:token_list' %}" data-testid="nav-settings">Settings</a>
+    <div data-testid="user-menu">
+      {% if user.is_authenticated %}{{ user.username }}{% endif %}
+    </div>
+  </nav>
+
+  <!-- Screen: AUTH-TOKEN-1 -->
+  <div data-testid="auth-token-page">
+    <h1>API Access</h1>
+    <button data-testid="generate-token-btn" type="button">Generate New Token</button>
+    <table aria-label="API tokens">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Scope</th>
+          <th>Created</th>
+          <th>Last used</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for token in tokens %}
+        <tr data-testid="token-row-{{ token.pk }}">
+          <td>{{ token.name }}</td>
+          <td>{{ token.scope }}</td>
+          <td>{{ token.created_at|date:"Y-m-d" }}</td>
+          <td>{{ token.last_used_at|date:"Y-m-d"|default:"Never" }}</td>
+          <td>
+            <form method="post" action="{% url 'auth:token_revoke' token.pk %}">
+              {% csrf_token %}
+              <button type="submit" data-testid="revoke-token-{{ token.pk }}">Revoke</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5">No tokens yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Usage snippets -->
+  <div data-testid="usage-snippets">
+    <h2>Usage snippets</h2>
+    <h3>Shell</h3>
+    <pre>export YGGDRASIL_TOKEN=&lt;token&gt;</pre>
+    <h3>Ratatosk CLI</h3>
+    <pre>pip install ratatosk
+ratatosk bootstrap ./repo --token=$YGGDRASIL_TOKEN</pre>
+    <h3>MCP via Docker</h3>
+    <pre>{
+  "mcpServers": {
+    "yggdrasil": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "YGGDRASIL_TOKEN=&lt;token&gt;",
+        "-e", "YGGDRASIL_SERVER_URL=https://yggdrasil.featurefactory.io",
+        "featurefactory-io/yggdrasil-mcp:latest"
+      ]
+    }
+  }
+}</pre>
+    <h3>MCP direct</h3>
+    <pre>{
+  "mcpServers": {
+    "yggdrasil": {
+      "url": "https://yggdrasil.featurefactory.io/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer &lt;token&gt;"
+      }
+    }
+  }
+}</pre>
+  </div>
+</body>
+</html>

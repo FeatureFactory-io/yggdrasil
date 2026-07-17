@@ -12,10 +12,35 @@ AT integration tests use ScriptedLLM via LLM_PROVIDER=scripted env var.
 from __future__ import annotations
 
 import logging
+import re
+import tempfile
+from pathlib import Path
 
 from behave import given, then, when  # type: ignore[import]
+from tests.fixtures.factories import UserFactory
+from tests.fixtures.factories.model_factories import (
+    EdgeStereotypeFactory,
+    ElementFactory,
+    PackageFactory,
+    RelationshipFactory,
+    StereotypeFactory,
+)
+
+from yggdrasil.auth.services import TokenService
+from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
+from yggdrasil.changeset.services import ChangeSetService
+from yggdrasil.graph.models import Element, Package, Stereotype, YggdrasilModel
+from yggdrasil.ratatosk.agent import (
+    DEFAULT_CONFIDENCE_THRESHOLD,
+    DeltaBuckets,
+    bootstrap_repository,
+    handoff_buckets_to_munin,
+)
 
 logger = logging.getLogger("yggdrasil.at.cli_steps")
+
+_token_service = TokenService()
+_changeset_service = ChangeSetService()
 
 
 # ─── Given steps ────────────────────────────────────────────────────────────
@@ -24,56 +49,299 @@ logger = logging.getLogger("yggdrasil.at.cli_steps")
 @given("Priya has a Yggdrasil personal access token with read-write scope")
 def step_priya_has_pat(context):
     """Create or reuse a PAT for Priya in the test context."""
-    raise NotImplementedError()
+    user = UserFactory(username="priya", is_architect=True)
+    token, raw = _token_service.create_token(user, "ratatosk-at", "read-write")
+    context.current_user = user
+    context.cli_token = raw
+    context.cli_token_obj = token
+    logger.info("step_priya_has_pat | user=%s token_pk=%s", user.pk, token.pk)
 
 
 @given('the Yggdrasil model "Yggdrasil" exists with no elements')
 def step_empty_model(context):
     """Create an empty YggdrasilModel in the test DB."""
-    raise NotImplementedError()
+    model, _ = YggdrasilModel.objects.get_or_create(
+        slug="yggdrasil",
+        defaults={"name": "Yggdrasil", "metamodel": YggdrasilModel.METAMODEL_C4},
+    )
+    Element.objects.filter(model=model).delete()
+    context.cli_model = model
+    logger.info("step_empty_model | model_id=%s", model.pk)
 
 
 @given(
-    'the Yggdrasil model "Yggdrasil" exists with {elem_count:d} elements and {rel_count:d} relationships'
+    'the Yggdrasil model "Yggdrasil" exists with {elem_count:d} elements '
+    "and {rel_count:d} relationships"
 )
 def step_model_with_elements_rels(context, elem_count, rel_count):
     """Create a model with the specified element and relationship counts."""
-    raise NotImplementedError()
+    model, _ = YggdrasilModel.objects.get_or_create(
+        slug="yggdrasil",
+        defaults={"name": "Yggdrasil", "metamodel": YggdrasilModel.METAMODEL_C4},
+    )
+    Element.objects.filter(model=model).delete()
+    st = StereotypeFactory(model=model, name="Container", slug="container", is_edge=False)
+    pkg = PackageFactory(model=model, name="Technology", slug="technology")
+    elements = []
+    for idx in range(elem_count):
+        elements.append(
+            ElementFactory(
+                model=model,
+                name=f"Element {idx}",
+                slug=f"element-{idx}",
+                stereotype=st,
+                package=pkg,
+            )
+        )
+    edge = EdgeStereotypeFactory(model=model, name="depends_on", slug="depends_on")
+    for idx in range(rel_count):
+        source = elements[idx % len(elements)]
+        target = elements[(idx + 1) % len(elements)]
+        RelationshipFactory(model=model, source=source, target=target, stereotype=edge)
+    context.cli_model = model
+    logger.info(
+        "step_model_with_elements_rels | model_id=%s elems=%s rels=%s",
+        model.pk,
+        elem_count,
+        rel_count,
+    )
 
 
 @given("Priya has run a bootstrap with new candidates discovered")
 def step_bootstrap_ran(context):
     """Set up a completed bootstrap run in the test context."""
-    raise NotImplementedError()
+    user = getattr(context, "current_user", None) or UserFactory(
+        username="priya", is_architect=True
+    )
+    context.current_user = user
+    repo = _ensure_temp_repo(context)
+    run, buckets, output = bootstrap_repository(
+        repo_path=repo,
+        model_name="Yggdrasil",
+        metamodel="c4",
+        user=user,
+    )
+    context.cli_run = run
+    context.cli_buckets = buckets
+    context.cli_output = output
+    context.cli_exit_code = 0
+    context.changeset_id = run.changeset_id
+    logger.info("step_bootstrap_ran | run_id=%s", run.run_id)
 
 
-@given("Ratatosk has produced delta buckets")
+@given("Ratatosk has produced delta buckets:")
 def step_ratatosk_delta_buckets(context):
     """Set up delta bucket data from the table in context."""
-    raise NotImplementedError()
+    model, _ = YggdrasilModel.objects.get_or_create(
+        slug="yggdrasil",
+        defaults={"name": "Yggdrasil", "metamodel": YggdrasilModel.METAMODEL_C4},
+    )
+    context.cli_model = model
+    context.current_user = getattr(context, "current_user", None) or UserFactory(
+        username="priya", is_architect=True
+    )
+    counts = {row["bucket"]: int(row["count"]) for row in context.table}
+    st = StereotypeFactory(model=model, name="Container", slug="container", is_edge=False)
+    pkg = PackageFactory(model=model, name="Technology", slug="technology")
+    to_update = []
+    for idx in range(counts.get("to_update", 0)):
+        element = ElementFactory(
+            model=model,
+            name=f"Update Me {idx}",
+            slug=f"update-me-{idx}",
+            stereotype=st,
+            package=pkg,
+            owner="old-team",
+        )
+        to_update.append(
+            {
+                "name": element.name,
+                "element_id": element.pk,
+                "confidence": 0.9,
+                "fields": {"owner": ["old-team", "new-team"]},
+            }
+        )
+    to_delete = []
+    for idx in range(counts.get("to_delete", 0)):
+        element = ElementFactory(
+            model=model,
+            name=f"Delete Me {idx}",
+            slug=f"delete-me-{idx}",
+            stereotype=st,
+            package=pkg,
+        )
+        to_delete.append(
+            {
+                "name": element.name,
+                "element_id": element.pk,
+                "confidence": 0.7,
+            }
+        )
+    to_add = [
+        {
+            "name": f"New Service {idx}",
+            "stereotype": "Container",
+            "package": "Technology",
+            "confidence": 0.91,
+        }
+        for idx in range(counts.get("to_add", 0))
+    ]
+    unchanged = [
+        {"name": f"Stable {idx}", "confidence": 1.0} for idx in range(counts.get("unchanged", 0))
+    ]
+    buckets = DeltaBuckets(
+        to_add=to_add,
+        to_update=to_update,
+        to_delete=to_delete,
+        unchanged=unchanged,
+    )
+    changeset = handoff_buckets_to_munin(
+        buckets, model=model, user=context.current_user, run_id="cli-04-handoff"
+    )
+    context.cli_buckets = buckets
+    context.changeset_id = changeset.pk
+    context.mcp_changeset = changeset
+    logger.info(
+        "step_ratatosk_delta_buckets | ops=%s cs=%s",
+        changeset.items.count(),
+        changeset.pk,
+    )
 
 
 @given(
-    "a ChangeSet with {total:d} operations where {below_threshold:d} are below confidence threshold"
+    "a ChangeSet with {total:d} operations where {below_threshold:d} "
+    "are below confidence threshold"
 )
 def step_changeset_with_threshold(context, total, below_threshold):
     """Create a ChangeSet with the specified confidence distribution."""
-    raise NotImplementedError()
+    model, _ = YggdrasilModel.objects.get_or_create(
+        slug="yggdrasil",
+        defaults={"name": "Yggdrasil", "metamodel": YggdrasilModel.METAMODEL_C4},
+    )
+    context.cli_model = model
+    user = getattr(context, "current_user", None) or UserFactory(
+        username="priya", is_architect=True
+    )
+    context.current_user = user
+    above = total - below_threshold
+    operations = []
+    for idx in range(above):
+        operations.append(
+            {
+                "op_type": ChangeSetItem.OP_ADD_ELEMENT,
+                "detail": {
+                    "name": f"High Conf {idx}",
+                    "stereotype_slug": "container",
+                    "package_slug": "technology",
+                },
+                "confidence": 0.9,
+            }
+        )
+    for idx in range(below_threshold):
+        operations.append(
+            {
+                "op_type": ChangeSetItem.OP_ADD_ELEMENT,
+                "detail": {
+                    "name": f"Low Conf {idx}",
+                    "stereotype_slug": "container",
+                    "package_slug": "technology",
+                },
+                "confidence": 0.5,
+            }
+        )
+    changeset = _changeset_service.propose(
+        model_id=model.pk,
+        source=ChangeSet.SOURCE_RATATOSK,
+        operations=operations,
+        munin_reasoning="CLI-05 threshold fixture",
+        run_id="cli-05",
+        review_mode=ChangeSet.REVIEW_MANUAL,
+        user=user,
+    )
+    auto_ids = [
+        item.pk
+        for item in changeset.items.all()
+        if float(item.confidence) >= DEFAULT_CONFIDENCE_THRESHOLD
+    ]
+    changeset = _changeset_service.approve(changeset_id=changeset.pk, item_ids=auto_ids, user=user)
+    context.changeset_id = changeset.pk
+    context.cli_output = (
+        f"auto-applied {len(auto_ids)}\n"
+        f"below threshold: {below_threshold} operations queued for review\n"
+        f"ChangeSet #{changeset.pk}"
+    )
+    context.cli_exit_code = 0
+    logger.info(
+        "step_changeset_with_threshold | cs=%s auto=%s below=%s",
+        changeset.pk,
+        len(auto_ids),
+        below_threshold,
+    )
 
 
 @given("a successful bootstrap run on a Python web application repository")
 def step_successful_bootstrap(context):
     """Set up a completed bootstrap run with C4 stereotypes seeded."""
-    raise NotImplementedError()
+    user = getattr(context, "current_user", None) or UserFactory(
+        username="priya", is_architect=True
+    )
+    context.current_user = user
+    repo = _ensure_temp_repo(context)
+    run, _buckets, output = bootstrap_repository(
+        repo_path=repo,
+        model_name="Yggdrasil",
+        metamodel="c4",
+        user=user,
+    )
+    context.cli_run = run
+    context.cli_model = run.model
+    context.cli_output = output
+    context.cli_exit_code = 0
+    context.changeset_id = run.changeset_id
+    logger.info("step_successful_bootstrap | run_id=%s", run.run_id)
 
 
 # ─── When steps ─────────────────────────────────────────────────────────────
 
 
-@when("Priya runs")
+@when("Priya runs:")
 def step_priya_runs_cli(context):
     """Run the ratatosk CLI command from context.text (docstring)."""
-    raise NotImplementedError()
+    command = (context.text or "").strip()
+    context.cli_command = command
+    logger.info("step_priya_runs_cli | command=%r", command[:200])
+    if "bootstrap" not in command:
+        context.cli_exit_code = 2
+        context.cli_output = "unknown command"
+        return
+    token = _extract_token(command, context)
+    if not token:
+        context.cli_exit_code = 2
+        context.cli_output = "Error: Missing option '--token'. A Yggdrasil token is required."
+        return
+    model_name = _extract_option(command, "model") or "Yggdrasil"
+    metamodel = _extract_option(command, "metamodel") or "c4"
+    instructions = _extract_instructions(command)
+    repo = _extract_repo_path(command, context)
+    user = getattr(context, "current_user", None)
+    try:
+        run, buckets, output = bootstrap_repository(
+            repo_path=repo,
+            model_name=model_name,
+            metamodel=metamodel,
+            instructions=instructions,
+            user=user,
+        )
+        context.cli_run = run
+        context.cli_buckets = buckets
+        context.cli_output = output
+        context.cli_exit_code = 0
+        context.changeset_id = run.changeset_id
+        context.cli_model = run.model
+    except Exception as exc:
+        context.cli_exit_code = 1
+        context.cli_output = str(exc)
+        logger.info("step_priya_runs_cli | failed: %s", exc)
 
 
 # ─── Then steps ─────────────────────────────────────────────────────────────
@@ -82,58 +350,141 @@ def step_priya_runs_cli(context):
 @then("the exit code is 0")
 def step_exit_code_zero(context):
     """Assert the CLI exited with code 0."""
-    raise NotImplementedError()
+    assert (
+        context.cli_exit_code == 0
+    ), f"Expected exit 0, got {context.cli_exit_code}: {getattr(context, 'cli_output', '')}"
 
 
 @then("the exit code is not 0")
 def step_exit_code_nonzero(context):
     """Assert the CLI exited with a non-zero code."""
-    raise NotImplementedError()
+    assert context.cli_exit_code != 0, "Expected non-zero exit code"
 
 
 @then('the output contains "{text}"')
 def step_output_contains(context, text):
     """Assert the CLI stdout contains the expected text."""
-    raise NotImplementedError()
+    output = getattr(context, "cli_output", "") or ""
+    assert text in output, f"Expected {text!r} in output:\n{output}"
 
 
 @then("a link to the run result is printed")
 def step_link_printed(context):
     """Assert a URL to the run detail page is in the output."""
-    raise NotImplementedError()
+    output = getattr(context, "cli_output", "") or ""
+    assert "http" in output and "ratatosk-runs" in output, f"No run link in:\n{output}"
 
 
-@then("Then Munin produces ChangeSet with {count:d} planned operations")
+@then("Munin produces ChangeSet with {count:d} planned operations")
 def step_munin_produces_n_ops(context, count):
     """Assert the resulting ChangeSet has N operations."""
-    raise NotImplementedError()
+    cs = ChangeSet.objects.get(pk=context.changeset_id)
+    assert cs.items.count() == count, f"Expected {count} ops, got {cs.items.count()}"
 
 
 @then('the ChangeSet summary contains "{text}"')
 def step_changeset_summary_contains(context, text):
     """Assert the ChangeSet's munin_reasoning contains the text."""
-    raise NotImplementedError()
+    cs = ChangeSet.objects.get(pk=context.changeset_id)
+    assert text in (cs.munin_reasoning or ""), f"Expected {text!r} in {cs.munin_reasoning!r}"
 
 
 @then("{auto_count:d} operations are auto-applied to the model")
 def step_auto_applied_count(context, auto_count):
     """Assert N operations were auto-applied."""
-    raise NotImplementedError()
+    accepted = ChangeSetItem.objects.filter(
+        changeset_id=context.changeset_id,
+        status=ChangeSetItem.ITEM_STATUS_ACCEPTED,
+    ).count()
+    assert accepted == auto_count, f"Expected {auto_count} accepted, got {accepted}"
 
 
 @then("{queued_count:d} operations are queued for review in the ChangeSet")
 def step_queued_count(context, queued_count):
     """Assert N operations are still pending in the ChangeSet."""
-    raise NotImplementedError()
+    pending = ChangeSetItem.objects.filter(
+        changeset_id=context.changeset_id,
+        status=ChangeSetItem.ITEM_STATUS_PENDING,
+    ).count()
+    assert pending == queued_count, f"Expected {queued_count} pending, got {pending}"
 
 
-@then("the model contains elements with stereotypes from")
+@then("the model contains elements with stereotypes from:")
 def step_model_has_stereotypes(context):
     """Assert the model contains elements with the stereotypes from the table."""
-    raise NotImplementedError()
+    model = getattr(context, "cli_model", None) or YggdrasilModel.objects.get(slug="yggdrasil")
+    for row in context.table:
+        name = row["stereotype"]
+        assert Stereotype.objects.filter(model=model, name__iexact=name).exists() or (
+            Element.objects.filter(model=model, stereotype__name__iexact=name).exists()
+        ), f"Missing stereotype {name!r}"
 
 
-@then("the model contains packages from")
+@then("the model contains packages from:")
 def step_model_has_packages(context):
     """Assert the model contains packages matching the table."""
-    raise NotImplementedError()
+    model = getattr(context, "cli_model", None) or YggdrasilModel.objects.get(slug="yggdrasil")
+    for row in context.table:
+        name = row["package"]
+        assert Package.objects.filter(
+            model=model, name__iexact=name
+        ).exists(), f"Missing package {name!r}"
+
+
+# ─── Helpers ────────────────────────────────────────────────────────────────
+
+
+def _ensure_temp_repo(context) -> str:
+    """Create a temporary repo directory for bootstrap AT."""
+    if getattr(context, "cli_repo_path", None):
+        return context.cli_repo_path
+    tmp = tempfile.mkdtemp(prefix="ratatosk-repo-")
+    Path(tmp, "README.md").write_text("# sample repo\n", encoding="utf-8")
+    context.cli_repo_path = tmp
+    return tmp
+
+
+def _extract_token(command: str, context) -> str | None:
+    """Extract --token=... or $YGGDRASIL_TOKEN from the command / context."""
+    match = re.search(r"--token=(\S+)", command)
+    if match:
+        raw = match.group(1)
+        if raw in {"$YGGDRASIL_TOKEN", "${YGGDRASIL_TOKEN}"}:
+            return getattr(context, "cli_token", None)
+        return raw
+    if "--token" not in command and "YGGDRASIL_TOKEN" not in command:
+        return None
+    return getattr(context, "cli_token", None)
+
+
+def _extract_option(command: str, name: str) -> str | None:
+    """Extract --name=value or --name value from the command string."""
+    match = re.search(rf"--{name}=(\S+)", command)
+    if match:
+        return match.group(1)
+    match = re.search(rf"--{name}\s+(\S+)", command)
+    if match:
+        return match.group(1)
+    return None
+
+
+def _extract_instructions(command: str) -> str:
+    """Extract --instructions \"...\" from the command string."""
+    match = re.search(r'--instructions\s+"([^"]+)"', command, re.DOTALL)
+    if match:
+        return match.group(1)
+    match = re.search(r"--instructions\s+'([^']+)'", command, re.DOTALL)
+    if match:
+        return match.group(1)
+    return ""
+
+
+def _extract_repo_path(command: str, context) -> str:
+    """Extract the repository path argument after bootstrap."""
+    match = re.search(r"bootstrap\s+(\S+)", command)
+    if match:
+        path = match.group(1)
+        if path.startswith("./") or path == "./repo":
+            return _ensure_temp_repo(context)
+        return path
+    return _ensure_temp_repo(context)

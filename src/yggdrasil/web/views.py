@@ -4,7 +4,7 @@ Web views for Yggdrasil.
 /health/ — machine-readable liveness probe (no auth required).
 /        — welcome page.
 """
-import json
+
 import logging
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -40,4 +40,5 @@ def index(request: HttpRequest) -> HttpResponse:
     """
     logger.debug("index requested", extra={"user": str(request.user)})
     from django.shortcuts import render
+
     return render(request, "web/index.html")

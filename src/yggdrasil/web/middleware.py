@@ -4,13 +4,17 @@ Request-scoped middleware for Yggdrasil.
 RequestIdMiddleware — attaches a UUID ``request_id`` to every request
 so all log entries for a single HTTP transaction can be correlated.
 """
+
 from __future__ import annotations
 
 import logging
 import uuid
-from typing import Callable
+from typing import TYPE_CHECKING
 
-from django.http import HttpRequest, HttpResponse
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from django.http import HttpRequest, HttpResponse
 
 logger = logging.getLogger("yggdrasil.web")
 

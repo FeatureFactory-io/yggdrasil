@@ -1,0 +1,689 @@
+---
+# Iteration 2 — Agents + MCP
+# Generated: 2026-07-17  |  Branch: iteration/20260717-agents-mcp
+
+id: ITER-20260717-1300
+name: "Act 1 + Act 5 + Act 7 + Act 8 — Agents & MCP"
+branch: iteration/20260717-agents-mcp
+milestone: "#2 — ITER-20260717 | Agents + MCP"
+start_date: 2026-07-17
+acts:
+  - act-1-ratatosk
+  - act-5-mcp
+  - act-7-changeset
+  - act-8-chat
+total_scenarios: 71
+graduated_at_pin: 18      # Group A — already passing, @wip removed
+
+# ─── Infrastructure Prerequisites ──────────────────────────────────────────
+infrastructure:
+  - id: SINFRA-01
+    name: "ChangeSet app models + migration"
+    codebase_footprint:
+      - src/yggdrasil/changeset/models.py
+      - src/yggdrasil/changeset/services.py
+      - src/yggdrasil/changeset/admin.py
+      - src/yggdrasil/changeset/migrations/0001_initial.py
+    checkpoint: "uv run python manage.py migrate --run-syncdb && uv run pytest tests/changeset/test_models.py -x"
+    status: skeleton_done
+
+  - id: SINFRA-02
+    name: "LLM Port: BaseLLM protocol + ScriptedLLM + adapters"
+    codebase_footprint:
+      - src/yggdrasil/llm/base.py
+      - src/yggdrasil/llm/adapters/ollama.py
+      - src/yggdrasil/llm/adapters/anthropic.py
+    checkpoint: "uv run pytest tests/llm/test_scripted_llm.py -x"
+    status: skeleton_done
+
+  - id: SINFRA-03
+    name: "FastMCP server core + tool stubs"
+    codebase_footprint:
+      - src/yggdrasil/mcp/server.py
+      - src/yggdrasil/mcp/tools/query.py
+      - src/yggdrasil/mcp/tools/write.py
+      - src/yggdrasil/mcp/tools/changeset.py
+      - src/yggdrasil/mcp/management/commands/mcp_server.py
+    checkpoint: "uv run python manage.py mcp_server --help"
+    status: skeleton_done
+
+  - id: SINFRA-04
+    name: "MCP AT step definitions"
+    codebase_footprint:
+      - docs/features/steps/mcp_steps.py
+    checkpoint: "behave --wip --include mcp-query.feature docs/features/ 2>&1 | grep 'undefined' | wc -l | xargs test 0 -eq"
+    status: skeleton_done
+
+  - id: SINFRA-05
+    name: "CLI AT step definitions"
+    codebase_footprint:
+      - docs/features/steps/cli_steps.py
+    checkpoint: "behave --wip --include ratatosk-bootstrap.feature docs/features/ 2>&1 | grep 'undefined' | wc -l | xargs test 0 -eq"
+    status: skeleton_done
+
+  - id: SINFRA-06
+    name: "Munin AT step definitions"
+    codebase_footprint:
+      - docs/features/steps/munin_steps.py
+    checkpoint: "behave --wip --include chat-munin.feature docs/features/ 2>&1 | grep 'undefined' | wc -l | xargs test 0 -eq"
+    status: skeleton_done
+
+# ─── Feature Scenarios ──────────────────────────────────────────────────────
+scenarios:
+
+  # ── Group A: Graduation (18 graduated, 12 blocked on siblings) ──────────
+  - id: S01
+    scenario: CHANGESET-LIST+FIND-1-01
+    feature: docs/features/act-7-changeset/changeset-list.feature
+    group: graduation
+    status: done           # @wip removed; passes in normal AT run
+    sao_sections: [13, 5]
+    context_map:
+      mockup_view: mockups/views.py:changeset_list
+      template: mockups/templates/changeset/list.html
+    do_not_do: ["Real DB queries in mockup view", "Change MOCK_CHANGESETS dict"]
+    checkpoint: "behave --include changeset-list.feature docs/features/"
+
+  - id: S02
+    scenario: CHANGESET-LIST+FIND-1-02
+    feature: docs/features/act-7-changeset/changeset-list.feature
+    group: graduation
+    status: done
+
+  - id: S03
+    scenario: CHANGESET-LIST+FIND-1-03
+    feature: docs/features/act-7-changeset/changeset-list.feature
+    group: graduation
+    status: done
+
+  - id: S04
+    scenario: CHANGESET-LIST+FIND-1-04
+    feature: docs/features/act-7-changeset/changeset-list.feature
+    group: graduation
+    status: done
+
+  - id: S05
+    scenario: CHANGESET-LIST+FIND-1-05
+    feature: docs/features/act-7-changeset/changeset-list.feature
+    group: graduation
+    status: done
+
+  - id: S06
+    scenario: CHANGESET-LIST+FIND-1-06
+    feature: docs/features/act-7-changeset/changeset-list.feature
+    group: graduation
+    status: done
+
+  - id: S07
+    scenario: CHANGESET-LIST+FIND-1-07
+    feature: docs/features/act-7-changeset/changeset-list.feature
+    group: graduation
+    status: done
+
+  - id: S08
+    scenario: CHANGESET-LIST+FIND-1-08
+    feature: docs/features/act-7-changeset/changeset-list.feature
+    group: graduation
+    status: done
+
+  - id: S09
+    scenario: CHANGESET-VIEW_CHANGESET-1-01
+    feature: docs/features/act-7-changeset/changeset-view.feature
+    group: graduation
+    status: queued       # passes w/ --wip; graduates when S33 (S11) is done
+    sao_sections: [13, 5, 7]
+    context_map:
+      mockup_view: mockups/views.py:changeset_view
+      template: mockups/templates/changeset/view.html
+    do_not_do: ["Real service calls", "Real ChangeSet DB objects"]
+    checkpoint: "behave --wip --include changeset-view.feature docs/features/"
+    blocks_on: [S33]     # S11 (rollback) must be done before @wip removal
+
+  - id: S10
+    scenario: CHANGESET-VIEW_CHANGESET-1-02
+    feature: docs/features/act-7-changeset/changeset-view.feature
+    group: graduation
+    status: queued
+    blocks_on: [S33]
+
+  - id: S11
+    scenario: CHANGESET-VIEW_CHANGESET-1-03
+    feature: docs/features/act-7-changeset/changeset-view.feature
+    group: graduation
+    status: queued
+    blocks_on: [S33]
+
+  - id: S12
+    scenario: CHANGESET-VIEW_CHANGESET-1-04
+    feature: docs/features/act-7-changeset/changeset-view.feature
+    group: graduation
+    status: queued
+    blocks_on: [S33]
+
+  - id: S13
+    scenario: CHANGESET-VIEW_CHANGESET-1-05
+    feature: docs/features/act-7-changeset/changeset-view.feature
+    group: graduation
+    status: queued
+    blocks_on: [S33]
+
+  - id: S14
+    scenario: CHANGESET-VIEW_CHANGESET-1-06
+    feature: docs/features/act-7-changeset/changeset-view.feature
+    group: graduation
+    status: queued
+    blocks_on: [S33]
+
+  - id: S15
+    scenario: CHANGESET-VIEW_CHANGESET-1-07
+    feature: docs/features/act-7-changeset/changeset-view.feature
+    group: graduation
+    status: queued
+    blocks_on: [S33]
+
+  - id: S16
+    scenario: CHANGESET-VIEW_CHANGESET-1-08
+    feature: docs/features/act-7-changeset/changeset-view.feature
+    group: graduation
+    status: queued
+    blocks_on: [S33]
+
+  - id: S17
+    scenario: CHANGESET-VIEW_CHANGESET-1-09
+    feature: docs/features/act-7-changeset/changeset-view.feature
+    group: graduation
+    status: queued
+    blocks_on: [S33]
+
+  - id: S18
+    scenario: CHANGESET-VIEW_CHANGESET-1-10
+    feature: docs/features/act-7-changeset/changeset-view.feature
+    group: graduation
+    status: queued
+    blocks_on: [S33]
+
+  - id: S19
+    scenario: CHANGESET-VIEW_CHANGESET-1-12
+    feature: docs/features/act-7-changeset/changeset-view.feature
+    group: graduation
+    status: queued
+    blocks_on: [S33]
+
+  - id: S21
+    scenario: MUNIN-BRIEFING-1-01
+    feature: docs/features/act-1-ratatosk/munin-briefing.feature
+    group: graduation
+    status: done
+    sao_sections: [13, 5]
+    context_map:
+      mockup_view: mockups/views.py:munin_briefing
+      template: mockups/templates/munin/briefing.html
+    do_not_do: ["Real Munin calls", "Real RataskRun DB objects"]
+    checkpoint: "behave --include munin-briefing.feature docs/features/"
+
+  - id: S22
+    scenario: MUNIN-BRIEFING-1-02
+    feature: docs/features/act-1-ratatosk/munin-briefing.feature
+    group: graduation
+    status: done
+
+  - id: S23
+    scenario: MUNIN-BRIEFING-1-03
+    feature: docs/features/act-1-ratatosk/munin-briefing.feature
+    group: graduation
+    status: done
+
+  - id: S24
+    scenario: MUNIN-BRIEFING-1-04
+    feature: docs/features/act-1-ratatosk/munin-briefing.feature
+    group: graduation
+    status: done
+
+  - id: S25
+    scenario: MUNIN-BRIEFING-1-05
+    feature: docs/features/act-1-ratatosk/munin-briefing.feature
+    group: graduation
+    status: done
+
+  - id: S26
+    scenario: MUNIN-BRIEFING-1-06
+    feature: docs/features/act-1-ratatosk/munin-briefing.feature
+    group: graduation
+    status: done
+
+  - id: S27
+    scenario: MUNIN-BRIEFING-1-07
+    feature: docs/features/act-1-ratatosk/munin-briefing.feature
+    group: graduation
+    status: done
+
+  - id: S28
+    scenario: MUNIN-BRIEFING-1-08
+    feature: docs/features/act-1-ratatosk/munin-briefing.feature
+    group: graduation
+    status: done
+
+  - id: S29
+    scenario: MUNIN-BRIEFING-1-09
+    feature: docs/features/act-1-ratatosk/munin-briefing.feature
+    group: graduation
+    status: done
+
+  - id: S30
+    scenario: MUNIN-BRIEFING-1-10
+    feature: docs/features/act-1-ratatosk/munin-briefing.feature
+    group: graduation
+    status: done
+
+  - id: S31
+    scenario: CHAT-MUNIN-1-01
+    feature: docs/features/act-8-chat/chat-munin.feature
+    group: graduation
+    status: queued       # passes w/ --wip; graduates when S65-71 (Munin chat) done
+    blocks_on: [S65]
+
+  - id: S32
+    scenario: CHAT-MUNIN-1-02
+    feature: docs/features/act-8-chat/chat-munin.feature
+    group: graduation
+    status: queued
+    blocks_on: [S65]
+
+  # ── Group B: ChangeSet service layer ────────────────────────────────────
+  - id: S33
+    scenario: CHANGESET-VIEW_CHANGESET-1-11
+    feature: docs/features/act-7-changeset/changeset-view.feature
+    group: changeset_service
+    status: queued
+    sao_sections: [7, 3, 13]
+    context_map:
+      service: src/yggdrasil/changeset/services.py:ChangeSetService.rollback
+      view: src/yggdrasil/changeset/views.py:ChangeSetRollbackView
+      model: src/yggdrasil/changeset/models.py:ChangeSet
+      step_def: docs/features/steps/common_steps.py:step_applied_changeset
+    do_not_do: ["Bypass ChangeSetService", "Direct ORM calls in view"]
+    logs_to_emit:
+      - "yggdrasil.changeset | rollback | changeset_id={} user={}"
+    checkpoint: "behave --wip --include changeset-view.feature -n CHANGESET-VIEW_CHANGESET-1-11 docs/features/"
+    codebase_footprint:
+      - src/yggdrasil/changeset/services.py
+      - src/yggdrasil/changeset/views.py
+      - docs/features/steps/common_steps.py
+
+  - id: S34
+    scenario: ACT-5-MCP-CHANGESET-01
+    feature: docs/features/act-5-mcp/mcp-changeset.feature
+    group: changeset_service
+    status: queued
+    sao_sections: [18, 7, 3]
+    context_map:
+      mcp_tool: src/yggdrasil/mcp/tools/changeset.py:approve_changeset
+      service: src/yggdrasil/changeset/services.py:ChangeSetService.approve
+    do_not_do: ["Bypass ChangeSetService", "Accept user_id as tool arg"]
+    logs_to_emit:
+      - "yggdrasil.mcp.tools.changeset | approve_changeset | id={} user={}"
+    checkpoint: "behave --wip --include mcp-changeset.feature -n ACT-5-MCP-CHANGESET-01 docs/features/"
+    codebase_footprint:
+      - src/yggdrasil/mcp/tools/changeset.py
+      - src/yggdrasil/changeset/services.py
+      - docs/features/steps/mcp_steps.py
+
+  - id: S35
+    scenario: ACT-5-MCP-CHANGESET-02
+    feature: docs/features/act-5-mcp/mcp-changeset.feature
+    group: changeset_service
+    status: queued
+    blocks_on: [S34]
+    checkpoint: "behave --wip --include mcp-changeset.feature -n ACT-5-MCP-CHANGESET-02 docs/features/"
+
+  - id: S36
+    scenario: ACT-5-MCP-CHANGESET-03
+    feature: docs/features/act-5-mcp/mcp-changeset.feature
+    group: changeset_service
+    status: queued
+    blocks_on: [S34]
+    checkpoint: "behave --wip --include mcp-changeset.feature -n ACT-5-MCP-CHANGESET-03 docs/features/"
+
+  # ── Group C: MCP query tools ─────────────────────────────────────────────
+  - id: S37
+    scenario: ACT-5-MCP-QUERY-01
+    feature: docs/features/act-5-mcp/mcp-query.feature
+    group: mcp_query
+    status: queued
+    sao_sections: [18, 3, 10]
+    context_map:
+      mcp_tool: src/yggdrasil/mcp/tools/query.py:list_elements
+      graph_model: src/yggdrasil/graph/models.py:Element
+    do_not_do: ["Accept user_id as tool arg", "Bypass service layer", "Direct ORM in tool"]
+    logs_to_emit:
+      - "yggdrasil.mcp.tools.query | list_elements | model={} user={} count={}"
+    checkpoint: "behave --wip --include mcp-query.feature -n ACT-5-MCP-QUERY-01 docs/features/"
+    codebase_footprint:
+      - src/yggdrasil/mcp/tools/query.py
+      - src/yggdrasil/mcp/server.py
+      - docs/features/steps/mcp_steps.py
+
+  - id: S38
+    scenario: ACT-5-MCP-QUERY-02
+    feature: docs/features/act-5-mcp/mcp-query.feature
+    group: mcp_query
+    status: queued
+    blocks_on: [S37]
+    checkpoint: "behave --wip --include mcp-query.feature -n ACT-5-MCP-QUERY-02 docs/features/"
+
+  - id: S39
+    scenario: ACT-5-MCP-QUERY-03
+    feature: docs/features/act-5-mcp/mcp-query.feature
+    group: mcp_query
+    status: queued
+    blocks_on: [S37]
+
+  - id: S40
+    scenario: ACT-5-MCP-QUERY-04
+    feature: docs/features/act-5-mcp/mcp-query.feature
+    group: mcp_query
+    status: queued
+    blocks_on: [S37]
+
+  - id: S41
+    scenario: ACT-5-MCP-QUERY-05
+    feature: docs/features/act-5-mcp/mcp-query.feature
+    group: mcp_query
+    status: queued
+    blocks_on: [S37]
+
+  - id: S42
+    scenario: ACT-5-MCP-QUERY-06
+    feature: docs/features/act-5-mcp/mcp-query.feature
+    group: mcp_query
+    status: queued
+    blocks_on: [S37]
+
+  - id: S43
+    scenario: ACT-5-MCP-QUERY-07
+    feature: docs/features/act-5-mcp/mcp-query.feature
+    group: mcp_query
+    status: queued
+    blocks_on: [S37]
+
+  - id: S44
+    scenario: ACT-5-MCP-QUERY-08
+    feature: docs/features/act-5-mcp/mcp-query.feature
+    group: mcp_query
+    status: queued
+    blocks_on: [S37]
+
+  - id: S45
+    scenario: ACT-5-MCP-QUERY-09
+    feature: docs/features/act-5-mcp/mcp-query.feature
+    group: mcp_query
+    status: queued
+    blocks_on: [S37]
+
+  - id: S46
+    scenario: ACT-5-MCP-QUERY-10
+    feature: docs/features/act-5-mcp/mcp-query.feature
+    group: mcp_query
+    status: queued
+    blocks_on: [S37]
+
+  # ── Group D: Munin write + ChangeSet tools ────────────────────────────────
+  - id: S47
+    scenario: ACT-5-MCP-WRITE-01
+    feature: docs/features/act-5-mcp/mcp-write.feature
+    group: munin_write
+    status: queued
+    sao_sections: [18, 17, 7, 3]
+    context_map:
+      mcp_tool: src/yggdrasil/mcp/tools/write.py:create_element
+      munin_agent: src/yggdrasil/munin/agent.py:MuninAgent.chat
+      service: src/yggdrasil/changeset/services.py:ChangeSetService.propose
+    do_not_do:
+      - "Write to graph directly — always via ChangeSetService.propose()"
+      - "Call Munin in request-response cycle — use Celery for long agent loops"
+    logs_to_emit:
+      - "yggdrasil.mcp.tools.write | create_element | name={} model={} user={}"
+      - "yggdrasil.munin.agent | chat | turn=create_element proposed cs_id={}"
+    checkpoint: "behave --wip --include mcp-write.feature -n ACT-5-MCP-WRITE-01 docs/features/"
+    codebase_footprint:
+      - src/yggdrasil/mcp/tools/write.py
+      - src/yggdrasil/munin/agent.py
+      - src/yggdrasil/changeset/services.py
+      - docs/features/steps/mcp_steps.py
+
+  - id: S48
+    scenario: ACT-5-MCP-WRITE-02
+    feature: docs/features/act-5-mcp/mcp-write.feature
+    group: munin_write
+    status: queued
+    blocks_on: [S47]
+
+  - id: S49
+    scenario: ACT-5-MCP-WRITE-03
+    feature: docs/features/act-5-mcp/mcp-write.feature
+    group: munin_write
+    status: queued
+    blocks_on: [S47]
+
+  - id: S50
+    scenario: ACT-5-MCP-WRITE-04
+    feature: docs/features/act-5-mcp/mcp-write.feature
+    group: munin_write
+    status: queued
+    blocks_on: [S47]
+
+  - id: S51
+    scenario: ACT-5-MCP-WRITE-05
+    feature: docs/features/act-5-mcp/mcp-write.feature
+    group: munin_write
+    status: queued
+    blocks_on: [S47]
+
+  - id: S52
+    scenario: ACT-5-MCP-WRITE-06
+    feature: docs/features/act-5-mcp/mcp-write.feature
+    group: munin_write
+    status: queued
+    blocks_on: [S47]
+
+  - id: S53
+    scenario: ACT-5-MCP-WRITE-07
+    feature: docs/features/act-5-mcp/mcp-write.feature
+    group: munin_write
+    status: queued
+    blocks_on: [S47]
+
+  - id: S54
+    scenario: ACT-5-MCP-WRITE-08
+    feature: docs/features/act-5-mcp/mcp-write.feature
+    group: munin_write
+    status: queued
+    blocks_on: [S47]
+
+  - id: S55
+    scenario: ACT-5-MCP-CHANGESET-04
+    feature: docs/features/act-5-mcp/mcp-changeset.feature
+    group: munin_write
+    status: queued
+    blocks_on: [S36]
+
+  - id: S56
+    scenario: ACT-5-MCP-CHANGESET-05
+    feature: docs/features/act-5-mcp/mcp-changeset.feature
+    group: munin_write
+    status: queued
+    blocks_on: [S36, S47]
+
+  - id: S57
+    scenario: ACT-5-MCP-CHANGESET-06
+    feature: docs/features/act-5-mcp/mcp-changeset.feature
+    group: munin_write
+    status: queued
+    blocks_on: [S36, S47]
+
+  # ── Group E: Ratatosk CLI ─────────────────────────────────────────────────
+  - id: S58
+    scenario: ACT-1-CLI-01
+    feature: docs/features/act-1-ratatosk/ratatosk-bootstrap.feature
+    group: ratatosk_cli
+    status: queued
+    sao_sections: [17, 17.4, 17.6, 7]
+    context_map:
+      agent: src/yggdrasil/ratatosk/agent.py:RataskAgent
+      model: src/yggdrasil/ratatosk/models.py:RataskRun
+      step_def: docs/features/steps/cli_steps.py
+    do_not_do:
+      - "Use real Ollama in AT — use ScriptedLLM (LLM_PROVIDER=scripted)"
+      - "Call RataskAgent in web request — only from Celery task or CLI"
+    logs_to_emit:
+      - "yggdrasil.ratatosk.agent | execute | run_id={} repo={}"
+      - "yggdrasil.ratatosk.agent | _reconcile | candidates={} to_add={} to_update={}"
+    llm_dependency: "ollama_service [STUBBED_FOR_AT via ScriptedLLM]"
+    checkpoint: "behave --wip --include ratatosk-bootstrap.feature -n ACT-1-CLI-01 docs/features/"
+    codebase_footprint:
+      - src/yggdrasil/ratatosk/agent.py
+      - src/yggdrasil/ratatosk/models.py
+      - docs/features/steps/cli_steps.py
+
+  - id: S59
+    scenario: ACT-1-CLI-02
+    feature: docs/features/act-1-ratatosk/ratatosk-bootstrap.feature
+    group: ratatosk_cli
+    status: queued
+    blocks_on: [S58]
+
+  - id: S60
+    scenario: ACT-1-CLI-03
+    feature: docs/features/act-1-ratatosk/ratatosk-bootstrap.feature
+    group: ratatosk_cli
+    status: queued
+    blocks_on: [S58]
+
+  - id: S61
+    scenario: ACT-1-CLI-04
+    feature: docs/features/act-1-ratatosk/ratatosk-bootstrap.feature
+    group: ratatosk_cli
+    status: queued
+    blocks_on: [S58, S47]
+
+  - id: S62
+    scenario: ACT-1-CLI-05
+    feature: docs/features/act-1-ratatosk/ratatosk-bootstrap.feature
+    group: ratatosk_cli
+    status: queued
+    blocks_on: [S58]
+
+  - id: S63
+    scenario: ACT-1-CLI-06
+    feature: docs/features/act-1-ratatosk/ratatosk-bootstrap.feature
+    group: ratatosk_cli
+    status: queued
+    blocks_on: [S58]
+
+  - id: S64
+    scenario: ACT-1-CLI-07
+    feature: docs/features/act-1-ratatosk/ratatosk-bootstrap.feature
+    group: ratatosk_cli
+    status: queued
+    blocks_on: [S58]
+
+  # ── Group F: Munin chat full ───────────────────────────────────────────────
+  - id: S65
+    scenario: CHAT-MUNIN-1-03
+    feature: docs/features/act-8-chat/chat-munin.feature
+    group: munin_chat
+    status: queued
+    sao_sections: [13, 17, 18]
+    context_map:
+      view: src/yggdrasil/munin/views.py:MuninChatView
+      agent: src/yggdrasil/munin/agent.py:MuninAgent.chat
+      mcp_query: src/yggdrasil/mcp/tools/query.py:get_element
+    do_not_do:
+      - "Use real Ollama in AT — use ScriptedLLM"
+      - "Return agent steps to chat UI — only final response text"
+    logs_to_emit:
+      - "yggdrasil.munin.agent | chat | turn=1 tool_calls={} user={}"
+      - "yggdrasil.munin | MuninChatView | post | model_id={} user={}"
+    llm_dependency: "ollama_service [STUBBED_FOR_AT via ScriptedLLM]"
+    checkpoint: "behave --wip --include chat-munin.feature -n CHAT-MUNIN-1-03 docs/features/"
+    codebase_footprint:
+      - src/yggdrasil/munin/views.py
+      - src/yggdrasil/munin/agent.py
+      - docs/features/steps/munin_steps.py
+
+  - id: S66
+    scenario: CHAT-MUNIN-1-04
+    feature: docs/features/act-8-chat/chat-munin.feature
+    group: munin_chat
+    status: queued
+    blocks_on: [S65]
+
+  - id: S67
+    scenario: CHAT-MUNIN-1-05
+    feature: docs/features/act-8-chat/chat-munin.feature
+    group: munin_chat
+    status: queued
+    blocks_on: [S65]
+
+  - id: S68
+    scenario: CHAT-MUNIN-1-06
+    feature: docs/features/act-8-chat/chat-munin.feature
+    group: munin_chat
+    status: queued
+    blocks_on: [S65]
+
+  - id: S69
+    scenario: CHAT-MUNIN-1-07
+    feature: docs/features/act-8-chat/chat-munin.feature
+    group: munin_chat
+    status: queued
+    blocks_on: [S65, S47]
+
+  - id: S70
+    scenario: CHAT-MUNIN-1-08
+    feature: docs/features/act-8-chat/chat-munin.feature
+    group: munin_chat
+    status: queued
+    blocks_on: [S65]
+
+  - id: S71
+    scenario: CHAT-MUNIN-1-09
+    feature: docs/features/act-8-chat/chat-munin.feature
+    group: munin_chat
+    status: queued
+    blocks_on: [S65]
+
+# ─── Execution Order ────────────────────────────────────────────────────────
+# Recommended BPE implementation sequence (each block must pass checkpoint):
+#
+#   Phase 1 — No LLM required:
+#     SINFRA-01 → SINFRA-02 → SINFRA-03 → SINFRA-04 → SINFRA-05 → SINFRA-06
+#     S33 (rollback) → S34-36 (MCP changeset) → S37-46 (MCP query)
+#     Graduation: remove @wip from changeset-view.feature (S09-S20), S31-S32
+#
+#   Phase 2 — ScriptedLLM required (Munin + Ratatosk):
+#     S47 (create_element) → S48-54 (MCP write) → S55-57 (do_other, CI workflow)
+#     S58 (CLI bootstrap) → S59-64 (CLI scenarios)
+#     S65 (Munin chat find) → S66-71 (Munin chat full)
+#     Graduation: remove @wip from chat-munin.feature
+
+# ─── Velocity + Risk ────────────────────────────────────────────────────────
+risk_flags:
+  - group: munin_write
+    flag: RED
+    reason: "Full Munin agent loop: Plan & Steps, Tool Surface, _dispatch_tool all NotImplementedError"
+  - group: ratatosk_cli
+    flag: RED
+    reason: "Separate CLI package + subprocess testing + NER prompt engineering"
+  - group: munin_chat
+    flag: RED
+    reason: "HTMX streaming + MuninAgent.chat (full agent loop) + ScriptedLLM script authoring"
+  - group: mcp_query
+    flag: YELLOW
+    reason: "FastMCP async boundary — sync_to_async required for ORM access"
+  - group: changeset_service
+    flag: GREEN
+    reason: "Pure Django service + simple ORM — no LLM dependency"
+  - group: graduation
+    flag: GREEN
+    reason: "18 already done; 12 pending cleanup when siblings complete"

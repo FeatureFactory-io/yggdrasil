@@ -16,8 +16,11 @@ import logging
 from typing import TYPE_CHECKING
 
 from django.db import transaction
+from django.utils import timezone
+from django.utils.text import slugify
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem, MuninRule
+from yggdrasil.graph.models import Diagram, Element, Package, Relationship, Stereotype
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -111,7 +114,29 @@ class ChangeSetService:
         >>> cs.status
         'applied'
         """
-        raise NotImplementedError()
+        user_label = getattr(user, "pk", None)
+        logger.info(
+            "approve | changeset_id=%s item_ids=%s user=%s",
+            changeset_id,
+            item_ids,
+            user_label,
+        )
+        with transaction.atomic():
+            changeset = self._get_pending_changeset(changeset_id)
+            targets = self._select_pending_items(changeset, item_ids)
+            for item in targets:
+                self._apply_item(item)
+                item.status = ChangeSetItem.ITEM_STATUS_ACCEPTED
+                item.save(update_fields=["status", "detail"])
+            self._finalize_changeset_status(changeset, user)
+        logger.info(
+            "approve | changeset_id=%s applied_count=%s status=%s user=%s",
+            changeset.pk,
+            len(targets),
+            changeset.status,
+            user_label,
+        )
+        return changeset
 
     def reject(
         self,
@@ -247,7 +272,29 @@ class ChangeSetService:
 
     def _apply_item(self, item: ChangeSetItem) -> None:
         """Apply a single ChangeSetItem to the graph inside the caller's transaction."""
-        raise NotImplementedError()
+        logger.info(
+            "_apply_item | item=%s op=%s changeset=%s",
+            item.pk,
+            item.op_type,
+            item.changeset_id,
+        )
+        model = item.changeset.model
+        detail = item.detail or {}
+        if item.op_type == ChangeSetItem.OP_ADD_ELEMENT:
+            self._apply_add_element(model, item, detail)
+        elif item.op_type == ChangeSetItem.OP_UPDATE_ELEMENT:
+            self._apply_update_element(detail)
+        elif item.op_type == ChangeSetItem.OP_DELETE_ELEMENT:
+            self._apply_delete_element(detail)
+        elif item.op_type == ChangeSetItem.OP_ADD_RELATIONSHIP:
+            self._apply_add_relationship(model, detail)
+        elif item.op_type == ChangeSetItem.OP_DELETE_RELATIONSHIP:
+            self._apply_delete_relationship(detail)
+        elif item.op_type == ChangeSetItem.OP_ADD_TO_DIAGRAM:
+            self._apply_add_to_diagram(detail)
+        else:
+            msg = f"Unsupported op_type={item.op_type!r} on item={item.pk}"
+            raise ValueError(msg)
 
     def _invert_item(self, item: ChangeSetItem) -> dict:
         """
@@ -346,3 +393,146 @@ class ChangeSetService:
                 swapped[field_name] = pair
         inverted["fields"] = swapped
         return inverted
+
+    def _get_pending_changeset(self, changeset_id: int) -> ChangeSet:
+        """Load ChangeSet for approve/reject; reject already-applied."""
+        try:
+            changeset = (
+                ChangeSet.objects.select_related("model")
+                .prefetch_related("items")
+                .get(pk=changeset_id)
+            )
+        except ChangeSet.DoesNotExist as exc:
+            msg = f"ChangeSet id={changeset_id} not found"
+            raise ValueError(msg) from exc
+        if changeset.status == ChangeSet.STATUS_APPLIED:
+            msg = f"ChangeSet id={changeset_id} already applied"
+            raise ValueError(msg)
+        return changeset
+
+    def _select_pending_items(
+        self,
+        changeset: ChangeSet,
+        item_ids: list[int] | None,
+    ) -> list[ChangeSetItem]:
+        """Return pending items to process; optionally filter by PK list."""
+        pending = [
+            item
+            for item in changeset.items.all()
+            if item.status == ChangeSetItem.ITEM_STATUS_PENDING
+        ]
+        if item_ids is None:
+            return pending
+        wanted = set(item_ids)
+        selected = [item for item in pending if item.pk in wanted]
+        missing = wanted - {item.pk for item in selected}
+        if missing:
+            msg = f"Pending items not found on ChangeSet {changeset.pk}: {sorted(missing)}"
+            raise ValueError(msg)
+        return selected
+
+    def _finalize_changeset_status(self, changeset: ChangeSet, user: User | None) -> None:
+        """Set applied/rejected when no pending items remain; else leave status."""
+        remaining = changeset.items.filter(status=ChangeSetItem.ITEM_STATUS_PENDING).count()
+        if remaining > 0:
+            logger.info(
+                "_finalize_changeset_status | changeset_id=%s still_pending=%s",
+                changeset.pk,
+                remaining,
+            )
+            return
+        accepted = changeset.items.filter(status=ChangeSetItem.ITEM_STATUS_ACCEPTED).count()
+        if accepted > 0:
+            changeset.status = ChangeSet.STATUS_APPLIED
+            changeset.applied_at = timezone.now()
+            changeset.applied_by = user
+            changeset.save(update_fields=["status", "applied_at", "applied_by"])
+        else:
+            changeset.status = ChangeSet.STATUS_REJECTED
+            changeset.save(update_fields=["status"])
+
+    def _apply_add_element(self, model, item: ChangeSetItem, detail: dict) -> None:
+        """Create an Element from an add_element detail payload."""
+        name = detail.get("name")
+        if not name:
+            msg = f"add_element item={item.pk} missing detail.name"
+            raise ValueError(msg)
+        stereotype = self._get_or_create_stereotype(
+            model, detail.get("stereotype_slug", "container"), is_edge=False
+        )
+        package = self._get_or_create_package(model, detail.get("package_slug", "technology"))
+        element, created = Element.objects.get_or_create(
+            model=model,
+            slug=slugify(name),
+            defaults={
+                "name": name,
+                "stereotype": stereotype,
+                "package": package,
+                "properties": detail.get("properties", {}),
+                "owner": detail.get("owner", ""),
+                "source": Element.SOURCE_RATATOSK,
+                "confidence": item.confidence,
+            },
+        )
+        item.detail = {**detail, "element_id": element.pk}
+        logger.info(
+            "_apply_add_element | item=%s element_id=%s created=%s",
+            item.pk,
+            element.pk,
+            created,
+        )
+
+    def _apply_update_element(self, detail: dict) -> None:
+        """Apply field updates from update_element detail."""
+        element_id = detail.get("element_id")
+        element = Element.objects.get(pk=element_id)
+        for field_name, pair in (detail.get("fields") or {}).items():
+            if isinstance(pair, list | tuple) and len(pair) == 2:
+                setattr(element, field_name, pair[1])
+        element.save()
+
+    def _apply_delete_element(self, detail: dict) -> None:
+        """Delete element referenced by delete_element detail."""
+        element_id = detail.get("element_id")
+        Element.objects.filter(pk=element_id).delete()
+
+    def _apply_add_relationship(self, model, detail: dict) -> None:
+        """Create a Relationship from add_relationship detail."""
+        stereotype = self._get_or_create_stereotype(
+            model, detail.get("stereotype_slug", "depends_on"), is_edge=True
+        )
+        Relationship.objects.get_or_create(
+            model=model,
+            source_id=detail["source_id"],
+            target_id=detail["target_id"],
+            stereotype=stereotype,
+            defaults={"properties": detail.get("properties", {})},
+        )
+
+    def _apply_delete_relationship(self, detail: dict) -> None:
+        """Delete relationship referenced by delete_relationship detail."""
+        Relationship.objects.filter(pk=detail.get("relationship_id")).delete()
+
+    def _apply_add_to_diagram(self, detail: dict) -> None:
+        """Attach element to diagram via M2M."""
+        element = Element.objects.get(pk=detail["element_id"])
+        diagram = Diagram.objects.get(pk=detail["diagram_id"])
+        element.diagrams.add(diagram)
+
+    def _get_or_create_stereotype(self, model, slug: str, *, is_edge: bool) -> Stereotype:
+        """Return stereotype for model+slug, creating a minimal stub if needed."""
+        stereotype, _ = Stereotype.objects.get_or_create(
+            model=model,
+            slug=slug,
+            defaults={"name": slug.replace("-", " ").title(), "is_edge": is_edge},
+        )
+        return stereotype
+
+    def _get_or_create_package(self, model, slug: str) -> Package:
+        """Return package for model+slug, creating a minimal stub if needed."""
+        package, _ = Package.objects.get_or_create(
+            model=model,
+            slug=slug,
+            defaults={"name": slug.replace("-", " ").title()},
+        )
+        return package

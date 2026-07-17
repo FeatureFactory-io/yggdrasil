@@ -10,7 +10,15 @@ from __future__ import annotations
 
 import logging
 
+from django.contrib.auth.models import User
+
+from yggdrasil.changeset.models import ChangeSetItem
+from yggdrasil.changeset.services import ChangeSetService
+from yggdrasil.mcp.server import get_current_user_id
+
 logger = logging.getLogger("yggdrasil.mcp.tools.changeset")
+
+_service = ChangeSetService()
 
 
 def approve_changeset(
@@ -27,7 +35,45 @@ def approve_changeset(
     :raises PermissionError: If current user lacks write access.
     :raises ValueError: If ChangeSet not found or already applied.
     """
-    raise NotImplementedError()
+    user = _resolve_current_user()
+    logger.info(
+        "approve_changeset | id=%s user=%s item_ids=%s",
+        id,
+        getattr(user, "pk", None),
+        item_ids,
+    )
+    changeset = _service.approve(changeset_id=id, item_ids=item_ids, user=user)
+    applied_count = changeset.items.filter(status=ChangeSetItem.ITEM_STATUS_ACCEPTED).count()
+    if item_ids is not None:
+        applied_count = changeset.items.filter(
+            pk__in=item_ids,
+            status=ChangeSetItem.ITEM_STATUS_ACCEPTED,
+        ).count()
+    result = {
+        "changeset_id": changeset.pk,
+        "applied_count": applied_count,
+        "status": changeset.status,
+    }
+    logger.info(
+        "approve_changeset | id=%s user=%s result=%s",
+        id,
+        getattr(user, "pk", None),
+        result,
+    )
+    return result
+
+
+def _resolve_current_user() -> User | None:
+    """Load the authenticated user from MCP ContextVar (never from tool args)."""
+    user_id = get_current_user_id()
+    if user_id is None:
+        logger.info("approve_changeset | no user in ContextVar — proceeding as system")
+        return None
+    try:
+        return User.objects.get(pk=user_id)
+    except User.DoesNotExist as exc:
+        msg = f"MCP user_id={user_id} not found"
+        raise PermissionError(msg) from exc
 
 
 def reject_changeset(

@@ -14,11 +14,26 @@ Usage pattern:
 
 from __future__ import annotations
 
+import ast
 import logging
+from typing import Any
 
 from behave import given, then, when  # type: ignore[import]
+from tests.fixtures.factories import UserFactory
+
+from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
+from yggdrasil.graph.models import YggdrasilModel
+from yggdrasil.mcp import server as mcp_server
+from yggdrasil.mcp.tools import changeset as changeset_tools
 
 logger = logging.getLogger("yggdrasil.at.mcp_steps")
+
+_TOOL_REGISTRY: dict[str, Any] = {
+    "approve_changeset": changeset_tools.approve_changeset,
+    "reject_changeset": changeset_tools.reject_changeset,
+    "do_other_changeset": changeset_tools.do_other_changeset,
+    "ask_munin": changeset_tools.ask_munin,
+}
 
 
 # ─── Given steps ────────────────────────────────────────────────────────────
@@ -63,7 +78,42 @@ def step_model_has_ratatosk_runs(context, count):
 @given("ChangeSet id={cs_id:d} has {count:d} pending operations")
 def step_changeset_has_pending_ops(context, cs_id, count):
     """Create a ChangeSet with N pending ChangeSetItems."""
-    raise NotImplementedError()
+    model = _ensure_model()
+    changeset = ChangeSet(
+        pk=cs_id,
+        model=model,
+        source=ChangeSet.SOURCE_RATATOSK,
+        status=ChangeSet.STATUS_PENDING,
+        review_mode=ChangeSet.REVIEW_MANUAL,
+        run_id=f"run-{cs_id:03d}",
+        munin_reasoning="Pending ChangeSet for MCP AT",
+    )
+    changeset.save()
+    ChangeSetItem.objects.filter(changeset=changeset).delete()
+    for order in range(1, count + 1):
+        item_kwargs: dict[str, Any] = {
+            "changeset": changeset,
+            "order": order,
+            "op_type": ChangeSetItem.OP_ADD_ELEMENT,
+            "detail": {
+                "name": f"Element {order}",
+                "stereotype_slug": "container",
+                "package_slug": "technology",
+            },
+            "status": ChangeSetItem.ITEM_STATUS_PENDING,
+            "confidence": 0.9,
+        }
+        # Stable PKs for item_ids assertions in ACT-5-MCP-CHANGESET-02+.
+        if cs_id == 1:
+            item_kwargs["pk"] = order
+        ChangeSetItem.objects.create(**item_kwargs)
+    context.changeset_id = cs_id
+    context.mcp_changeset = changeset
+    logger.info(
+        "step_changeset_has_pending_ops | changeset_id=%s pending=%s",
+        cs_id,
+        count,
+    )
 
 
 @given("ChangeSet id={cs_id:d} has operations {item_ids}")
@@ -153,10 +203,11 @@ def step_call_mcp_tool_no_params(context, tool_name):
     raise NotImplementedError()
 
 
-@when('the CI agent calls MCP tool "{tool_name}" with')
+@when('the CI agent calls MCP tool "{tool_name}" with:')
 def step_ci_agent_calls_tool(context, tool_name):
     """CI agent calls an MCP tool — same as Priya call but under CI identity."""
-    raise NotImplementedError()
+    user = UserFactory(username="ci-agent", is_architect=True)
+    _call_mcp_tool(context, tool_name, user=user)
 
 
 @when('Elena calls MCP tool "{tool_name}" with')
@@ -311,13 +362,24 @@ def step_run_has_status(context, run_id, status, cs_id):
 @then("all {count:d} operations are applied to the model")
 def step_all_ops_applied(context, count):
     """Assert N operations have been applied to the graph."""
-    raise NotImplementedError()
+    cs_id = context.changeset_id
+    accepted = ChangeSetItem.objects.filter(
+        changeset_id=cs_id,
+        status=ChangeSetItem.ITEM_STATUS_ACCEPTED,
+    ).count()
+    assert accepted == count, f"Expected {count} accepted ops on ChangeSet {cs_id}, got {accepted}"
+    logger.info("step_all_ops_applied | changeset_id=%s accepted=%s", cs_id, accepted)
 
 
 @then('the ChangeSet status changes to "{status}"')
 def step_changeset_status(context, status):
     """Assert the ChangeSet has the given status."""
-    raise NotImplementedError()
+    cs_id = context.changeset_id
+    changeset = ChangeSet.objects.get(pk=cs_id)
+    assert (
+        changeset.status == status
+    ), f"Expected ChangeSet {cs_id} status={status!r}, got {changeset.status!r}"
+    logger.info("step_changeset_status | changeset_id=%s status=%s", cs_id, status)
 
 
 @then("operations {item_ids} are applied")
@@ -474,3 +536,70 @@ def step_op_remains_pending(context, op_id):
 def step_op_redirected(context, op_id):
     """Assert an operation has been queued for Munin re-planning."""
     raise NotImplementedError()
+
+
+# ─── Helpers ────────────────────────────────────────────────────────────────
+
+
+def _ensure_model() -> YggdrasilModel:
+    """Return (or create) the default AT model."""
+    model, created = YggdrasilModel.objects.get_or_create(
+        slug="yggdrasil",
+        defaults={"name": "Yggdrasil", "metamodel": YggdrasilModel.METAMODEL_C4},
+    )
+    logger.info("_ensure_model | model_id=%s created=%s", model.pk, created)
+    return model
+
+
+def _call_mcp_tool(context, tool_name: str, *, user) -> None:
+    """
+    Invoke an MCP tool function in-process (T2 direct call).
+
+    FastMCP AsyncClient (T1) requires initialize_mcp(); until that skeleton is
+    filled, AT exercises the same tool callables the server will register.
+    """
+    tool_fn = _TOOL_REGISTRY.get(tool_name)
+    assert tool_fn is not None, f"Unknown MCP tool {tool_name!r}"
+    params = _parse_tool_table(context)
+    mcp_server.set_current_user_id(user.pk)
+    context.current_user = user
+    logger.info(
+        "_call_mcp_tool | tool=%s user=%s params=%s",
+        tool_name,
+        user.pk,
+        params,
+    )
+    try:
+        context.mcp_response = tool_fn(**params)
+        context.mcp_error = None
+    except Exception as exc:
+        context.mcp_response = None
+        context.mcp_error = exc
+        logger.info("_call_mcp_tool | tool=%s raised %s: %s", tool_name, type(exc).__name__, exc)
+        raise
+    finally:
+        mcp_server.set_current_user_id(None)
+
+
+def _parse_tool_table(context) -> dict[str, Any]:
+    """Parse a behave table of param/value rows into tool kwargs."""
+    if not getattr(context, "table", None):
+        return {}
+    params: dict[str, Any] = {}
+    for row in context.table:
+        key = row["param"].strip()
+        raw = row["value"].strip()
+        params[key] = _coerce_param(raw)
+    return params
+
+
+def _coerce_param(raw: str) -> Any:
+    """Coerce table cell strings to int/list/bool/str."""
+    if raw.lower() in {"true", "false"}:
+        return raw.lower() == "true"
+    if raw.startswith("[") and raw.endswith("]"):
+        return list(ast.literal_eval(raw))
+    try:
+        return int(raw)
+    except ValueError:
+        return raw

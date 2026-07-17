@@ -21,6 +21,7 @@ urlpatterns = [
     path("health/", health, name="health"),
     path("auth/", include("yggdrasil.auth.urls", namespace="auth")),
     path("api/v1/", include("yggdrasil.api.urls", namespace="api")),
+    path("changesets/", include("yggdrasil.changeset.urls")),
     path("", include("yggdrasil.web.urls", namespace="web")),
 ]
 

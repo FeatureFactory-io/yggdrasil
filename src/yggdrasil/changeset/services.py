@@ -15,6 +15,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from django.db import transaction
+
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem, MuninRule
 
 if TYPE_CHECKING:
@@ -22,6 +24,15 @@ if TYPE_CHECKING:
     from django.db.models import QuerySet
 
 logger = logging.getLogger("yggdrasil.changeset")
+
+_INVERSE_OP_TYPES: dict[str, str] = {
+    ChangeSetItem.OP_ADD_ELEMENT: ChangeSetItem.OP_DELETE_ELEMENT,
+    ChangeSetItem.OP_DELETE_ELEMENT: ChangeSetItem.OP_ADD_ELEMENT,
+    ChangeSetItem.OP_ADD_RELATIONSHIP: ChangeSetItem.OP_DELETE_RELATIONSHIP,
+    ChangeSetItem.OP_DELETE_RELATIONSHIP: ChangeSetItem.OP_ADD_RELATIONSHIP,
+    ChangeSetItem.OP_UPDATE_ELEMENT: ChangeSetItem.OP_UPDATE_ELEMENT,
+    ChangeSetItem.OP_ADD_TO_DIAGRAM: ChangeSetItem.OP_ADD_TO_DIAGRAM,
+}
 
 
 class ChangeSetService:
@@ -185,7 +196,24 @@ class ChangeSetService:
         >>> rollback_cs.source
         'rollback'
         """
-        raise NotImplementedError()
+        user_label = getattr(user, "pk", None)
+        logger.info(
+            "rollback | changeset_id=%s user=%s",
+            changeset_id,
+            user_label,
+        )
+        with transaction.atomic():
+            source_cs = self._get_applied_changeset(changeset_id)
+            accepted = self._accepted_items(source_cs)
+            rollback_cs = self._create_rollback_changeset(source_cs, accepted)
+        logger.info(
+            "rollback | created rollback_id=%s reversing=%s from changeset_id=%s user=%s",
+            rollback_cs.pk,
+            len(accepted),
+            changeset_id,
+            user_label,
+        )
+        return rollback_cs
 
     def get(self, changeset_id: int) -> ChangeSet:
         """
@@ -222,9 +250,99 @@ class ChangeSetService:
         raise NotImplementedError()
 
     def _invert_item(self, item: ChangeSetItem) -> dict:
-        """Produce the inverse operation dict for a rollback."""
-        raise NotImplementedError()
+        """
+        Produce the inverse operation dict for a rollback.
+
+        :param item: Accepted ChangeSetItem to invert.
+        :return: Dict with ``op_type``, ``detail``, ``confidence``.
+        :raises ValueError: If ``op_type`` has no known inverse.
+        """
+        inverse_type = _INVERSE_OP_TYPES.get(item.op_type)
+        if inverse_type is None:
+            msg = f"Cannot invert unknown op_type={item.op_type!r} on item={item.pk}"
+            raise ValueError(msg)
+        detail = self._invert_detail(item.op_type, item.detail)
+        logger.info(
+            "_invert_item | item=%s op=%s → %s",
+            item.pk,
+            item.op_type,
+            inverse_type,
+        )
+        return {
+            "op_type": inverse_type,
+            "detail": detail,
+            "confidence": item.confidence,
+        }
 
     def _create_munin_rule(self, item: ChangeSetItem, reason: str, user: User | None) -> MuninRule:
         """Create a MuninRule from a rejected item and reason."""
         raise NotImplementedError()
+
+    def _get_applied_changeset(self, changeset_id: int) -> ChangeSet:
+        """Load ChangeSet for rollback; require status=applied."""
+        try:
+            changeset = (
+                ChangeSet.objects.select_related("model")
+                .prefetch_related("items")
+                .get(pk=changeset_id)
+            )
+        except ChangeSet.DoesNotExist as exc:
+            msg = f"ChangeSet id={changeset_id} not found"
+            raise ValueError(msg) from exc
+        if changeset.status != ChangeSet.STATUS_APPLIED:
+            msg = (
+                f"ChangeSet id={changeset_id} status={changeset.status!r}; "
+                "rollback requires status='applied'"
+            )
+            raise ValueError(msg)
+        return changeset
+
+    def _accepted_items(self, changeset: ChangeSet) -> list[ChangeSetItem]:
+        """Return accepted items in apply order (order ascending)."""
+        return [
+            item
+            for item in changeset.items.all()
+            if item.status == ChangeSetItem.ITEM_STATUS_ACCEPTED
+        ]
+
+    def _create_rollback_changeset(
+        self,
+        source_cs: ChangeSet,
+        accepted: list[ChangeSetItem],
+    ) -> ChangeSet:
+        """Create pending rollback ChangeSet with inverse ops (reverse apply order)."""
+        rollback_cs = ChangeSet.objects.create(
+            model=source_cs.model,
+            source=ChangeSet.SOURCE_ROLLBACK,
+            status=ChangeSet.STATUS_PENDING,
+            review_mode=source_cs.review_mode,
+            run_id=f"rollback-{source_cs.pk}",
+            munin_reasoning=f"Rollback of ChangeSet#{source_cs.pk}",
+        )
+        # Invert in reverse order so deletes precede recreates when applied later.
+        for order, item in enumerate(reversed(accepted), start=1):
+            inverse = self._invert_item(item)
+            ChangeSetItem.objects.create(
+                changeset=rollback_cs,
+                order=order,
+                op_type=inverse["op_type"],
+                detail=inverse["detail"],
+                confidence=inverse["confidence"],
+                status=ChangeSetItem.ITEM_STATUS_PENDING,
+            )
+        return rollback_cs
+
+    def _invert_detail(self, op_type: str, detail: dict) -> dict:
+        """Return a copy of detail with update_element field pairs swapped."""
+        inverted = dict(detail)
+        if op_type != ChangeSetItem.OP_UPDATE_ELEMENT:
+            return inverted
+        fields = detail.get("fields", {})
+        swapped: dict = {}
+        for field_name, pair in fields.items():
+            if isinstance(pair, list | tuple) and len(pair) == 2:
+                swapped[field_name] = [pair[1], pair[0]]
+            else:
+                swapped[field_name] = pair
+        inverted["fields"] = swapped
+        return inverted

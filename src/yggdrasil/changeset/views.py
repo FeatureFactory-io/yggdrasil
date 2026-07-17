@@ -17,12 +17,14 @@ import logging
 from typing import TYPE_CHECKING
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import Http404, HttpResponse
+from django.urls import reverse
 from django.views import View
 
 from yggdrasil.changeset.services import ChangeSetService
 
 if TYPE_CHECKING:
-    from django.http import HttpRequest, HttpResponse
+    from django.http import HttpRequest
 
 logger = logging.getLogger("yggdrasil.changeset")
 
@@ -142,4 +144,26 @@ class ChangeSetRollbackView(LoginRequiredMixin, View):
         :raises Http404: If ChangeSet not found.
         :raises ValueError: If ChangeSet is not applied.
         """
-        raise NotImplementedError()
+        logger.info(
+            "ChangeSetRollbackView.post | changeset_id=%s user=%s",
+            changeset_id,
+            request.user.pk,
+        )
+        try:
+            rollback_cs = _service.rollback(changeset_id=changeset_id, user=request.user)
+        except ValueError as exc:
+            logger.info(
+                "ChangeSetRollbackView.post | rejected changeset_id=%s reason=%s",
+                changeset_id,
+                exc,
+            )
+            raise Http404(str(exc)) from exc
+        redirect_url = reverse("changeset:detail", args=[rollback_cs.pk])
+        response = HttpResponse(status=204)
+        response["HX-Redirect"] = redirect_url
+        logger.info(
+            "ChangeSetRollbackView.post | rollback_id=%s hx_redirect=%s",
+            rollback_cs.pk,
+            redirect_url,
+        )
+        return response

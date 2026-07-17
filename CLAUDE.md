@@ -20,9 +20,9 @@ iteration-scoped execution contract.
 8. Repeat from step 2 until all `status-queued` issues in the milestone are closed.
 
 <!-- MANIFEST -->
-Active manifest: docs/plans/iterations/ITER-20260716-1300-act-0-foundation.yaml
-Milestone: #1 — ITER-20260716 | Act 0 — Authentication & API Access
-Branch: iteration/20260716-act-0-foundation
+Active manifest: docs/plans/iterations/ITER-20260717-1300-act-0-agents-mcp.yaml
+Milestone: #2 — ITER-20260717 | Agents + MCP
+Branch: iteration/20260717-agents-mcp
 <!-- /MANIFEST -->
 
 ---

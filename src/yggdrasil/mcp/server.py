@@ -27,6 +27,7 @@ logger = logging.getLogger("yggdrasil.mcp")
 # ─── Current-request user injected by auth middleware (SAO.md §18.5) ─────────
 # Never accept user_id as a tool argument — always read from this ContextVar.
 _current_user_id: ContextVar[int | None] = ContextVar("mcp_user_id", default=None)
+_current_token_scope: ContextVar[str] = ContextVar("mcp_token_scope", default="read-write")
 
 _mcp_instance = None
 _initialized = False
@@ -145,6 +146,21 @@ def set_current_user_id(user_id: int | None) -> None:
     """
     _current_user_id.set(user_id)
     logger.debug("mcp.server: user context set | user_id=%s", user_id)
+
+
+def get_token_scope() -> str:
+    """Return the current token scope (``read-write`` or ``read-only``)."""
+    return _current_token_scope.get()
+
+
+def set_token_scope(scope: str | None) -> None:
+    """
+    Set the token scope for the current MCP request context.
+
+    :param scope: ``read-write`` or ``read-only``. None resets to read-write.
+    """
+    _current_token_scope.set(scope or "read-write")
+    logger.debug("mcp.server: token scope set | scope=%s", scope)
 
 
 def redirect_print_to_stderr() -> None:

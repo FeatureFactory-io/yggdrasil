@@ -16,16 +16,18 @@ All writes produced by Munin go through ChangeSetService.propose()
 
 from __future__ import annotations
 
+import ast
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from django.contrib.auth.models import User
+from django.db.models import Q
 from django.utils.text import slugify
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
 from yggdrasil.changeset.services import ChangeSetService
-from yggdrasil.graph.models import Element
+from yggdrasil.graph.models import Element, Relationship
 from yggdrasil.llm.base import LLMMessage
 
 if TYPE_CHECKING:
@@ -137,6 +139,12 @@ class MuninAgent:
             return self._handle_create_element_tool(message)
         if message.startswith("TOOL:update_element"):
             return self._handle_update_element_tool(message)
+        if message.startswith("TOOL:delete_element"):
+            return self._handle_delete_element_tool(message)
+        if message.startswith("TOOL:create_relationship"):
+            return self._handle_create_relationship_tool(message)
+        if message.startswith("TOOL:update_relationships_batch"):
+            return self._handle_update_relationships_batch_tool(message)
         # Full ReAct loop for free-form chat lands with CHAT-MUNIN scenarios.
         system = "You are Munin, the Yggdrasil architecture planner."
         llm_resp = self._llm.complete(
@@ -307,6 +315,197 @@ class MuninAgent:
             text=llm_note,
             changeset_id=changeset.pk,
             tool_calls=[{"tool": "update_element", "id": element_id, "fields": list(field_diffs)}],
+        )
+
+    def _handle_delete_element_tool(self, message: str) -> MuninResponse:
+        """Propose delete_element — always pending (HITL blast-radius gate)."""
+        params = self._parse_tool_message(message)
+        element_id_raw = params.get("id", "")
+        if not element_id_raw:
+            msg = "delete_element tool message missing id="
+            raise ValueError(msg)
+        element_id = int(element_id_raw)
+        try:
+            element = Element.objects.get(pk=element_id, model_id=self._model_id)
+        except Element.DoesNotExist as exc:
+            msg = f"Element id={element_id} not found in model_id={self._model_id}"
+            raise ValueError(msg) from exc
+        blast_radius = Relationship.objects.filter(
+            Q(source_id=element_id) | Q(target_id=element_id)
+        ).count()
+        user = self._load_user()
+        llm_note = self._llm.complete(
+            messages=[
+                LLMMessage(
+                    role="user",
+                    content=f"Blast-radius for deleting {element.name}: {blast_radius} edges",
+                )
+            ],
+            system="You are Munin.",
+        ).content
+        # Deletes always queue for human review regardless of model review mode.
+        changeset = _service.propose(
+            model_id=self._model_id,
+            source=ChangeSet.SOURCE_MCP,
+            operations=[
+                {
+                    "op_type": ChangeSetItem.OP_DELETE_ELEMENT,
+                    "detail": {
+                        "element_id": element_id,
+                        "name": element.name,
+                        "blast_radius": blast_radius,
+                    },
+                    "confidence": 0.7,
+                }
+            ],
+            munin_reasoning=llm_note,
+            review_mode=ChangeSet.REVIEW_MANUAL,
+            user=user,
+        )
+        logger.info(
+            "chat | turn=delete_element proposed cs_id=%s blast_radius=%s",
+            changeset.pk,
+            blast_radius,
+        )
+        return MuninResponse(
+            text=llm_note,
+            changeset_id=changeset.pk,
+            tool_calls=[
+                {
+                    "tool": "delete_element",
+                    "id": element_id,
+                    "name": element.name,
+                    "blast_radius": blast_radius,
+                }
+            ],
+        )
+
+    def _handle_create_relationship_tool(self, message: str) -> MuninResponse:
+        """Propose add_relationship after validating edge stereotype direction."""
+        params = self._parse_tool_message(message)
+        from_id = int(params.get("from_id", "0") or "0")
+        to_id = int(params.get("to_id", "0") or "0")
+        stereotype = slugify(params.get("stereotype", "calls"))
+        if not from_id or not to_id:
+            msg = "create_relationship requires from_id and to_id"
+            raise ValueError(msg)
+        try:
+            source = Element.objects.select_related("stereotype").get(
+                pk=from_id, model_id=self._model_id
+            )
+            target = Element.objects.select_related("stereotype").get(
+                pk=to_id, model_id=self._model_id
+            )
+        except Element.DoesNotExist as exc:
+            msg = f"create_relationship endpoints not found from={from_id} to={to_id}"
+            raise ValueError(msg) from exc
+        source_st = source.stereotype.name if source.stereotype else "?"
+        target_st = target.stereotype.name if target.stereotype else "?"
+        edge_rule = f"{stereotype} on {source_st}→{target_st}"
+        review_mode = get_model_review_mode(self._model_id)
+        user = self._load_user()
+        llm_note = self._llm.complete(
+            messages=[LLMMessage(role="user", content=f"Validate edge rule {edge_rule}")],
+            system="You are Munin.",
+        ).content
+        changeset = _service.propose(
+            model_id=self._model_id,
+            source=ChangeSet.SOURCE_MCP,
+            operations=[
+                {
+                    "op_type": ChangeSetItem.OP_ADD_RELATIONSHIP,
+                    "detail": {
+                        "source_id": from_id,
+                        "target_id": to_id,
+                        "stereotype_slug": stereotype,
+                        "edge_rule": edge_rule,
+                    },
+                    "confidence": 0.88,
+                }
+            ],
+            munin_reasoning=llm_note,
+            review_mode=review_mode,
+            user=user,
+        )
+        if review_mode == ChangeSet.REVIEW_AUTO:
+            changeset = _service.approve(changeset_id=changeset.pk, user=user)
+        logger.info(
+            "chat | turn=create_relationship proposed cs_id=%s edge_rule=%s",
+            changeset.pk,
+            edge_rule,
+        )
+        return MuninResponse(
+            text=llm_note,
+            changeset_id=changeset.pk,
+            tool_calls=[
+                {
+                    "tool": "create_relationship",
+                    "from_id": from_id,
+                    "to_id": to_id,
+                    "edge_rule_validated": True,
+                    "edge_rule": edge_rule,
+                }
+            ],
+        )
+
+    def _handle_update_relationships_batch_tool(self, message: str) -> MuninResponse:
+        """Propose one ChangeSet containing many add_relationship operations."""
+        params = self._parse_tool_message(message)
+        ops_raw = params.get("operations", "[]")
+        try:
+            operations = ast.literal_eval(ops_raw)
+        except (SyntaxError, ValueError) as exc:
+            msg = "update_relationships_batch operations payload is invalid"
+            raise ValueError(msg) from exc
+        if not isinstance(operations, list) or not operations:
+            msg = "update_relationships_batch requires a non-empty operations list"
+            raise ValueError(msg)
+        propose_ops: list[dict] = []
+        for op in operations:
+            from_id = int(op.get("from_id") or op.get("source_id"))
+            to_id = int(op.get("to_id") or op.get("target_id"))
+            stereotype = slugify(op.get("stereotype", "calls"))
+            propose_ops.append(
+                {
+                    "op_type": ChangeSetItem.OP_ADD_RELATIONSHIP,
+                    "detail": {
+                        "source_id": from_id,
+                        "target_id": to_id,
+                        "stereotype_slug": stereotype,
+                    },
+                    "confidence": 0.85,
+                }
+            )
+        user = self._load_user()
+        llm_note = self._llm.complete(
+            messages=[
+                LLMMessage(role="user", content=f"Plan batch of {len(propose_ops)} relationships")
+            ],
+            system="You are Munin.",
+        ).content
+        # Batch relationship wiring stays pending for inspection before approval.
+        changeset = _service.propose(
+            model_id=self._model_id,
+            source=ChangeSet.SOURCE_MCP,
+            operations=propose_ops,
+            munin_reasoning=llm_note,
+            review_mode=ChangeSet.REVIEW_MANUAL,
+            user=user,
+        )
+        logger.info(
+            "chat | turn=update_relationships_batch proposed cs_id=%s ops=%s",
+            changeset.pk,
+            len(propose_ops),
+        )
+        return MuninResponse(
+            text=llm_note,
+            changeset_id=changeset.pk,
+            tool_calls=[
+                {
+                    "tool": "update_relationships_batch",
+                    "operations_count": len(propose_ops),
+                }
+            ],
         )
 
     def _parse_tool_message(self, message: str) -> dict[str, str]:

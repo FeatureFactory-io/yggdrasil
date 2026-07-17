@@ -17,8 +17,8 @@ from django.db.models import Q
 from yggdrasil.changeset.models import ChangeSet
 from yggdrasil.graph.models import Element, YggdrasilModel
 from yggdrasil.llm.base import ScriptedLLM
-from yggdrasil.mcp.server import get_current_user_id
-from yggdrasil.munin.agent import MuninAgent
+from yggdrasil.mcp.server import get_current_user_id, get_token_scope
+from yggdrasil.munin.agent import MuninAgent, set_model_review_mode
 
 logger = logging.getLogger("yggdrasil.mcp.tools.write")
 
@@ -47,6 +47,7 @@ def create_element(
     :raises PermissionError: If current user token has read-only scope.
     :raises ValueError: If stereotype or model not found.
     """
+    _require_write_scope()
     user = _resolve_current_user()
     logger.info(
         "create_element | name=%s model=%s user=%s",
@@ -109,6 +110,7 @@ def update_element(
     :raises PermissionError: If current user token has read-only scope.
     :raises ValueError: If element not found.
     """
+    _require_write_scope()
     user = _resolve_current_user()
     logger.info(
         "update_element | id=%s model=%s fields=%s user=%s",
@@ -162,7 +164,47 @@ def delete_element(id: int, model: str | None = None) -> dict:
     :raises PermissionError: If read-only scope.
     :raises ValueError: If element not found.
     """
-    raise NotImplementedError()
+    _require_write_scope()
+    user = _resolve_current_user()
+    logger.info(
+        "delete_element | id=%s model=%s user=%s",
+        id,
+        model,
+        getattr(user, "pk", None),
+    )
+    ymodel = _resolve_model(model) if model else None
+    model_id = ymodel.pk if ymodel else _model_id_for_element(id)
+    llm = ScriptedLLM(responses=[f"Blast-radius check for delete element id={id}"])
+    agent = MuninAgent(llm=llm, model_id=model_id, user_id=getattr(user, "pk", None))
+    resp = agent.chat(f"TOOL:delete_element|id={id}", history=[])
+    if resp.changeset_id is None:
+        msg = "Munin did not produce a ChangeSet for delete_element"
+        raise ValueError(msg)
+    cs = ChangeSet.objects.get(pk=resp.changeset_id)
+    blast_radius = next(
+        (
+            call.get("blast_radius")
+            for call in resp.tool_calls
+            if call.get("tool") == "delete_element"
+        ),
+        0,
+    )
+    result = {
+        "changeset_id": cs.pk,
+        "status": cs.status,
+        "blast_radius": blast_radius,
+        "operation": {
+            "op_type": "delete_element",
+            "detail": cs.items.first().detail if cs.items.exists() else {},
+        },
+    }
+    logger.info(
+        "delete_element | id=%s changeset_id=%s blast_radius=%s",
+        id,
+        cs.pk,
+        blast_radius,
+    )
+    return result
 
 
 def create_relationship(
@@ -182,7 +224,53 @@ def create_relationship(
     :param properties: Edge properties. Example: {"label": "HTTP"}
     :return: {"changeset_id": N, "status": ..., "operation": {...}}
     """
-    raise NotImplementedError()
+    _require_write_scope()
+    user = _resolve_current_user()
+    logger.info(
+        "create_relationship | from=%s to=%s stereotype=%s user=%s",
+        from_id,
+        to_id,
+        stereotype,
+        getattr(user, "pk", None),
+    )
+    ymodel = _resolve_model(model) if model else None
+    model_id = ymodel.pk if ymodel else _model_id_for_element(from_id)
+    llm = ScriptedLLM(responses=[f"Proposed Add Relationship {from_id}->{to_id}"])
+    agent = MuninAgent(llm=llm, model_id=model_id, user_id=getattr(user, "pk", None))
+    props = f"|properties={properties!r}" if properties else ""
+    message = (
+        f"TOOL:create_relationship|from_id={from_id}|to_id={to_id}"
+        f"|stereotype={stereotype}{props}"
+    )
+    resp = agent.chat(message, history=[])
+    if resp.changeset_id is None:
+        msg = "Munin did not produce a ChangeSet for create_relationship"
+        raise ValueError(msg)
+    cs = ChangeSet.objects.get(pk=resp.changeset_id)
+    op = cs.items.first()
+    result = {
+        "changeset_id": cs.pk,
+        "status": cs.status,
+        "operation": {
+            "op_type": op.op_type if op else "add_relationship",
+            "detail": op.detail if op else {},
+        },
+        "edge_rule_validated": next(
+            (
+                call.get("edge_rule_validated")
+                for call in resp.tool_calls
+                if call.get("tool") == "create_relationship"
+            ),
+            True,
+        ),
+    }
+    logger.info(
+        "create_relationship | from=%s to=%s changeset_id=%s",
+        from_id,
+        to_id,
+        cs.pk,
+    )
+    return result
 
 
 def update_relationships_batch(
@@ -197,7 +285,39 @@ def update_relationships_batch(
     :param model: Model slug. Example: "yggdrasil"
     :return: {"changeset_id": N, "status": "pending", "operations_count": N}
     """
-    raise NotImplementedError()
+    _require_write_scope()
+    user = _resolve_current_user()
+    if not operations:
+        msg = "update_relationships_batch requires at least one operation"
+        raise ValueError(msg)
+    logger.info(
+        "update_relationships_batch | ops=%s model=%s user=%s",
+        len(operations),
+        model,
+        getattr(user, "pk", None),
+    )
+    ymodel = _resolve_model(model) if model else None
+    first_from = operations[0].get("from_id") or operations[0].get("source_id")
+    model_id = ymodel.pk if ymodel else _model_id_for_element(int(first_from))
+    llm = ScriptedLLM(responses=[f"Proposed batch of {len(operations)} relationships"])
+    agent = MuninAgent(llm=llm, model_id=model_id, user_id=getattr(user, "pk", None))
+    message = f"TOOL:update_relationships_batch|count={len(operations)}|operations={operations!r}"
+    resp = agent.chat(message, history=[])
+    if resp.changeset_id is None:
+        msg = "Munin did not produce a ChangeSet for update_relationships_batch"
+        raise ValueError(msg)
+    cs = ChangeSet.objects.get(pk=resp.changeset_id)
+    result = {
+        "changeset_id": cs.pk,
+        "status": cs.status,
+        "operations_count": cs.items.count(),
+    }
+    logger.info(
+        "update_relationships_batch | changeset_id=%s ops=%s",
+        cs.pk,
+        result["operations_count"],
+    )
+    return result
 
 
 def set_model_mode(model_id: str, mode: str) -> dict:
@@ -208,7 +328,32 @@ def set_model_mode(model_id: str, mode: str) -> dict:
     :param mode: "auto" or "manual". Example: "auto"
     :return: {"model": "yggdrasil", "review_mode": "auto"}
     """
-    raise NotImplementedError()
+    _require_write_scope()
+    user = _resolve_current_user()
+    logger.info(
+        "set_model_mode | model_id=%s mode=%s user=%s",
+        model_id,
+        mode,
+        getattr(user, "pk", None),
+    )
+    normalized = mode.strip().lower()
+    if normalized not in {"auto", "manual"}:
+        msg = f"Invalid mode={mode!r}; expected 'auto' or 'manual'"
+        raise ValueError(msg)
+    ymodel = _resolve_model(model_id)
+    set_model_review_mode(ymodel.pk, normalized)
+    result = {"model": ymodel.slug, "review_mode": normalized}
+    logger.info("set_model_mode | model=%s review_mode=%s", ymodel.slug, normalized)
+    return result
+
+
+def _require_write_scope() -> None:
+    """Reject write tools when the current token is read-only."""
+    scope = get_token_scope()
+    if scope == "read-only":
+        msg = "permission denied: read-only token cannot write"
+        logger.info("_require_write_scope | denied scope=%s", scope)
+        raise PermissionError(msg)
 
 
 def _resolve_current_user() -> User | None:

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import ast
 import logging
+from types import SimpleNamespace
 from typing import Any
 
 from behave import given, then, when  # type: ignore[import]
@@ -31,7 +32,7 @@ from tests.fixtures.factories.model_factories import (
 )
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
-from yggdrasil.graph.models import Element, YggdrasilModel
+from yggdrasil.graph.models import Element, Relationship, YggdrasilModel
 from yggdrasil.mcp import server as mcp_server
 from yggdrasil.mcp.tools import changeset as changeset_tools
 from yggdrasil.mcp.tools import query as query_tools
@@ -339,13 +340,93 @@ def step_model_has_element_with_owner(context, name, owner):
 @given('the model contains element "{name}" (id={elem_id:d}) with {count:d} relationships')
 def step_model_has_element_with_rels(context, name, elem_id, count):
     """Create an element with N relationships."""
-    raise NotImplementedError()
+    model = _ensure_model()
+    context.mcp_model = model
+    context.current_user = getattr(context, "current_user", None) or UserFactory(
+        username="priya", is_architect=True
+    )
+    Element.objects.filter(pk=elem_id).delete()
+    stereotype = StereotypeFactory(model=model, name="Container", slug="container", is_edge=False)
+    package = PackageFactory(model=model, name="Technology", slug="technology")
+    element = ElementFactory(
+        pk=elem_id,
+        model=model,
+        name=name,
+        slug=slugify(name),
+        stereotype=stereotype,
+        package=package,
+    )
+    edge_st = EdgeStereotypeFactory(model=model, name="depends_on", slug="depends_on")
+    Relationship.objects.filter(source=element).delete()
+    Relationship.objects.filter(target=element).delete()
+    for idx in range(count):
+        peer = ElementFactory(
+            model=model,
+            name=f"Peer {idx} of {name}",
+            slug=f"peer-{elem_id}-{idx}",
+            stereotype=stereotype,
+            package=package,
+        )
+        if idx % 2 == 0:
+            RelationshipFactory(model=model, source=peer, target=element, stereotype=edge_st)
+        else:
+            RelationshipFactory(model=model, source=element, target=peer, stereotype=edge_st)
+    context.target_element = element
+    logger.info(
+        "step_model_has_element_with_rels | id=%s name=%s rels=%s",
+        element.pk,
+        name,
+        count,
+    )
 
 
 @given('the model contains "{name1}" and "{name2}"')
 def step_model_has_two_elements(context, name1, name2):
-    """Ensure two named elements exist in the model."""
-    raise NotImplementedError()
+    """Ensure two named elements exist in the model (pinned PKs for WRITE-05)."""
+    model = _ensure_model()
+    context.mcp_model = model
+    context.current_user = getattr(context, "current_user", None) or UserFactory(
+        username="priya", is_architect=True
+    )
+    # Feature table: from_id=6 (Mobile App / System), to_id=2 (Notification Service / Container)
+    specs = {
+        name1: {"pk": 6 if name1 == "Mobile App" else None, "st": "System", "pkg": "Context"},
+        name2: {
+            "pk": 2 if name2 == "Notification Service" else None,
+            "st": "Container",
+            "pkg": "Technology",
+        },
+    }
+    created = {}
+    for elem_name, meta in specs.items():
+        if meta["pk"] is not None:
+            Element.objects.filter(pk=meta["pk"]).delete()
+        stereotype = StereotypeFactory(
+            model=model,
+            name=meta["st"],
+            slug=slugify(meta["st"]),
+            is_edge=False,
+        )
+        package = PackageFactory(model=model, name=meta["pkg"], slug=slugify(meta["pkg"]))
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "name": elem_name,
+            "slug": slugify(elem_name),
+            "stereotype": stereotype,
+            "package": package,
+        }
+        if meta["pk"] is not None:
+            kwargs["pk"] = meta["pk"]
+        created[elem_name] = ElementFactory(**kwargs)
+    EdgeStereotypeFactory(model=model, name="calls", slug="calls")
+    context.pair_elements = created
+    logger.info(
+        "step_model_has_two_elements | %s=%s %s=%s",
+        name1,
+        created[name1].pk,
+        name2,
+        created[name2].pk,
+    )
 
 
 @given("ChangeSet id={cs_id:d} has operation id={op_id:d} ({op_description})")
@@ -474,8 +555,32 @@ def step_marcus_calls_tool(context, tool_name):
 
 @when('Priya calls MCP tool "{tool_name}" with name "{element_name}"')
 def step_call_tool_with_name(context, tool_name, element_name):
-    """Call a tool with a single name argument."""
-    raise NotImplementedError()
+    """Call a tool with a single name argument (WRITE-08 expects permission denial)."""
+    user = getattr(context, "current_user", None) or UserFactory(
+        username="priya", is_architect=True
+    )
+    context.table = None
+    tool_fn = _TOOL_REGISTRY.get(tool_name)
+    assert tool_fn is not None, f"Unknown MCP tool {tool_name!r}"
+    mcp_server.set_current_user_id(user.pk)
+    mcp_server.set_token_scope(getattr(context, "mcp_token_scope", "read-write"))
+    params = {"name": element_name, "stereotype": "Container", "model": "Yggdrasil"}
+    try:
+        context.mcp_response = tool_fn(**params)
+        context.mcp_error = None
+        context.response = SimpleNamespace(status_code=200)
+    except PermissionError as exc:
+        context.mcp_response = None
+        context.mcp_error = exc
+        context.response = SimpleNamespace(status_code=403)
+        logger.info(
+            "step_call_tool_with_name | tool=%s permission denied: %s",
+            tool_name,
+            exc,
+        )
+    finally:
+        mcp_server.set_current_user_id(None)
+        mcp_server.set_token_scope("read-write")
 
 
 @when(
@@ -483,25 +588,50 @@ def step_call_tool_with_name(context, tool_name, element_name):
 )
 def step_call_batch_tool(context, count):
     """Call update_relationships_batch with N operations."""
-    raise NotImplementedError()
-
-
-@when("the CI agent approves operations with confidence >= {threshold:f}")
-def step_ci_approves_high_confidence(context, threshold):
-    """CI agent approves high-confidence operations."""
-    raise NotImplementedError()
-
-
-@when("calls do_other_changeset for operation {op_id:d} with instructions {instructions}")
-def step_ci_do_other(context, op_id, instructions):
-    """CI agent redirects one operation."""
-    raise NotImplementedError()
-
-
-@when("subsequent create_element calls apply directly without queuing")
-def step_verify_auto_mode(context):
-    """Verify that auto-mode is now in effect."""
-    raise NotImplementedError()
+    model = _ensure_model()
+    context.mcp_model = model
+    user = UserFactory(username="marcus", is_architect=True)
+    context.current_user = user
+    context.mcp_token_scope = "read-write"
+    stereotype = StereotypeFactory(model=model, name="Container", slug="container", is_edge=False)
+    package = PackageFactory(model=model, name="Technology", slug="technology")
+    edge_st = EdgeStereotypeFactory(model=model, name="calls", slug="calls")
+    operations: list[dict[str, Any]] = []
+    for idx in range(count):
+        source = ElementFactory(
+            model=model,
+            name=f"Batch Source {idx}",
+            slug=f"batch-source-{idx}",
+            stereotype=stereotype,
+            package=package,
+        )
+        target = ElementFactory(
+            model=model,
+            name=f"Batch Target {idx}",
+            slug=f"batch-target-{idx}",
+            stereotype=stereotype,
+            package=package,
+        )
+        operations.append(
+            {
+                "op": "create",
+                "from_id": source.pk,
+                "to_id": target.pk,
+                "stereotype": edge_st.slug,
+            }
+        )
+    mcp_server.set_current_user_id(user.pk)
+    mcp_server.set_token_scope("read-write")
+    try:
+        context.mcp_response = write_tools.update_relationships_batch(
+            operations=operations, model=model.slug
+        )
+        context.mcp_error = None
+        context.changeset_id = context.mcp_response.get("changeset_id")
+    finally:
+        mcp_server.set_current_user_id(None)
+        mcp_server.set_token_scope("read-write")
+    logger.info("step_call_batch_tool | count=%s cs=%s", count, context.changeset_id)
 
 
 # ─── Then steps ─────────────────────────────────────────────────────────────
@@ -865,43 +995,128 @@ def step_op_detail_contains(context, detail):
 @then('Munin checks the blast-radius of deleting "{name}"')
 def step_munin_blast_radius(context, name):
     """Assert Munin computed a blast-radius check."""
-    raise NotImplementedError()
+    response = context.mcp_response
+    assert response is not None, "No mcp_response"
+    blast = response.get("blast_radius")
+    assert blast is not None and blast > 0, f"Expected blast_radius > 0, got {response!r}"
+    detail = (response.get("operation") or {}).get("detail") or {}
+    assert (
+        name in repr(detail) or detail.get("name") == name
+    ), f"Expected delete of {name!r} in {detail!r}"
+    context.changeset_id = response.get("changeset_id")
+    logger.info("step_munin_blast_radius | name=%s blast=%s", name, blast)
 
 
 @then('a ChangeSet with a "{op_type}" operation is queued')
 def step_changeset_queued(context, op_type):
     """Assert a ChangeSet with the given operation type is queued."""
-    raise NotImplementedError()
+    response = context.mcp_response
+    assert response is not None, "No mcp_response"
+    cs_id = response.get("changeset_id") or getattr(context, "changeset_id", None)
+    assert cs_id, f"No changeset_id in {response!r}"
+    cs = ChangeSet.objects.get(pk=cs_id)
+    context.changeset_id = cs_id
+    assert cs.status == ChangeSet.STATUS_PENDING, f"Expected pending, got {cs.status!r}"
+    op_slug = op_type.lower().replace(" ", "_")
+    match = next((item for item in cs.items.all() if item.op_type == op_slug), None)
+    assert match is not None, f"No {op_type!r} op in CS#{cs_id}"
+    assert match.status == ChangeSetItem.ITEM_STATUS_PENDING
+    logger.info("step_changeset_queued | cs=%s op=%s", cs_id, op_type)
 
 
 @then('Munin validates the edge rule for "{stereotype}" on System→Container')
 def step_munin_validates_edge(context, stereotype):
     """Assert Munin validated the edge stereotype rule."""
-    raise NotImplementedError()
+    response = context.mcp_response
+    assert response is not None, "No mcp_response"
+    assert response.get("edge_rule_validated") is True, f"Edge rule not validated: {response!r}"
+    detail = (response.get("operation") or {}).get("detail") or {}
+    edge_rule = detail.get("edge_rule", "")
+    assert stereotype in edge_rule or stereotype == detail.get(
+        "stereotype_slug"
+    ), f"Expected stereotype {stereotype!r} in {detail!r}"
+    assert (
+        "System" in edge_rule and "Container" in edge_rule
+    ), f"Expected System→Container in edge_rule={edge_rule!r}"
+    logger.info("step_munin_validates_edge | stereotype=%s rule=%s", stereotype, edge_rule)
 
 
 @then('Munin plans exactly {count:d} ChangeSet containing {op_count:d} "{op_type}" operations')
 def step_munin_plans_batch(context, count, op_count, op_type):
     """Assert Munin planned exactly the specified batch."""
-    raise NotImplementedError()
+    response = context.mcp_response
+    assert response is not None, "No mcp_response"
+    assert count == 1, "Feature expects a single ChangeSet"
+    cs_id = response.get("changeset_id")
+    assert cs_id, f"No changeset_id in {response!r}"
+    cs = ChangeSet.objects.get(pk=cs_id)
+    context.changeset_id = cs_id
+    op_slug = op_type.lower().replace(" ", "_")
+    matched = cs.items.filter(op_type=op_slug).count()
+    assert matched == op_count, f"Expected {op_count} {op_type!r} ops, got {matched}"
+    assert ChangeSet.objects.filter(pk=cs_id).count() == 1
+    logger.info(
+        "step_munin_plans_batch | cs=%s op_count=%s op=%s",
+        cs_id,
+        op_count,
+        op_type,
+    )
 
 
 @then("the ChangeSet can be inspected via get_changeset before approval")
 def step_changeset_inspectable(context):
     """Assert the ChangeSet is retrievable via get_changeset."""
-    raise NotImplementedError()
+    cs_id = context.changeset_id
+    user = getattr(context, "current_user", None) or UserFactory(
+        username="marcus", is_architect=True
+    )
+    mcp_server.set_current_user_id(user.pk)
+    try:
+        inspected = query_tools.get_changeset(id=cs_id)
+    finally:
+        mcp_server.set_current_user_id(None)
+    assert (
+        inspected.get("id") == cs_id or inspected.get("changeset_id") == cs_id
+    ), f"get_changeset failed for {cs_id}: {inspected!r}"
+    assert inspected.get("status") == ChangeSet.STATUS_PENDING
+    logger.info("step_changeset_inspectable | cs=%s", cs_id)
 
 
 @then("subsequent create_element calls apply directly without queuing")
 def step_auto_mode_effective(context):
     """Assert subsequent calls go through auto-approval."""
-    raise NotImplementedError()
+    user = getattr(context, "current_user", None) or UserFactory(
+        username="priya", is_architect=True
+    )
+    model = getattr(context, "mcp_model", None) or _ensure_model()
+    mcp_server.set_current_user_id(user.pk)
+    mcp_server.set_token_scope("read-write")
+    try:
+        result = write_tools.create_element(
+            name="Auto Mode Probe Service",
+            stereotype="Container",
+            model=model.slug,
+            package="Technology",
+        )
+    finally:
+        mcp_server.set_current_user_id(None)
+        mcp_server.set_token_scope("read-write")
+    cs = ChangeSet.objects.get(pk=result["changeset_id"])
+    assert (
+        cs.status == ChangeSet.STATUS_APPLIED
+    ), f"Expected applied after set_model_mode auto, got {cs.status!r}"
+    context.changeset_id = cs.pk
+    context.mcp_response = result
+    logger.info("step_auto_mode_effective | cs=%s status=%s", cs.pk, cs.status)
 
 
 @then('the error message contains "{text}"')
 def step_error_contains(context, text):
     """Assert the error message contains the text."""
-    raise NotImplementedError()
+    err = getattr(context, "mcp_error", None)
+    assert err is not None, "Expected mcp_error on context"
+    assert text.lower() in str(err).lower(), f"Expected {text!r} in {err!r}"
+    logger.info("step_error_contains | text=%s", text)
 
 
 @then("each entry includes the element owner and confidence")
@@ -1001,16 +1216,19 @@ def _call_mcp_tool(context, tool_name: str, *, user) -> None:
         model = getattr(context, "mcp_model", None)
         params["model"] = model.slug if model is not None else "Yggdrasil"
     mcp_server.set_current_user_id(user.pk)
+    mcp_server.set_token_scope(getattr(context, "mcp_token_scope", "read-write"))
     context.current_user = user
     logger.info(
-        "_call_mcp_tool | tool=%s user=%s params=%s",
+        "_call_mcp_tool | tool=%s user=%s params=%s scope=%s",
         tool_name,
         user.pk,
         params,
+        getattr(context, "mcp_token_scope", "read-write"),
     )
     try:
         context.mcp_response = tool_fn(**params)
         context.mcp_error = None
+        context.response = SimpleNamespace(status_code=200)
     except Exception as exc:
         context.mcp_response = None
         context.mcp_error = exc
@@ -1018,6 +1236,7 @@ def _call_mcp_tool(context, tool_name: str, *, user) -> None:
         raise
     finally:
         mcp_server.set_current_user_id(None)
+        mcp_server.set_token_scope("read-write")
 
 
 def _parse_tool_table(context) -> dict[str, Any]:

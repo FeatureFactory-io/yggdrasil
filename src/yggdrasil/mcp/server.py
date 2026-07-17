@@ -57,7 +57,18 @@ def initialize_mcp() -> None:
 
     :raises ImportError: If fastmcp is not installed.
     """
-    raise NotImplementedError()
+    global _mcp_instance, _initialized
+    if _initialized:
+        logger.info("initialize_mcp | already initialised — no-op")
+        return
+    _ensure_stderr_logging()
+    from fastmcp import FastMCP
+
+    mcp = FastMCP("yggdrasil")
+    _register_tools(mcp)
+    _mcp_instance = mcp
+    _initialized = True
+    logger.info("initialize_mcp | FastMCP singleton ready")
 
 
 def _ensure_stderr_logging() -> None:
@@ -67,7 +78,11 @@ def _ensure_stderr_logging() -> None:
     Must be called before any FastMCP server startup (SAO.md §18.4 — stdout
     hygiene). Only applies when transport=stdio; HTTP+SSE uses normal logging.
     """
-    raise NotImplementedError()
+    root = logging.getLogger()
+    for handler in list(root.handlers):
+        if isinstance(handler, logging.StreamHandler) and handler.stream is sys.stdout:
+            handler.stream = sys.stderr
+    logger.debug("_ensure_stderr_logging | StreamHandlers pointing at stdout redirected")
 
 
 def _register_tools(mcp) -> None:
@@ -77,7 +92,37 @@ def _register_tools(mcp) -> None:
     Each sub-module in ``mcp/tools/`` calls ``@mcp.tool`` on its functions.
     Importing them here is sufficient for registration.
     """
-    raise NotImplementedError()
+    from yggdrasil.mcp.tools import changeset as changeset_tools
+    from yggdrasil.mcp.tools import query as query_tools
+    from yggdrasil.mcp.tools import write as write_tools
+
+    query_fns = [
+        query_tools.list_elements,
+        query_tools.search,
+        query_tools.get_element,
+        query_tools.traverse,
+        query_tools.list_changesets,
+        query_tools.get_changeset,
+        query_tools.list_stereotypes,
+        query_tools.list_ratatosk_runs,
+    ]
+    changeset_fns = [
+        changeset_tools.approve_changeset,
+        changeset_tools.reject_changeset,
+        changeset_tools.do_other_changeset,
+        changeset_tools.ask_munin,
+    ]
+    write_fns = [
+        write_tools.create_element,
+        write_tools.update_element,
+        write_tools.delete_element,
+        write_tools.create_relationship,
+        write_tools.update_relationships_batch,
+        write_tools.set_model_mode,
+    ]
+    for fn in [*query_fns, *changeset_fns, *write_fns]:
+        mcp.tool(fn)
+        logger.info("_register_tools | registered %s", fn.__name__)
 
 
 def get_current_user_id() -> int | None:

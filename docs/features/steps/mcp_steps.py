@@ -19,12 +19,20 @@ import logging
 from typing import Any
 
 from behave import given, then, when  # type: ignore[import]
+from django.utils.text import slugify
 from tests.fixtures.factories import UserFactory
+from tests.fixtures.factories.model_factories import (
+    ElementFactory,
+    PackageFactory,
+    StereotypeFactory,
+    YggdrasilModelFactory,
+)
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
 from yggdrasil.graph.models import YggdrasilModel
 from yggdrasil.mcp import server as mcp_server
 from yggdrasil.mcp.tools import changeset as changeset_tools
+from yggdrasil.mcp.tools import query as query_tools
 
 logger = logging.getLogger("yggdrasil.at.mcp_steps")
 
@@ -33,7 +41,24 @@ _TOOL_REGISTRY: dict[str, Any] = {
     "reject_changeset": changeset_tools.reject_changeset,
     "do_other_changeset": changeset_tools.do_other_changeset,
     "ask_munin": changeset_tools.ask_munin,
+    "list_elements": query_tools.list_elements,
+    "search": query_tools.search,
+    "get_element": query_tools.get_element,
+    "traverse": query_tools.traverse,
+    "list_changesets": query_tools.list_changesets,
+    "get_changeset": query_tools.get_changeset,
+    "list_stereotypes": query_tools.list_stereotypes,
+    "list_ratatosk_runs": query_tools.list_ratatosk_runs,
 }
+
+_SEED_ELEMENTS: list[tuple[str, str, str]] = [
+    ("Payment API", "Container", "Technology"),
+    ("Mobile App", "System", "Context"),
+    ("Order Domain", "Component", "Application"),
+    ("Notification Service", "Container", "Technology"),
+    ("PostgreSQL", "Container", "Technology"),
+    ("LegacyBatch", "Container", "Technology"),
+]
 
 
 # ─── Given steps ────────────────────────────────────────────────────────────
@@ -42,25 +67,58 @@ _TOOL_REGISTRY: dict[str, Any] = {
 @given("Priya has a valid read-write token configured in mcp_config.json")
 def step_priya_has_rw_token(context):
     """Set up a read-write token in the test context."""
-    raise NotImplementedError()
+    user = UserFactory(username="priya", is_architect=True)
+    context.current_user = user
+    context.mcp_token_scope = "read-write"
+    logger.info("step_priya_has_rw_token | user=%s", user.pk)
 
 
 @given("Priya has a valid read-write token")
 def step_priya_has_rw_token_short(context):
     """Alias for the token setup step."""
-    raise NotImplementedError()
+    step_priya_has_rw_token(context)
 
 
 @given("Priya has a read-only token")
 def step_priya_has_ro_token(context):
     """Set up a read-only token in the test context."""
-    raise NotImplementedError()
+    user = UserFactory(username="priya-ro", is_viewer=True)
+    context.current_user = user
+    context.mcp_token_scope = "read-only"
+    logger.info("step_priya_has_ro_token | user=%s", user.pk)
 
 
 @given('the model "{model_name}" contains {count:d} elements')
 def step_model_has_n_elements(context, model_name, count):
     """Create N elements in the specified model."""
-    raise NotImplementedError()
+    model = YggdrasilModelFactory(name=model_name, slug=slugify(model_name))
+    context.mcp_model = model
+    for name, stereotype_name, package_name in _SEED_ELEMENTS[:count]:
+        stereotype = StereotypeFactory(
+            model=model,
+            name=stereotype_name,
+            slug=slugify(stereotype_name),
+            is_edge=False,
+        )
+        package = PackageFactory(
+            model=model,
+            name=package_name,
+            slug=slugify(package_name),
+        )
+        ElementFactory(
+            model=model,
+            name=name,
+            slug=slugify(name),
+            stereotype=stereotype,
+            package=package,
+            owner="payments-team" if name == "Payment API" else "",
+            properties={"framework": "FastAPI"} if name == "Payment API" else {},
+        )
+    logger.info(
+        "step_model_has_n_elements | model=%s count=%s",
+        model.slug,
+        count,
+    )
 
 
 @given("the model has ChangeSet id={cs_id:d} (run-{run_id}, pending, {op_count:d} operations)")
@@ -227,7 +285,9 @@ def step_marcus_has_script(context):
 @when('Priya calls MCP tool "{tool_name}" with:')
 def step_call_mcp_tool_with_table(context, tool_name):
     """Call an MCP tool with parameters from a table."""
-    user = UserFactory(username="priya", is_architect=True)
+    user = getattr(context, "current_user", None) or UserFactory(
+        username="priya", is_architect=True
+    )
     _call_mcp_tool(context, tool_name, user=user)
 
 
@@ -294,13 +354,24 @@ def step_verify_auto_mode(context):
 @then("the response contains {count:d} elements")
 def step_response_has_n_elements(context, count):
     """Assert the MCP response contains exactly N elements."""
-    raise NotImplementedError()
+    response = context.mcp_response
+    assert response is not None, "No mcp_response on context"
+    items = response.get("items", response if isinstance(response, list) else [])
+    assert len(items) == count, f"Expected {count} elements, got {len(items)}: {items!r}"
+    logger.info("step_response_has_n_elements | count=%s", count)
 
 
 @then('element "{name}" is in the response with stereotype "{stereotype}"')
 def step_element_in_response(context, name, stereotype):
     """Assert a named element is present with the given stereotype."""
-    raise NotImplementedError()
+    items = context.mcp_response.get("items", [])
+    match = next((item for item in items if item.get("name") == name), None)
+    assert match is not None, f"Element {name!r} not in response items={items!r}"
+    actual = match.get("stereotype") or match.get("stereotype_slug")
+    assert actual.lower() == stereotype.lower() or slugify(actual) == slugify(
+        stereotype
+    ), f"Element {name!r} stereotype={actual!r}, expected {stereotype!r}"
+    logger.info("step_element_in_response | name=%s stereotype=%s", name, stereotype)
 
 
 @then('the response contains "{value}"')
@@ -644,6 +715,9 @@ def _parse_tool_table(context) -> dict[str, Any]:
     params: dict[str, Any] = {}
     for row in context.table:
         key = row["param"].strip()
+        # Python keyword: traverse(from_=...) — feature tables use "from".
+        if key == "from":
+            key = "from_"
         raw = row["value"].strip()
         params[key] = _coerce_param(raw)
     return params

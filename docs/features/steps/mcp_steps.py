@@ -284,12 +284,6 @@ def step_response_has_add_element(context, name):
     raise NotImplementedError()
 
 
-@then('the response contains a "{field}" field')
-def step_response_field_exists(context, field):
-    """Assert a field exists in the response."""
-    raise NotImplementedError()
-
-
 @then('the response contains stereotype "{name}"')
 def step_response_has_stereotype(context, name):
     """Assert a stereotype is in the response."""
@@ -458,12 +452,6 @@ def step_auto_mode_effective(context):
     raise NotImplementedError()
 
 
-@then("the response status is {status:d}")
-def step_mcp_response_status(context, status):
-    """Assert the MCP response HTTP-equivalent status code."""
-    raise NotImplementedError()
-
-
 @then('the error message contains "{text}"')
 def step_error_contains(context, text):
     """Assert the error message contains the text."""
@@ -473,12 +461,6 @@ def step_error_contains(context, text):
 @then("each entry includes the element owner and confidence")
 def step_entries_have_owner_confidence(context):
     """Assert each traversal result has owner and confidence fields."""
-    raise NotImplementedError()
-
-
-@then("operations {item_a}, {item_b}, {item_c} are applied")
-def step_three_ops_applied(context, item_a, item_b, item_c):
-    """Assert three specific operations are applied."""
     raise NotImplementedError()
 
 

@@ -1,0 +1,494 @@
+"""
+Step definitions for MCP tool calls (Act 5 scenarios).
+
+All steps call the FastMCP server in-process via the AsyncClient transport
+(T1 pattern from artifact 57 §7). No subprocess, no real HTTP server needed
+for AT; behave-django provides the Django context.
+
+Usage pattern:
+    When Priya calls MCP tool "list_elements" with:
+      | param | value     |
+      | model | Yggdrasil |
+    Then the response contains 6 elements
+"""
+
+from __future__ import annotations
+
+import logging
+
+from behave import given, then, when  # type: ignore[import]
+
+logger = logging.getLogger("yggdrasil.at.mcp_steps")
+
+
+# ─── Given steps ────────────────────────────────────────────────────────────
+
+
+@given("Priya has a valid read-write token configured in mcp_config.json")
+def step_priya_has_rw_token(context):
+    """Set up a read-write token in the test context."""
+    raise NotImplementedError()
+
+
+@given("Priya has a valid read-write token")
+def step_priya_has_rw_token_short(context):
+    """Alias for the token setup step."""
+    raise NotImplementedError()
+
+
+@given("Priya has a read-only token")
+def step_priya_has_ro_token(context):
+    """Set up a read-only token in the test context."""
+    raise NotImplementedError()
+
+
+@given('the model "{model_name}" contains {count:d} elements')
+def step_model_has_n_elements(context, model_name, count):
+    """Create N elements in the specified model."""
+    raise NotImplementedError()
+
+
+@given("the model has ChangeSet id={cs_id:d} (run-{run_id}, pending, {op_count:d} operations)")
+def step_model_has_changeset(context, cs_id, run_id, op_count):
+    """Create a pending ChangeSet with N operations in the test DB."""
+    raise NotImplementedError()
+
+
+@given("the model has {count:d} completed Ratatosk runs")
+def step_model_has_ratatosk_runs(context, count):
+    """Create N completed RataskRun records."""
+    raise NotImplementedError()
+
+
+@given("ChangeSet id={cs_id:d} has {count:d} pending operations")
+def step_changeset_has_pending_ops(context, cs_id, count):
+    """Create a ChangeSet with N pending ChangeSetItems."""
+    raise NotImplementedError()
+
+
+@given("ChangeSet id={cs_id:d} has operations {item_ids}")
+def step_changeset_has_operations(context, cs_id, item_ids):
+    """Create a ChangeSet with specific item IDs."""
+    raise NotImplementedError()
+
+
+@given('the model contains element "{name}" with owner "{owner}"')
+def step_model_has_element_with_owner(context, name, owner):
+    """Ensure an element exists with the given owner."""
+    raise NotImplementedError()
+
+
+@given('the model contains element "{name}" (id={elem_id:d}) with {count:d} relationships')
+def step_model_has_element_with_rels(context, name, elem_id, count):
+    """Create an element with N relationships."""
+    raise NotImplementedError()
+
+
+@given('the model contains "{name1}" and "{name2}"')
+def step_model_has_two_elements(context, name1, name2):
+    """Ensure two named elements exist in the model."""
+    raise NotImplementedError()
+
+
+@given("ChangeSet id={cs_id:d} has operation id={op_id:d} ({op_description})")
+def step_changeset_has_specific_op(context, cs_id, op_id, op_description):
+    """Create a ChangeSet with a specific operation."""
+    raise NotImplementedError()
+
+
+@given("a post-merge ChangeSet with {count:d} operations")
+def step_post_merge_changeset(context, count):
+    """Create a ChangeSet with operations from the table."""
+    raise NotImplementedError()
+
+
+@given('the model "Yggdrasil" is in {mode}-review mode')
+def step_model_in_mode(context, mode):
+    """Set the model review mode."""
+    raise NotImplementedError()
+
+
+@given('the model "Yggdrasil" is currently in {mode}-review mode')
+def step_model_currently_in_mode(context, mode):
+    """Set the model review mode (alias)."""
+    raise NotImplementedError()
+
+
+@given("Elena wants to see the domain model as of {date}")
+def step_elena_wants_historical(context, date):
+    """Set up historical context for Elena's query."""
+    raise NotImplementedError()
+
+
+@given("Elena has a valid read-only token in Claude Desktop")
+def step_elena_has_ro_token(context):
+    """Set up a read-only token for Elena."""
+    raise NotImplementedError()
+
+
+@given("Priya is in Cursor and wants to know what depends on Payment API")
+def step_priya_in_cursor(context):
+    """No-op setup — Cursor is the MCP client in AT, not actually present."""
+    pass
+
+
+@given("Marcus has a Python script to wire a new service's relationships")
+def step_marcus_has_script(context):
+    """No-op setup."""
+    pass
+
+
+# ─── When steps ─────────────────────────────────────────────────────────────
+
+
+@when('Priya calls MCP tool "{tool_name}" with')
+def step_call_mcp_tool_with_table(context, tool_name):
+    """Call an MCP tool with parameters from a table."""
+    raise NotImplementedError()
+
+
+@when('Priya calls MCP tool "{tool_name}" with no params')
+def step_call_mcp_tool_no_params(context, tool_name):
+    """Call an MCP tool with no parameters."""
+    raise NotImplementedError()
+
+
+@when('the CI agent calls MCP tool "{tool_name}" with')
+def step_ci_agent_calls_tool(context, tool_name):
+    """CI agent calls an MCP tool — same as Priya call but under CI identity."""
+    raise NotImplementedError()
+
+
+@when('Elena calls MCP tool "{tool_name}" with')
+def step_elena_calls_tool(context, tool_name):
+    """Elena calls an MCP tool."""
+    raise NotImplementedError()
+
+
+@when('Marcus calls MCP tool "{tool_name}" with')
+def step_marcus_calls_tool(context, tool_name):
+    """Marcus calls an MCP tool."""
+    raise NotImplementedError()
+
+
+@when('Priya calls MCP tool "{tool_name}" with name "{element_name}"')
+def step_call_tool_with_name(context, tool_name, element_name):
+    """Call a tool with a single name argument."""
+    raise NotImplementedError()
+
+
+@when(
+    'Marcus calls MCP tool "update_relationships_batch" with {count:d} create-relationship operations'
+)
+def step_call_batch_tool(context, count):
+    """Call update_relationships_batch with N operations."""
+    raise NotImplementedError()
+
+
+@when("the CI agent approves operations with confidence >= {threshold:f}")
+def step_ci_approves_high_confidence(context, threshold):
+    """CI agent approves high-confidence operations."""
+    raise NotImplementedError()
+
+
+@when("calls do_other_changeset for operation {op_id:d} with instructions {instructions}")
+def step_ci_do_other(context, op_id, instructions):
+    """CI agent redirects one operation."""
+    raise NotImplementedError()
+
+
+@when("subsequent create_element calls apply directly without queuing")
+def step_verify_auto_mode(context):
+    """Verify that auto-mode is now in effect."""
+    raise NotImplementedError()
+
+
+# ─── Then steps ─────────────────────────────────────────────────────────────
+
+
+@then("the response contains {count:d} elements")
+def step_response_has_n_elements(context, count):
+    """Assert the MCP response contains exactly N elements."""
+    raise NotImplementedError()
+
+
+@then('element "{name}" is in the response with stereotype "{stereotype}"')
+def step_element_in_response(context, name, stereotype):
+    """Assert a named element is present with the given stereotype."""
+    raise NotImplementedError()
+
+
+@then('the response contains "{value}"')
+def step_response_contains_str(context, value):
+    """Assert the response contains the given string or field value."""
+    raise NotImplementedError()
+
+
+@then('the response does not contain "{value}"')
+def step_response_not_contain(context, value):
+    """Assert the response does not contain the value."""
+    raise NotImplementedError()
+
+
+@then("the response contains")
+def step_response_contains_table(context):
+    """Assert the response contains all field/value pairs from the table."""
+    raise NotImplementedError()
+
+
+@then('the response contains a "{field}" field with "{key}": "{value}"')
+def step_response_has_field_key(context, field, key, value):
+    """Assert a nested field exists with a specific key/value pair."""
+    raise NotImplementedError()
+
+
+@then('the response contains a "{field}" field')
+def step_response_has_field(context, field):
+    """Assert the response contains the named field."""
+    raise NotImplementedError()
+
+
+@then("the response reflects the model state as of {date}")
+def step_response_is_historical(context, date):
+    """Assert the response is scoped to the historical timestamp."""
+    raise NotImplementedError()
+
+
+@then("the response header or metadata indicates the historical timestamp")
+def step_response_has_timestamp(context):
+    """Assert the response carries a historical timestamp."""
+    raise NotImplementedError()
+
+
+@then('the response contains a ChangeSet with status "{status}"')
+def step_response_has_changeset_status(context, status):
+    """Assert a ChangeSet with the given status is in the response."""
+    raise NotImplementedError()
+
+
+@then('the response contains ChangeSets with status "{status}"')
+def step_response_has_changesets_status(context, status):
+    """Assert ChangeSets with the given status are in the response."""
+    raise NotImplementedError()
+
+
+@then("the response contains {count:d} operations")
+def step_response_has_n_ops(context, count):
+    """Assert the response contains N operations."""
+    raise NotImplementedError()
+
+
+@then('the response contains "{name}" in an Add Element operation')
+def step_response_has_add_element(context, name):
+    """Assert an Add Element operation for the named element is present."""
+    raise NotImplementedError()
+
+
+@then('the response contains a "{field}" field')
+def step_response_field_exists(context, field):
+    """Assert a field exists in the response."""
+    raise NotImplementedError()
+
+
+@then('the response contains stereotype "{name}"')
+def step_response_has_stereotype(context, name):
+    """Assert a stereotype is in the response."""
+    raise NotImplementedError()
+
+
+@then("each entry includes the property_schema")
+def step_entries_have_property_schema(context):
+    """Assert each entry has a property_schema field."""
+    raise NotImplementedError()
+
+
+@then("the response contains {count:d} runs")
+def step_response_has_n_runs(context, count):
+    """Assert the response contains N runs."""
+    raise NotImplementedError()
+
+
+@then('run id={run_id:d} has status "{status}" and changeset_id={cs_id:d}')
+def step_run_has_status(context, run_id, status, cs_id):
+    """Assert a specific run has the given status and changeset_id."""
+    raise NotImplementedError()
+
+
+@then("all {count:d} operations are applied to the model")
+def step_all_ops_applied(context, count):
+    """Assert N operations have been applied to the graph."""
+    raise NotImplementedError()
+
+
+@then('the ChangeSet status changes to "{status}"')
+def step_changeset_status(context, status):
+    """Assert the ChangeSet has the given status."""
+    raise NotImplementedError()
+
+
+@then("operations {item_ids} are applied")
+def step_specific_ops_applied(context, item_ids):
+    """Assert specific operations are applied."""
+    raise NotImplementedError()
+
+
+@then("operations {item_ids} remain pending")
+def step_specific_ops_pending(context, item_ids):
+    """Assert specific operations remain pending."""
+    raise NotImplementedError()
+
+
+@then("all {count:d} operations are rejected")
+def step_all_ops_rejected(context, count):
+    """Assert all operations are rejected."""
+    raise NotImplementedError()
+
+
+@then("a MuninRule is created with the provided reason text")
+def step_munin_rule_created(context):
+    """Assert a MuninRule was created."""
+    raise NotImplementedError()
+
+
+@then("the rule is prepended to Munin's BASE prompt on the next run")
+def step_rule_in_base_prompt(context):
+    """Assert the rule is active and will affect the next Munin run."""
+    raise NotImplementedError()
+
+
+@then("operation {op_id:d} is rejected")
+def step_op_rejected(context, op_id):
+    """Assert a specific operation is rejected."""
+    raise NotImplementedError()
+
+
+@then("Munin re-processes operation {op_id:d} with the instructions as context")
+def step_munin_reprocesses(context, op_id):
+    """Assert Munin re-processes the operation."""
+    raise NotImplementedError()
+
+
+@then("a replacement ChangeSet is produced with the corrected operation")
+def step_replacement_changeset(context):
+    """Assert a replacement ChangeSet was created."""
+    raise NotImplementedError()
+
+
+@then("the instructions are appended to LEARNED")
+def step_instructions_learned(context):
+    """Assert instructions are stored as a MuninRule."""
+    raise NotImplementedError()
+
+
+@then('Munin produces a ChangeSet with an "{op_type}" operation for "{name}"')
+def step_munin_produces_changeset(context, op_type, name):
+    """Assert Munin produced a ChangeSet with the specified operation."""
+    raise NotImplementedError()
+
+
+@then("in auto-approval mode the operation is applied directly")
+def step_auto_applied(context):
+    """Assert the operation was applied (not queued)."""
+    raise NotImplementedError()
+
+
+@then("the ChangeSet is retained as an audit trail")
+def step_changeset_retained(context):
+    """Assert the ChangeSet exists even after auto-apply."""
+    raise NotImplementedError()
+
+
+@then('a ChangeSet with status "{status}" is created')
+def step_changeset_created_with_status(context, status):
+    """Assert a ChangeSet with the given status was created."""
+    raise NotImplementedError()
+
+
+@then('the ChangeSet contains {count:d} operation with status "{status}"')
+def step_changeset_has_op_with_status(context, count, status):
+    """Assert the ChangeSet has N operations with the given status."""
+    raise NotImplementedError()
+
+
+@then('a ChangeSet with an "{op_type}" operation is produced')
+def step_changeset_with_op(context, op_type):
+    """Assert a ChangeSet with the given operation type is produced."""
+    raise NotImplementedError()
+
+
+@then('the operation detail contains "{detail}"')
+def step_op_detail_contains(context, detail):
+    """Assert the operation detail contains the given string."""
+    raise NotImplementedError()
+
+
+@then('Munin checks the blast-radius of deleting "{name}"')
+def step_munin_blast_radius(context, name):
+    """Assert Munin computed a blast-radius check."""
+    raise NotImplementedError()
+
+
+@then('a ChangeSet with a "{op_type}" operation is queued')
+def step_changeset_queued(context, op_type):
+    """Assert a ChangeSet with the given operation type is queued."""
+    raise NotImplementedError()
+
+
+@then('Munin validates the edge rule for "{stereotype}" on System→Container')
+def step_munin_validates_edge(context, stereotype):
+    """Assert Munin validated the edge stereotype rule."""
+    raise NotImplementedError()
+
+
+@then('Munin plans exactly {count:d} ChangeSet containing {op_count:d} "{op_type}" operations')
+def step_munin_plans_batch(context, count, op_count, op_type):
+    """Assert Munin planned exactly the specified batch."""
+    raise NotImplementedError()
+
+
+@then("the ChangeSet can be inspected via get_changeset before approval")
+def step_changeset_inspectable(context):
+    """Assert the ChangeSet is retrievable via get_changeset."""
+    raise NotImplementedError()
+
+
+@then("subsequent create_element calls apply directly without queuing")
+def step_auto_mode_effective(context):
+    """Assert subsequent calls go through auto-approval."""
+    raise NotImplementedError()
+
+
+@then("the response status is {status:d}")
+def step_mcp_response_status(context, status):
+    """Assert the MCP response HTTP-equivalent status code."""
+    raise NotImplementedError()
+
+
+@then('the error message contains "{text}"')
+def step_error_contains(context, text):
+    """Assert the error message contains the text."""
+    raise NotImplementedError()
+
+
+@then("each entry includes the element owner and confidence")
+def step_entries_have_owner_confidence(context):
+    """Assert each traversal result has owner and confidence fields."""
+    raise NotImplementedError()
+
+
+@then("operations {item_a}, {item_b}, {item_c} are applied")
+def step_three_ops_applied(context, item_a, item_b, item_c):
+    """Assert three specific operations are applied."""
+    raise NotImplementedError()
+
+
+@then("operation {op_id:d} remains pending for human review")
+def step_op_remains_pending(context, op_id):
+    """Assert an operation is still pending."""
+    raise NotImplementedError()
+
+
+@then("operation {op_id:d} is redirected to Munin for re-planning")
+def step_op_redirected(context, op_id):
+    """Assert an operation has been queued for Munin re-planning."""
+    raise NotImplementedError()

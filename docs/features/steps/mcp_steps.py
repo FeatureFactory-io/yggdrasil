@@ -141,7 +141,7 @@ def step_marcus_has_script(context):
 # ─── When steps ─────────────────────────────────────────────────────────────
 
 
-@when('Priya calls MCP tool "{tool_name}" with')
+@when('Priya calls MCP tool "{tool_name}" with:')
 def step_call_mcp_tool_with_table(context, tool_name):
     """Call an MCP tool with parameters from a table."""
     raise NotImplementedError()

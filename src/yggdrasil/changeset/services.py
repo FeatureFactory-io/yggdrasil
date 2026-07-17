@@ -656,19 +656,38 @@ class ChangeSetService:
         element.diagrams.add(diagram)
 
     def _get_or_create_stereotype(self, model, slug: str, *, is_edge: bool) -> Stereotype:
-        """Return stereotype for model+slug, creating a minimal stub if needed."""
-        stereotype, _ = Stereotype.objects.get_or_create(
-            model=model,
-            slug=slug,
-            defaults={"name": slug.replace("-", " ").title(), "is_edge": is_edge},
-        )
-        return stereotype
+        """
+        Resolve stereotype from the Model's Metamodel catalog.
+
+        Does not invent catalog rows — unknown slugs raise ValueError.
+        """
+        try:
+            return Stereotype.objects.get(
+                metamodel=model.metamodel,
+                slug=slug,
+                is_edge=is_edge,
+            )
+        except Stereotype.DoesNotExist as exc:
+            kind = "edge" if is_edge else "element"
+            msg = (
+                f"Unknown {kind} stereotype {slug!r} on metamodel "
+                f"{model.metamodel.slug!r}. Add it in Django admin."
+            )
+            logger.warning("_get_or_create_stereotype | %s", msg)
+            raise ValueError(msg) from exc
 
     def _get_or_create_package(self, model, slug: str) -> Package:
-        """Return package for model+slug, creating a minimal stub if needed."""
-        package, _ = Package.objects.get_or_create(
-            model=model,
-            slug=slug,
-            defaults={"name": slug.replace("-", " ").title()},
-        )
-        return package
+        """
+        Resolve package from the Model's Metamodel catalog.
+
+        Does not invent catalog rows — unknown slugs raise ValueError.
+        """
+        try:
+            return Package.objects.get(metamodel=model.metamodel, slug=slug)
+        except Package.DoesNotExist as exc:
+            msg = (
+                f"Unknown package {slug!r} on metamodel {model.metamodel.slug!r}. "
+                "Add it in Django admin."
+            )
+            logger.warning("_get_or_create_package | %s", msg)
+            raise ValueError(msg) from exc

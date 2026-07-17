@@ -34,7 +34,6 @@ class RataskRun(models.Model):
     >>> run = RataskRun.objects.create(
     ...     model=model, triggered_by=user,
     ...     run_id="run-003", repo_path="./repo",
-    ...     metamodel="c4",
     ... )
     """
 
@@ -54,7 +53,6 @@ class RataskRun(models.Model):
     )
     run_id = models.CharField(max_length=50, unique=True)
     repo_path = models.CharField(max_length=500)
-    metamodel = models.CharField(max_length=50, default="c4")
     instructions = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_RUNNING)
     blackboard = models.JSONField(default=dict)

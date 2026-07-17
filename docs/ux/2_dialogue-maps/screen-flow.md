@@ -7,17 +7,23 @@ Source of truth for screen IDs and navigation. All screen IDs follow the convent
 
 ## Diagram 1 — Domain Model
 
-Core entities, their properties, and relationships. C4 metamodel is the only supported
-metamodel in MVP; Elena governs metamodel evolution in Part II.
+Core entities, their properties, and relationships. Metamodel is the type catalog;
+Model is the instance graph. C4 is the only Metamodel in MVP (Django admin);
+evolving metamodels is Part II / Key Feature 12.
 
 ```mermaid
 ---
 title: Yggdrasil Domain Model
 ---
 erDiagram
+    METAMODEL {
+        string  name
+        string  slug        "c4 only in MVP"
+        string  description
+    }
     MODEL {
         string  name
-        string  metamodel   "c4 only in MVP"
+        string  slug
         enum    mode        "auto | manual"
     }
     ELEMENT {
@@ -38,12 +44,14 @@ erDiagram
     }
     STEREOTYPE {
         string  name
+        string  slug
+        bool    is_edge
         jsonb   property_schema
         jsonb   allowed_edge_rules
     }
     PACKAGE {
         string  name
-        string  slug        "Context | Container | Component | Code"
+        string  slug        "Context | Technology | Application | Code"
     }
     DIAGRAM {
         string  name
@@ -79,10 +87,11 @@ erDiagram
         enum    scope       "read_only | read_write"
     }
 
+    METAMODEL   ||--o{  STEREOTYPE          : "defines"
+    METAMODEL   ||--o{  PACKAGE             : "organises"
+    METAMODEL   ||--o{  MODEL               : "constrains"
     MODEL       ||--o{  ELEMENT             : "contains"
     MODEL       ||--o{  RELATIONSHIP        : "contains"
-    MODEL       ||--o{  STEREOTYPE          : "defines"
-    MODEL       ||--o{  PACKAGE             : "organises"
     MODEL       ||--o{  DIAGRAM             : "has"
     MODEL       ||--o{  CHANGESET           : "tracks"
     MODEL       ||--o{  MUNIN_RULE          : "LEARNED"
@@ -92,6 +101,7 @@ erDiagram
     RELATIONSHIP    }|--||  ELEMENT         : "from"
     RELATIONSHIP    }|--||  ELEMENT         : "to"
     RELATIONSHIP    }|--||  STEREOTYPE      : "typed by"
+    DIAGRAM     }|--||  PACKAGE             : "in"
     CHANGESET   ||--o{  CHANGESET_OPERATION : "plans"
     CHANGESET   }o--o|  RATATOSK_RUN        : "produced by"
     CHANGESET   ||--o{  MUNIN_RULE          : "may produce"

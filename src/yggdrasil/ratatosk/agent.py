@@ -22,7 +22,13 @@ from django.utils.text import slugify
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
 from yggdrasil.changeset.services import ChangeSetService
-from yggdrasil.graph.models import Element, Package, Relationship, Stereotype, YggdrasilModel
+from yggdrasil.graph.models import (
+    Element,
+    Metamodel,
+    Relationship,
+    YggdrasilModel,
+    ensure_c4_metamodel,
+)
 from yggdrasil.llm.base import LLMMessage
 from yggdrasil.ratatosk.models import RataskRun
 
@@ -163,17 +169,23 @@ class RataskAgent:
         if not path.exists():
             msg = f"Repository path not accessible: {repo_path}"
             raise RuntimeError(msg)
+        ontology = _metamodel_guidance(self._run.model.metamodel)
         note = self._llm.complete(
             messages=[
                 LLMMessage(
                     role="user",
                     content=(
-                        f"Scan {repo_path} metamodel={self._run.metamodel} "
+                        f"Scan {repo_path} metamodel={self._run.model.metamodel.slug}\n"
+                        f"{ontology}\n"
                         f"instructions={self._run.instructions[:200]}"
                     ),
                 )
             ],
-            system="You are Ratatosk, the Yggdrasil NER field agent.",
+            system=(
+                "You are Ratatosk, the Yggdrasil NER field agent. "
+                "Classify discoveries only into the provided metamodel stereotypes "
+                "and packages — never invent new types."
+            ),
         ).content
         # Deterministic C4 candidates for AT / ScriptedLLM (no real filesystem NER yet).
         candidates = [
@@ -328,7 +340,6 @@ def bootstrap_repository(
         model=model,
         run_id=f"run-{uuid.uuid4().hex[:12]}",
         repo_path=repo_path,
-        metamodel=metamodel,
         instructions=instructions,
         status=RataskRun.STATUS_RUNNING,
         triggered_by=user,
@@ -380,7 +391,6 @@ def bootstrap_repository(
         changeset = _service.approve(changeset_id=changeset.pk, item_ids=auto_ids, user=user)
     if below_count:
         output_lines.append(f"below threshold: {below_count} operations queued for review")
-    _seed_c4_structure(model)
     run.status = RataskRun.STATUS_COMPLETE
     run.changeset = changeset
     run.delta_summary = {
@@ -493,27 +503,58 @@ def _buckets_to_operations(buckets: DeltaBuckets) -> list[dict]:
     return ops
 
 
-def _ensure_model(model_name: str, metamodel: str) -> YggdrasilModel:
-    """Resolve or create the target YggdrasilModel."""
+def _resolve_metamodel(metamodel_slug: str) -> Metamodel:
+    """
+    Resolve a Metamodel by slug.
+
+    Ensures the canonical C4 catalog exists when slug is ``c4``.
+    """
+    slug = (metamodel_slug or Metamodel.SLUG_C4).strip().lower()
+    if slug == Metamodel.SLUG_C4:
+        return ensure_c4_metamodel()
+    try:
+        return Metamodel.objects.get(slug=slug)
+    except Metamodel.DoesNotExist as exc:
+        msg = f"Unknown metamodel slug: {slug!r}. Create it in Django admin first."
+        raise ValueError(msg) from exc
+
+
+def _ensure_model(model_name: str, metamodel_slug: str) -> YggdrasilModel:
+    """
+    Resolve or create the target YggdrasilModel bound to a Metamodel.
+
+    :raises ValueError: If the model exists with a different metamodel slug.
+    """
+    mm = _resolve_metamodel(metamodel_slug)
     slug = slugify(model_name)
-    model, _ = YggdrasilModel.objects.get_or_create(
-        slug=slug,
-        defaults={"name": model_name, "metamodel": metamodel},
-    )
+    model = YggdrasilModel.objects.filter(slug=slug).first()
+    if model is None:
+        model = YggdrasilModel.objects.create(name=model_name, slug=slug, metamodel=mm)
+        logger.info(
+            "_ensure_model | created model=%s metamodel=%s",
+            model.slug,
+            mm.slug,
+        )
+        return model
+    if model.metamodel.slug != mm.slug:
+        msg = (
+            f"Model {model.slug!r} is bound to metamodel {model.metamodel.slug!r}; "
+            f"cannot use --metamodel={mm.slug}."
+        )
+        raise ValueError(msg)
     return model
 
 
-def _seed_c4_structure(model: YggdrasilModel) -> None:
-    """Ensure C4 stereotypes and packages exist after bootstrap (CLI-07)."""
-    for name in ("Container", "Component", "System"):
-        Stereotype.objects.get_or_create(
-            model=model,
-            slug=slugify(name),
-            defaults={"name": name, "is_edge": False},
-        )
-    for name in ("Context", "Technology", "Application"):
-        Package.objects.get_or_create(
-            model=model,
-            slug=slugify(name),
-            defaults={"name": name},
-        )
+def _metamodel_guidance(metamodel: Metamodel) -> str:
+    """Serialize Metamodel ontology for the Ratatosk LLM prompt."""
+    element_sts = metamodel.stereotypes.filter(is_edge=False).order_by("slug")
+    edge_sts = metamodel.stereotypes.filter(is_edge=True).order_by("slug")
+    packages = metamodel.packages.order_by("slug")
+    element_line = ", ".join(f"{st.slug}({st.name})" for st in element_sts) or "(none)"
+    edge_line = ", ".join(f"{st.slug}({st.name})" for st in edge_sts) or "(none)"
+    package_line = ", ".join(f"{pkg.slug}({pkg.name})" for pkg in packages) or "(none)"
+    return (
+        f"ontology element_stereotypes=[{element_line}] "
+        f"edge_stereotypes=[{edge_line}] "
+        f"packages=[{package_line}]"
+    )

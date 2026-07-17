@@ -19,7 +19,7 @@ from behave import given, then, when
 from django.utils import timezone
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
-from yggdrasil.graph.models import YggdrasilModel
+from yggdrasil.graph.models import YggdrasilModel, ensure_c4_metamodel
 
 if TYPE_CHECKING:
     from django.test import Client
@@ -189,7 +189,7 @@ def _ensure_default_model() -> YggdrasilModel:
     """Return (or create) the default Yggdrasil model used by AT fixtures."""
     model, created = YggdrasilModel.objects.get_or_create(
         slug="yggdrasil",
-        defaults={"name": "Yggdrasil", "metamodel": YggdrasilModel.METAMODEL_C4},
+        defaults={"name": "Yggdrasil", "metamodel": ensure_c4_metamodel()},
     )
     logger.info("_ensure_default_model | model_id=%s created=%s", model.pk, created)
     return model

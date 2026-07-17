@@ -42,7 +42,9 @@ Feature: STEREOTYPE-LIST+FIND-1 Stereotype Definitions List
     When Marcus browses to the Stereotype list screen
     Then he can view stereotypes but cannot create or edit them
 
-  Scenario: STEREOTYPE-LIST+FIND-1-05 C4 stereotypes are seeded automatically on bootstrap
-    Given a new Yggdrasil model is created with metamodel=c4
+  Scenario: STEREOTYPE-LIST+FIND-1-05 C4 stereotypes are provided by Metamodel c4
+    # Stereotypes live on the Metamodel (Django admin / fixture), not invented by Ratatosk.
+    Given the Metamodel "c4" exists with C4 stereotypes and packages
+    And a new Yggdrasil model is created with metamodel=c4
     When Elena browses to the Stereotype list
     Then the C4 default stereotypes are present without manual entry

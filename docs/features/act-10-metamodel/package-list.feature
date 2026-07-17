@@ -28,8 +28,10 @@ Feature: PACKAGE-LIST+FIND-1 Package Hierarchy
     Then she sees the package slug "technology"
     And she sees the count of elements assigned to Technology
 
-  Scenario: PACKAGE-LIST+FIND-1-03 C4 packages are seeded automatically on bootstrap
-    Given a new model is created with metamodel=c4
+  Scenario: PACKAGE-LIST+FIND-1-03 C4 packages are provided by Metamodel c4
+    # Packages live on the Metamodel (Django admin / fixture), not invented by Ratatosk.
+    Given the Metamodel "c4" exists with C4 stereotypes and packages
+    And a new model is created with metamodel=c4
     When Elena browses to the Package list
     Then the 4 C4 default packages exist without manual entry
 

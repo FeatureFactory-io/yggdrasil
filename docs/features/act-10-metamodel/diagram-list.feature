@@ -34,8 +34,10 @@ Feature: DIAGRAM-LIST+FIND-1 Diagrams per Package
     Then the Cytoscape layout editor opens for that diagram
     And Elena can rearrange element positions
 
-  Scenario: DIAGRAM-LIST+FIND-1-04 C4 diagrams are created automatically on bootstrap
-    Given a new model is created with metamodel=c4
+  Scenario: DIAGRAM-LIST+FIND-1-04 Diagram instances may be created during bootstrap
+    # Diagram *types* are constrained by the Metamodel; *instances* live on the Model.
+    Given the Metamodel "c4" exists with C4 stereotypes and packages
+    And a new model is created with metamodel=c4
     When Elena browses to the Diagram list
     Then at least one diagram of each C4 type is present
 

@@ -1,9 +1,15 @@
 """
 Step definitions for MCP tool calls (Act 5 scenarios).
 
-All steps call the FastMCP server in-process via the AsyncClient transport
-(T1 pattern from artifact 57 §7). No subprocess, no real HTTP server needed
-for AT; behave-django provides the Django context.
+HONEST CONTRACT — these steps call tool Python callables directly (T2).
+They do NOT prove FastMCP Client (T1) or ``manage.py mcp_server`` stdio (T3).
+
+Real entrypoint coverage:
+  - tests/integration/mcp_harness/test_mcp_tools_client.py  (T1)
+  - tests/integration/mcp_harness/test_mcp_stdio_clean.py   (T3)
+  - src/yggdrasil/mcp/tests/test_mcp_server_command.py
+
+Keep act-5-mcp features ``@wip`` until ``_call_mcp_tool`` uses FastMCP Client.
 
 Usage pattern:
     When Priya calls MCP tool "list_elements" with:
@@ -32,7 +38,7 @@ from tests.fixtures.factories.model_factories import (
 )
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem, MuninRule
-from yggdrasil.graph.models import Element, Relationship, YggdrasilModel
+from yggdrasil.graph.models import Element, Relationship, YggdrasilModel, ensure_c4_metamodel
 from yggdrasil.llm.base import ScriptedLLM
 from yggdrasil.mcp import server as mcp_server
 from yggdrasil.mcp.tools import changeset as changeset_tools
@@ -110,13 +116,13 @@ def step_model_has_n_elements(context, model_name, count):
     context.mcp_model = model
     for name, stereotype_name, package_name in _SEED_ELEMENTS[:count]:
         stereotype = StereotypeFactory(
-            model=model,
+            metamodel=model.metamodel,
             name=stereotype_name,
             slug=slugify(stereotype_name),
             is_edge=False,
         )
         package = PackageFactory(
-            model=model,
+            metamodel=model.metamodel,
             name=package_name,
             slug=slugify(package_name),
         )
@@ -307,12 +313,12 @@ def step_model_has_element_with_owner(context, name, owner):
     # WRITE-03 uses id=3 for Order Domain — pin PK for stable tool args.
     element_pk = 3 if name == "Order Domain" else None
     stereotype = StereotypeFactory(
-        model=model,
+        metamodel=model.metamodel,
         name="Component",
         slug="component",
         is_edge=False,
     )
-    package = PackageFactory(model=model, name="Application", slug="application")
+    package = PackageFactory(metamodel=model.metamodel, name="Application", slug="application")
     element_kwargs: dict[str, Any] = {
         "model": model,
         "name": name,
@@ -347,8 +353,10 @@ def step_model_has_element_with_rels(context, name, elem_id, count):
         username="priya", is_architect=True
     )
     Element.objects.filter(pk=elem_id).delete()
-    stereotype = StereotypeFactory(model=model, name="Container", slug="container", is_edge=False)
-    package = PackageFactory(model=model, name="Technology", slug="technology")
+    stereotype = StereotypeFactory(
+        metamodel=model.metamodel, name="Container", slug="container", is_edge=False
+    )
+    package = PackageFactory(metamodel=model.metamodel, name="Technology", slug="technology")
     element = ElementFactory(
         pk=elem_id,
         model=model,
@@ -357,7 +365,7 @@ def step_model_has_element_with_rels(context, name, elem_id, count):
         stereotype=stereotype,
         package=package,
     )
-    edge_st = EdgeStereotypeFactory(model=model, name="depends_on", slug="depends_on")
+    edge_st = EdgeStereotypeFactory(metamodel=model.metamodel, name="depends_on", slug="depends_on")
     Relationship.objects.filter(source=element).delete()
     Relationship.objects.filter(target=element).delete()
     for idx in range(count):
@@ -403,12 +411,14 @@ def step_model_has_two_elements(context, name1, name2):
         if meta["pk"] is not None:
             Element.objects.filter(pk=meta["pk"]).delete()
         stereotype = StereotypeFactory(
-            model=model,
+            metamodel=model.metamodel,
             name=meta["st"],
             slug=slugify(meta["st"]),
             is_edge=False,
         )
-        package = PackageFactory(model=model, name=meta["pkg"], slug=slugify(meta["pkg"]))
+        package = PackageFactory(
+            metamodel=model.metamodel, name=meta["pkg"], slug=slugify(meta["pkg"])
+        )
         kwargs: dict[str, Any] = {
             "model": model,
             "name": elem_name,
@@ -419,7 +429,7 @@ def step_model_has_two_elements(context, name1, name2):
         if meta["pk"] is not None:
             kwargs["pk"] = meta["pk"]
         created[elem_name] = ElementFactory(**kwargs)
-    EdgeStereotypeFactory(model=model, name="calls", slug="calls")
+    EdgeStereotypeFactory(metamodel=model.metamodel, name="calls", slug="calls")
     context.pair_elements = created
     logger.info(
         "step_model_has_two_elements | %s=%s %s=%s",
@@ -484,8 +494,10 @@ def step_post_merge_changeset(context, count):
     context.current_user = UserFactory(username="ci-agent", is_architect=True)
     context.mcp_token_scope = "read-write"
     # Seed graph endpoints so applied ops (1-3) succeed.
-    st = StereotypeFactory(model=model, name="Container", slug="container", is_edge=False)
-    pkg = PackageFactory(model=model, name="Technology", slug="technology")
+    st = StereotypeFactory(
+        metamodel=model.metamodel, name="Container", slug="container", is_edge=False
+    )
+    pkg = PackageFactory(metamodel=model.metamodel, name="Technology", slug="technology")
     elem_a = ElementFactory(
         model=model, name="CI Node A", slug="ci-node-a", stereotype=st, package=pkg
     )
@@ -681,9 +693,11 @@ def step_call_batch_tool(context, count):
     user = UserFactory(username="marcus", is_architect=True)
     context.current_user = user
     context.mcp_token_scope = "read-write"
-    stereotype = StereotypeFactory(model=model, name="Container", slug="container", is_edge=False)
-    package = PackageFactory(model=model, name="Technology", slug="technology")
-    edge_st = EdgeStereotypeFactory(model=model, name="calls", slug="calls")
+    stereotype = StereotypeFactory(
+        metamodel=model.metamodel, name="Container", slug="container", is_edge=False
+    )
+    package = PackageFactory(metamodel=model.metamodel, name="Technology", slug="technology")
+    edge_st = EdgeStereotypeFactory(metamodel=model.metamodel, name="calls", slug="calls")
     operations: list[dict[str, Any]] = []
     for idx in range(count):
         source = ElementFactory(
@@ -1416,7 +1430,7 @@ def _ensure_model() -> YggdrasilModel:
     """Return (or create) the default AT model."""
     model, created = YggdrasilModel.objects.get_or_create(
         slug="yggdrasil",
-        defaults={"name": "Yggdrasil", "metamodel": YggdrasilModel.METAMODEL_C4},
+        defaults={"name": "Yggdrasil", "metamodel": ensure_c4_metamodel()},
     )
     logger.info("_ensure_model | model_id=%s created=%s", model.pk, created)
     return model
@@ -1437,7 +1451,9 @@ def _ensure_query_fixture(context) -> None:
     mobile = Element.objects.filter(model=model, slug="mobile-app").first()
     order = Element.objects.filter(model=model, slug="order-domain").first()
     if payment and mobile and order and not payment.incoming_relationships.exists():
-        edge_st = EdgeStereotypeFactory(model=model, name="depends_on", slug="depends_on")
+        edge_st = EdgeStereotypeFactory(
+            metamodel=model.metamodel, name="depends_on", slug="depends_on"
+        )
         RelationshipFactory(
             model=model, source=mobile, target=payment, stereotype=edge_st, confidence=0.9
         )
@@ -1473,8 +1489,9 @@ def _call_mcp_tool(context, tool_name: str, *, user) -> None:
     """
     Invoke an MCP tool function in-process (T2 direct call).
 
-    FastMCP AsyncClient (T1) requires initialize_mcp(); until that skeleton is
-    filled, AT exercises the same tool callables the server will register.
+    WARNING: This is NOT the Cursor/stdio entrypoint. T1/T3 coverage is in
+    ``tests/integration/mcp_harness/``. Do not treat a green AT as proof the MCP
+    server process works.
     """
     tool_fn = _TOOL_REGISTRY.get(tool_name)
     assert tool_fn is not None, f"Unknown MCP tool {tool_name!r}"

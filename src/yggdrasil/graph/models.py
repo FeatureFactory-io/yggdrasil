@@ -5,6 +5,10 @@ Bounded context: `graph` (SAO.md §1).
 Dependency rules: `graph` has no inbound imports from other Yggdrasil apps.
 All writes go through the ChangeSet pipeline (SAO.md §1, §4).
 
+Layering:
+  - Metamodel — type catalog (Stereotypes, Packages)
+  - Model — instance graph (Elements, Relationships, Diagrams), immutable FK to Metamodel
+
 JSONB columns (SAO.md §4):
   - Element.properties       — stereotype-driven flexible attributes
   - Relationship.properties  — edge-level flexible attributes
@@ -18,33 +22,89 @@ import logging
 from typing import ClassVar
 
 from django.contrib.auth.models import Group
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
 
 logger = logging.getLogger("yggdrasil.graph")
+
+# Canonical C4 catalog seeded onto Metamodel slug=c4 (admin / data migration).
+C4_ELEMENT_STEREOTYPES: tuple[str, ...] = (
+    "System",
+    "Container",
+    "Component",
+    "Person",
+    "External",
+)
+C4_EDGE_STEREOTYPES: tuple[str, ...] = (
+    "calls",
+    "depends_on",
+    "uses",
+)
+C4_PACKAGES: tuple[str, ...] = (
+    "Context",
+    "Technology",
+    "Application",
+    "Code",
+)
+
+
+class Metamodel(models.Model):
+    """
+    A named type catalog (convention) that constrains Models.
+
+    Owns Stereotypes and Packages. Ratatosk loads this ontology by slug
+    as LLM guidance — it does not invent catalog rows.
+
+    :Example:
+
+    >>> mm = Metamodel(name="C4", slug="c4")
+    """
+
+    SLUG_C4 = "c4"
+
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=200, unique=True)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    def save(self, *args, **kwargs) -> None:
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
 
 
 class YggdrasilModel(models.Model):
     """
     A named architecture knowledge-graph model (e.g. "Yggdrasil").
 
-    Each model has one metamodel (currently C4 only for MVP) and is
-    owned by a RBAC group. All Elements, Relationships, Stereotypes,
-    Packages and Diagrams belong to exactly one YggdrasilModel.
+    Each model is bound to exactly one Metamodel (immutable after create)
+    and owned by an RBAC group. Elements, Relationships and Diagrams
+    belong to the Model; Stereotypes and Packages belong to its Metamodel.
 
     :Example:
 
-    >>> model = YggdrasilModel(name="Yggdrasil", metamodel="c4")
+    >>> mm = Metamodel.objects.get(slug="c4")
+    >>> model = YggdrasilModel(name="Yggdrasil", metamodel=mm)
     """
 
-    METAMODEL_C4 = "c4"
-    METAMODEL_CHOICES: ClassVar[list[tuple[str, str]]] = [
-        (METAMODEL_C4, "C4"),
-    ]
+    # Kept for call-site convenience (slug of the seeded C4 Metamodel).
+    METAMODEL_C4 = Metamodel.SLUG_C4
 
     name = models.CharField(max_length=200)
     slug = models.SlugField(max_length=200, unique=True)
-    metamodel = models.CharField(max_length=50, choices=METAMODEL_CHOICES, default=METAMODEL_C4)
+    metamodel = models.ForeignKey(
+        Metamodel,
+        on_delete=models.PROTECT,
+        related_name="models",
+    )
     owner_group = models.ForeignKey(
         Group,
         on_delete=models.PROTECT,
@@ -66,12 +126,28 @@ class YggdrasilModel(models.Model):
     def save(self, *args, **kwargs) -> None:
         if not self.slug:
             self.slug = slugify(self.name)
+        if self.pk:
+            previous = (
+                YggdrasilModel.objects.filter(pk=self.pk)
+                .values_list("metamodel_id", flat=True)
+                .first()
+            )
+            if previous is not None and previous != self.metamodel_id:
+                logger.warning(
+                    "YggdrasilModel.save | refused metamodel change | model=%s from=%s to=%s",
+                    self.slug,
+                    previous,
+                    self.metamodel_id,
+                )
+                raise ValidationError(
+                    {"metamodel": "Metamodel cannot be changed after the Model is created."}
+                )
         super().save(*args, **kwargs)
 
 
 class Stereotype(models.Model):
     """
-    An element or edge type definition within a metamodel.
+    An element or edge type definition within a Metamodel.
 
     For C4: System, Container, Component, Person, External (element
     stereotypes); calls, depends_on, uses (edge stereotypes).
@@ -82,12 +158,12 @@ class Stereotype(models.Model):
 
     :Example:
 
-    >>> st = Stereotype(model=m, name="Container", slug="container",
+    >>> st = Stereotype(metamodel=mm, name="Container", slug="container",
     ...     property_schema={"type": "object", "properties": {"version": {"type": "string"}}})
     """
 
-    model = models.ForeignKey(
-        YggdrasilModel,
+    metamodel = models.ForeignKey(
+        Metamodel,
         on_delete=models.CASCADE,
         related_name="stereotypes",
     )
@@ -100,27 +176,27 @@ class Stereotype(models.Model):
     icon = models.CharField(max_length=50, blank=True)
 
     class Meta:
-        unique_together: ClassVar[list[tuple[str, str]]] = [("model", "slug")]
+        unique_together: ClassVar[list[tuple[str, str]]] = [("metamodel", "slug")]
         ordering: ClassVar[list[str]] = ["name"]
 
     def __str__(self) -> str:
-        return f"{self.model.slug}/{self.name}"
+        return f"{self.metamodel.slug}/{self.name}"
 
 
 class Package(models.Model):
     """
-    Organisational grouping for elements within a model.
+    Organisational grouping defined by a Metamodel.
 
     C4 default packages: Context, Technology, Application, Code.
     Packages are hierarchical (``parent`` is self-referential).
 
     :Example:
 
-    >>> pkg = Package(model=m, name="Technology", slug="technology")
+    >>> pkg = Package(metamodel=mm, name="Technology", slug="technology")
     """
 
-    model = models.ForeignKey(
-        YggdrasilModel,
+    metamodel = models.ForeignKey(
+        Metamodel,
         on_delete=models.CASCADE,
         related_name="packages",
     )
@@ -136,19 +212,21 @@ class Package(models.Model):
     description = models.TextField(blank=True)
 
     class Meta:
-        unique_together: ClassVar[list[tuple[str, str]]] = [("model", "slug")]
+        unique_together: ClassVar[list[tuple[str, str]]] = [("metamodel", "slug")]
         ordering: ClassVar[list[str]] = ["name"]
 
     def __str__(self) -> str:
-        return f"{self.model.slug}/{self.slug}"
+        return f"{self.metamodel.slug}/{self.slug}"
 
 
 class Diagram(models.Model):
     """
-    A named C4 diagram within a package.
+    A named C4 diagram instance within a Model.
 
     ``layout_data`` (JSONB) stores Cytoscape.js node positions so the
     layout editor can restore element positions between sessions.
+    Diagram *types* are constrained by the Metamodel profile; instances
+    live on the Model.
 
     :Example:
 
@@ -300,3 +378,46 @@ class Relationship(models.Model):
 
     def __str__(self) -> str:
         return f"{self.source} → {self.target} [{self.stereotype.slug}]"
+
+
+def ensure_c4_metamodel() -> Metamodel:
+    """
+    Ensure Metamodel ``c4`` exists with canonical Stereotypes and Packages.
+
+    Idempotent. Used by data migrations, fixtures, and admin bootstrap paths.
+
+    :return: The C4 Metamodel instance.
+    """
+    mm, created = Metamodel.objects.get_or_create(
+        slug=Metamodel.SLUG_C4,
+        defaults={
+            "name": "C4",
+            "description": "C4 architecture metamodel (Context, Container, Component, Code).",
+        },
+    )
+    if created:
+        logger.info("ensure_c4_metamodel | created Metamodel slug=c4")
+    for name in C4_ELEMENT_STEREOTYPES:
+        Stereotype.objects.get_or_create(
+            metamodel=mm,
+            slug=slugify(name),
+            defaults={"name": name, "is_edge": False},
+        )
+    for name in C4_EDGE_STEREOTYPES:
+        Stereotype.objects.get_or_create(
+            metamodel=mm,
+            slug=slugify(name),
+            defaults={"name": name, "is_edge": True},
+        )
+    for name in C4_PACKAGES:
+        Package.objects.get_or_create(
+            metamodel=mm,
+            slug=slugify(name),
+            defaults={"name": name},
+        )
+    logger.info(
+        "ensure_c4_metamodel | stereotypes=%s packages=%s",
+        mm.stereotypes.count(),
+        mm.packages.count(),
+    )
+    return mm

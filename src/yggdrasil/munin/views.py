@@ -18,7 +18,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
-from yggdrasil.graph.models import YggdrasilModel
+from yggdrasil.graph.models import YggdrasilModel, ensure_c4_metamodel
 from yggdrasil.llm.base import ScriptedLLM
 from yggdrasil.munin.agent import MuninAgent
 
@@ -97,7 +97,7 @@ class MuninChatView(LoginRequiredMixin, View):
             model = YggdrasilModel.objects.create(
                 name="Yggdrasil",
                 slug="yggdrasil",
-                metamodel=YggdrasilModel.METAMODEL_C4,
+                metamodel=ensure_c4_metamodel(),
             )
         return model.pk
 

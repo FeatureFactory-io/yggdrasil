@@ -253,7 +253,7 @@ def list_stereotypes(model: str) -> dict:
             "is_edge": st.is_edge,
             "property_schema": st.property_schema,
         }
-        for st in Stereotype.objects.filter(model=ymodel).order_by("name")
+        for st in Stereotype.objects.filter(metamodel=ymodel.metamodel).order_by("name")
     ]
     result = {"items": items}
     logger.info("list_stereotypes | model=%s count=%s user=%s", model, len(items), user_id)

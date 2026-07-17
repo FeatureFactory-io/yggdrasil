@@ -69,15 +69,17 @@ Feature: ACT-1-CLI Ratatosk Bootstrap
     Then the exit code is not 0
     And the output contains "token"
 
-  # ── C4 metamodel default ───────────────────────────────────────────────────
-  Scenario: ACT-1-CLI-07 Bootstrap seeds C4 structure automatically
-    Given a successful bootstrap run on a Python web application repository
-    Then the model contains elements with stereotypes from:
+  # ── C4 metamodel guidance ──────────────────────────────────────────────────
+  Scenario: ACT-1-CLI-07 Bootstrap uses existing C4 Metamodel ontology
+    Given the Metamodel "c4" exists with C4 stereotypes and packages
+    And a successful bootstrap run on a Python web application repository
+    Then the model's metamodel is "c4"
+    And the model contains elements with stereotypes from:
       | stereotype |
       | Container  |
       | Component  |
       | System     |
-    And the model contains packages from:
+    And the model's metamodel contains packages from:
       | package     |
       | Context     |
       | Technology  |

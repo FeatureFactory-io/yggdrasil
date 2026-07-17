@@ -100,7 +100,7 @@ $ ratatosk bootstrap ./repo --token=$YGGDRASIL_TOKEN --model Yggdrasil --metamod
           → https://yggdrasil.featurefactory.io/runs/4
 ```
 
-C4 is the default — and only — metamodel in MVP: Ratatosk seeds the Vertex/Edge/Stereotype/Diagram/Package structure (Context, Container, Component, Code views) automatically. There is no metamodel picker yet; designing/evolving the metamodel is Key Feature 12, Part II.
+C4 is the default — and only — Metamodel in MVP. It is a first-class type catalog (Stereotypes + Packages) established via Django admin / fixture seed — not invented by Ratatosk. Each Model is bound to a Metamodel at create time (immutable thereafter). Ratatosk takes `--metamodel=c4` as the slug for ontology guidance and populates Elements/Relationships under that catalog. There is no end-user metamodel picker yet; evolving metamodels beyond C4 is Key Feature 12, Part II.
 
 **Pipeline:**
 

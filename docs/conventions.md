@@ -34,11 +34,12 @@ All screens follow a consistent naming pattern for end-to-end traceability.
 
 | Entity | Role |
 |--------|------|
+| **METAMODEL** | Type catalog (convention): Stereotypes + Packages; Model binds immutably |
 | **ELEMENT** | Vertex in the graph (Application, Capability, etc.) — stereotype defines kind |
 | **RELATIONSHIP** | Edge between elements (depends_on, owns, etc.) |
 | **STEREOTYPE** | Metamodel definition: allowed properties, edge rules |
-| **PACKAGE** | Container / view root (Business View, Technology View) |
-| **DIAGRAM** | Cytoscape presentation layout for a package |
+| **PACKAGE** | Metamodel view root (Context, Technology, Application, Code) |
+| **DIAGRAM** | Cytoscape presentation layout instance on a Model |
 | **CHANGESET** | Staged writes from Ratatosk awaiting review |
 | **VIEW** | Saved query / filter configuration (view browser) |
 

@@ -25,7 +25,7 @@ from tests.fixtures.factories.model_factories import (
 )
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
-from yggdrasil.graph.models import Element, Package, Stereotype, YggdrasilModel
+from yggdrasil.graph.models import Element, Package, Stereotype, YggdrasilModel, ensure_c4_metamodel
 from yggdrasil.munin.agent import set_model_review_mode
 
 logger = logging.getLogger("yggdrasil.at.munin_steps")
@@ -51,8 +51,10 @@ def step_model_exactly_n_elements(context, count):
     """Create exactly N elements in the test model."""
     model = _ensure_model(context)
     Element.objects.filter(model=model).delete()
-    st = StereotypeFactory(model=model, name="Container", slug="container", is_edge=False)
-    pkg = PackageFactory(model=model, name="Technology", slug="technology")
+    st = StereotypeFactory(
+        metamodel=model.metamodel, name="Container", slug="container", is_edge=False
+    )
+    pkg = PackageFactory(metamodel=model.metamodel, name="Technology", slug="technology")
     for idx in range(count):
         ElementFactory(
             model=model,
@@ -361,7 +363,7 @@ def _extract_munin_text(response) -> str:
 def _ensure_model(context) -> YggdrasilModel:
     model, _ = YggdrasilModel.objects.get_or_create(
         slug="yggdrasil",
-        defaults={"name": "Yggdrasil", "metamodel": YggdrasilModel.METAMODEL_C4},
+        defaults={"name": "Yggdrasil", "metamodel": ensure_c4_metamodel()},
     )
     context.cli_model = model
     return model
@@ -374,12 +376,18 @@ def _ensure_chat_fixture(context) -> None:
     if Element.objects.filter(model=model, slug="payment-api").exists():
         _ensure_payment_package_components(model)
         return
-    container = StereotypeFactory(model=model, name="Container", slug="container", is_edge=False)
-    component = StereotypeFactory(model=model, name="Component", slug="component", is_edge=False)
-    system = StereotypeFactory(model=model, name="System", slug="system", is_edge=False)
-    tech = PackageFactory(model=model, name="Technology", slug="technology")
-    app = PackageFactory(model=model, name="Application", slug="application")
-    payment_pkg = PackageFactory(model=model, name="Payment", slug="payment")
+    container = StereotypeFactory(
+        metamodel=model.metamodel, name="Container", slug="container", is_edge=False
+    )
+    component = StereotypeFactory(
+        metamodel=model.metamodel, name="Component", slug="component", is_edge=False
+    )
+    system = StereotypeFactory(
+        metamodel=model.metamodel, name="System", slug="system", is_edge=False
+    )
+    tech = PackageFactory(metamodel=model.metamodel, name="Technology", slug="technology")
+    app = PackageFactory(metamodel=model.metamodel, name="Application", slug="application")
+    payment_pkg = PackageFactory(metamodel=model.metamodel, name="Payment", slug="payment")
     payment = ElementFactory(
         model=model,
         name="Payment API",
@@ -393,7 +401,7 @@ def _ensure_chat_fixture(context) -> None:
         name="Mobile App",
         slug="mobile-app",
         stereotype=system,
-        package=PackageFactory(model=model, name="Context", slug="context"),
+        package=PackageFactory(metamodel=model.metamodel, name="Context", slug="context"),
         owner="mobile-team",
     )
     order = ElementFactory(
@@ -412,7 +420,7 @@ def _ensure_chat_fixture(context) -> None:
         package=tech,
         owner="platform-team",
     )
-    edge = EdgeStereotypeFactory(model=model, name="depends_on", slug="depends_on")
+    edge = EdgeStereotypeFactory(metamodel=model.metamodel, name="depends_on", slug="depends_on")
     RelationshipFactory(model=model, source=mobile, target=payment, stereotype=edge)
     RelationshipFactory(model=model, source=order, target=payment, stereotype=edge)
     ElementFactory(

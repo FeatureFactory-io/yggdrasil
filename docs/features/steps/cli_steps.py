@@ -29,7 +29,14 @@ from tests.fixtures.factories.model_factories import (
 from yggdrasil.auth.services import TokenService
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
 from yggdrasil.changeset.services import ChangeSetService
-from yggdrasil.graph.models import Element, Package, Stereotype, YggdrasilModel
+from yggdrasil.graph.models import (
+    Element,
+    Metamodel,
+    Package,
+    Stereotype,
+    YggdrasilModel,
+    ensure_c4_metamodel,
+)
 from yggdrasil.ratatosk.agent import (
     DEFAULT_CONFIDENCE_THRESHOLD,
     DeltaBuckets,
@@ -62,7 +69,7 @@ def step_empty_model(context):
     """Create an empty YggdrasilModel in the test DB."""
     model, _ = YggdrasilModel.objects.get_or_create(
         slug="yggdrasil",
-        defaults={"name": "Yggdrasil", "metamodel": YggdrasilModel.METAMODEL_C4},
+        defaults={"name": "Yggdrasil", "metamodel": ensure_c4_metamodel()},
     )
     Element.objects.filter(model=model).delete()
     context.cli_model = model
@@ -77,11 +84,13 @@ def step_model_with_elements_rels(context, elem_count, rel_count):
     """Create a model with the specified element and relationship counts."""
     model, _ = YggdrasilModel.objects.get_or_create(
         slug="yggdrasil",
-        defaults={"name": "Yggdrasil", "metamodel": YggdrasilModel.METAMODEL_C4},
+        defaults={"name": "Yggdrasil", "metamodel": ensure_c4_metamodel()},
     )
     Element.objects.filter(model=model).delete()
-    st = StereotypeFactory(model=model, name="Container", slug="container", is_edge=False)
-    pkg = PackageFactory(model=model, name="Technology", slug="technology")
+    st = StereotypeFactory(
+        metamodel=model.metamodel, name="Container", slug="container", is_edge=False
+    )
+    pkg = PackageFactory(metamodel=model.metamodel, name="Technology", slug="technology")
     elements = []
     for idx in range(elem_count):
         elements.append(
@@ -93,7 +102,7 @@ def step_model_with_elements_rels(context, elem_count, rel_count):
                 package=pkg,
             )
         )
-    edge = EdgeStereotypeFactory(model=model, name="depends_on", slug="depends_on")
+    edge = EdgeStereotypeFactory(metamodel=model.metamodel, name="depends_on", slug="depends_on")
     for idx in range(rel_count):
         source = elements[idx % len(elements)]
         target = elements[(idx + 1) % len(elements)]
@@ -134,15 +143,17 @@ def step_ratatosk_delta_buckets(context):
     """Set up delta bucket data from the table in context."""
     model, _ = YggdrasilModel.objects.get_or_create(
         slug="yggdrasil",
-        defaults={"name": "Yggdrasil", "metamodel": YggdrasilModel.METAMODEL_C4},
+        defaults={"name": "Yggdrasil", "metamodel": ensure_c4_metamodel()},
     )
     context.cli_model = model
     context.current_user = getattr(context, "current_user", None) or UserFactory(
         username="priya", is_architect=True
     )
     counts = {row["bucket"]: int(row["count"]) for row in context.table}
-    st = StereotypeFactory(model=model, name="Container", slug="container", is_edge=False)
-    pkg = PackageFactory(model=model, name="Technology", slug="technology")
+    st = StereotypeFactory(
+        metamodel=model.metamodel, name="Container", slug="container", is_edge=False
+    )
+    pkg = PackageFactory(metamodel=model.metamodel, name="Technology", slug="technology")
     to_update = []
     for idx in range(counts.get("to_update", 0)):
         element = ElementFactory(
@@ -216,7 +227,7 @@ def step_changeset_with_threshold(context, total, below_threshold):
     """Create a ChangeSet with the specified confidence distribution."""
     model, _ = YggdrasilModel.objects.get_or_create(
         slug="yggdrasil",
-        defaults={"name": "Yggdrasil", "metamodel": YggdrasilModel.METAMODEL_C4},
+        defaults={"name": "Yggdrasil", "metamodel": ensure_c4_metamodel()},
     )
     context.cli_model = model
     user = getattr(context, "current_user", None) or UserFactory(
@@ -279,9 +290,21 @@ def step_changeset_with_threshold(context, total, below_threshold):
     )
 
 
+@given('the Metamodel "{slug}" exists with C4 stereotypes and packages')
+def step_metamodel_exists_with_c4(context, slug):
+    """Ensure a Metamodel catalog exists (C4 seed for slug=c4)."""
+    if slug == "c4":
+        mm = ensure_c4_metamodel()
+    else:
+        mm, _ = Metamodel.objects.get_or_create(slug=slug, defaults={"name": slug.upper()})
+    context.cli_metamodel = mm
+    logger.info("step_metamodel_exists_with_c4 | slug=%s id=%s", slug, mm.pk)
+
+
 @given("a successful bootstrap run on a Python web application repository")
 def step_successful_bootstrap(context):
-    """Set up a completed bootstrap run with C4 stereotypes seeded."""
+    """Set up a completed bootstrap run guided by the C4 Metamodel."""
+    ensure_c4_metamodel()
     user = getattr(context, "current_user", None) or UserFactory(
         username="priya", is_architect=True
     )
@@ -299,6 +322,15 @@ def step_successful_bootstrap(context):
     context.cli_exit_code = 0
     context.changeset_id = run.changeset_id
     logger.info("step_successful_bootstrap | run_id=%s", run.run_id)
+
+
+@then('the model\'s metamodel is "{slug}"')
+def step_model_metamodel_is(context, slug):
+    """Assert the Model is bound to the given Metamodel slug."""
+    model = getattr(context, "cli_model", None) or YggdrasilModel.objects.get(slug="yggdrasil")
+    assert (
+        model.metamodel.slug == slug
+    ), f"Expected metamodel {slug!r}, got {model.metamodel.slug!r}"
 
 
 # ─── When steps ─────────────────────────────────────────────────────────────
@@ -411,24 +443,25 @@ def step_queued_count(context, queued_count):
 
 @then("the model contains elements with stereotypes from:")
 def step_model_has_stereotypes(context):
-    """Assert the model contains elements with the stereotypes from the table."""
+    """Assert the Model's Metamodel defines the stereotypes (and/or elements use them)."""
     model = getattr(context, "cli_model", None) or YggdrasilModel.objects.get(slug="yggdrasil")
     for row in context.table:
         name = row["stereotype"]
-        assert Stereotype.objects.filter(model=model, name__iexact=name).exists() or (
+        assert Stereotype.objects.filter(metamodel=model.metamodel, name__iexact=name).exists() or (
             Element.objects.filter(model=model, stereotype__name__iexact=name).exists()
-        ), f"Missing stereotype {name!r}"
+        ), f"Missing stereotype {name!r} on metamodel {model.metamodel.slug!r}"
 
 
 @then("the model contains packages from:")
+@then("the model's metamodel contains packages from:")
 def step_model_has_packages(context):
-    """Assert the model contains packages matching the table."""
+    """Assert the Model's Metamodel defines the packages from the table."""
     model = getattr(context, "cli_model", None) or YggdrasilModel.objects.get(slug="yggdrasil")
     for row in context.table:
         name = row["package"]
         assert Package.objects.filter(
-            model=model, name__iexact=name
-        ).exists(), f"Missing package {name!r}"
+            metamodel=model.metamodel, name__iexact=name
+        ).exists(), f"Missing package {name!r} on metamodel {model.metamodel.slug!r}"
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────

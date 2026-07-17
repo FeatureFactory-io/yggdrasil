@@ -31,7 +31,7 @@ Yggdrasil is an AI-augmented architecture knowledge-graph platform that keeps a 
 | App | Responsibility |
 |---|---|
 | `auth` | Session auth, personal access tokens (hashed), RBAC roles |
-| `graph` | Element, Relationship, Stereotype, Package, Diagram — the core knowledge graph |
+| `graph` | Metamodel (type catalog: Stereotype, Package), Model (instance graph: Element, Relationship, Diagram) — Model.metamodel is immutable after create; Stereotype/Package CRUD is Django admin in MVP |
 | `changeset` | ChangeSet, ChangeSetItem, LEARNED (MuninRule) — all write operations go through here |
 | `munin` | Agentic planner: reads ChangeSet candidates, produces graph operations, maintains blackboard |
 | `ratatosk` | RataskRun model, CLI integration models, run history |

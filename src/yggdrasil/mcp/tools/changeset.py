@@ -153,7 +153,37 @@ def do_other_changeset(
     :raises PermissionError: If read-only scope.
     :raises ValueError: If item_ids is empty or ChangeSet not found.
     """
-    raise NotImplementedError()
+    user = _resolve_current_user()
+    logger.info(
+        "do_other_changeset | id=%s user=%s item_ids=%s instructions=%r",
+        id,
+        getattr(user, "pk", None),
+        item_ids,
+        instructions[:80] if instructions else "",
+    )
+    if not item_ids:
+        msg = "do_other_changeset requires at least one item_id"
+        raise ValueError(msg)
+    changeset = _service.do_other(
+        changeset_id=id,
+        item_ids=item_ids,
+        instructions=instructions,
+        user=user,
+    )
+    replacements = getattr(changeset, "_do_other_replacements", [])
+    result = {
+        "changeset_id": changeset.pk,
+        "redirected_count": len(item_ids),
+        "replan_task_id": f"replan-{id}-{'-'.join(str(i) for i in item_ids)}",
+        "replacement_changeset_ids": replacements,
+    }
+    logger.info(
+        "do_other_changeset | id=%s user=%s result=%s",
+        id,
+        getattr(user, "pk", None),
+        result,
+    )
+    return result
 
 
 def ask_munin(question: str, model: str | None = None) -> dict:

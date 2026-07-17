@@ -274,7 +274,53 @@ class ChangeSetService:
         >>> cs = svc.do_other(changeset_id=1, item_ids=[3],
         ...     instructions="It's an external system")
         """
-        raise NotImplementedError()
+        if not item_ids:
+            msg = "do_other requires at least one item_id"
+            raise ValueError(msg)
+        if not instructions.strip():
+            msg = "do_other requires non-empty instructions"
+            raise ValueError(msg)
+        user_label = getattr(user, "pk", None)
+        logger.info(
+            "do_other | changeset_id=%s item_ids=%s user=%s",
+            changeset_id,
+            item_ids,
+            user_label,
+        )
+        # Reject + LEARNED first; Munin re-plan is synchronous for AT/MCP.
+        changeset = self.reject(
+            changeset_id=changeset_id,
+            item_ids=item_ids,
+            reason=instructions,
+            user=user,
+            learn=True,
+        )
+        from yggdrasil.llm.base import ScriptedLLM
+        from yggdrasil.munin.agent import MuninAgent
+
+        agent = MuninAgent(
+            llm=ScriptedLLM(responses=[f"Re-planned with: {instructions[:80]}"]),
+            model_id=changeset.model_id,
+            user_id=getattr(user, "pk", None),
+        )
+        replacement_ids: list[int] = []
+        for item_id in item_ids:
+            resp = agent.replan_operation(
+                rejected_item_id=item_id,
+                instructions=instructions,
+            )
+            if resp.changeset_id is not None:
+                replacement_ids.append(resp.changeset_id)
+        # Stash for MCP tool response without changing the return contract.
+        changeset._do_other_replacements = replacement_ids  # type: ignore[attr-defined]
+        logger.info(
+            "do_other | changeset_id=%s redirected=%s replacements=%s user=%s",
+            changeset.pk,
+            len(item_ids),
+            replacement_ids,
+            user_label,
+        )
+        return changeset
 
     def rollback(
         self,

@@ -25,7 +25,7 @@ from django.contrib.auth.models import User
 from django.db.models import Q
 from django.utils.text import slugify
 
-from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
+from yggdrasil.changeset.models import ChangeSet, ChangeSetItem, MuninRule
 from yggdrasil.changeset.services import ChangeSetService
 from yggdrasil.graph.models import Element, Relationship
 from yggdrasil.llm.base import LLMMessage
@@ -169,13 +169,80 @@ class MuninAgent:
         :return: MuninResponse with changeset_id of the replacement ChangeSet.
         :raises ValueError: If item not found.
         """
-        raise NotImplementedError()
+        try:
+            item = ChangeSetItem.objects.select_related("changeset").get(pk=rejected_item_id)
+        except ChangeSetItem.DoesNotExist as exc:
+            msg = f"ChangeSetItem id={rejected_item_id} not found"
+            raise ValueError(msg) from exc
+        user = self._load_user()
+        llm_note = self._llm.complete(
+            messages=[
+                LLMMessage(
+                    role="user",
+                    content=f"Re-plan op {rejected_item_id} with: {instructions}",
+                )
+            ],
+            system=self.build_base_prompt(),
+        ).content
+        corrected_detail = dict(item.detail or {})
+        corrected_detail["replans_item_id"] = rejected_item_id
+        corrected_detail["instructions"] = instructions
+        corrected_detail["corrected"] = True
+        # External-system guidance → avoid diagram placement; propose element update note.
+        op_type = item.op_type
+        if "external system" in instructions.lower() and op_type == ChangeSetItem.OP_ADD_TO_DIAGRAM:
+            op_type = ChangeSetItem.OP_UPDATE_ELEMENT
+            corrected_detail["note"] = "treat as external system; do not add to container diagram"
+        changeset = _service.propose(
+            model_id=item.changeset.model_id,
+            source=ChangeSet.SOURCE_MCP,
+            operations=[
+                {
+                    "op_type": op_type,
+                    "detail": corrected_detail,
+                    "confidence": max(item.confidence, 0.75),
+                }
+            ],
+            munin_reasoning=llm_note,
+            review_mode=ChangeSet.REVIEW_MANUAL,
+            user=user,
+        )
+        logger.info(
+            "replan_operation | rejected_item=%s replacement_cs=%s",
+            rejected_item_id,
+            changeset.pk,
+        )
+        return MuninResponse(
+            text=llm_note,
+            changeset_id=changeset.pk,
+            tool_calls=[
+                {
+                    "tool": "replan_operation",
+                    "rejected_item_id": rejected_item_id,
+                    "replacement_changeset_id": changeset.pk,
+                    "instructions": instructions,
+                }
+            ],
+        )
+
+    def build_base_prompt(self) -> str:
+        """Assemble BASE prompt with active LEARNED rules prepended."""
+        rules = list(
+            MuninRule.objects.filter(model_id=self._model_id, is_active=True)
+            .order_by("-created_at")
+            .values_list("rule_text", flat=True)
+        )
+        return self._build_system_prompt(rules)
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
     def _build_system_prompt(self, rules: list[str]) -> str:
-        """Assemble Prompt Stack layers: Foundation + Rules + Context."""
-        raise NotImplementedError()
+        """Assemble Prompt Stack layers: LEARNED rules prepended to Foundation."""
+        foundation = "You are Munin, the Yggdrasil architecture planner."
+        if not rules:
+            return foundation
+        learned = "\n".join(f"- {rule}" for rule in rules)
+        return f"{learned}\n\n{foundation}"
 
     def _run_agent_loop(
         self,

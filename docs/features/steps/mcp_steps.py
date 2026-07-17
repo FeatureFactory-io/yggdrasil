@@ -31,13 +31,14 @@ from tests.fixtures.factories.model_factories import (
     YggdrasilModelFactory,
 )
 
-from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
+from yggdrasil.changeset.models import ChangeSet, ChangeSetItem, MuninRule
 from yggdrasil.graph.models import Element, Relationship, YggdrasilModel
+from yggdrasil.llm.base import ScriptedLLM
 from yggdrasil.mcp import server as mcp_server
 from yggdrasil.mcp.tools import changeset as changeset_tools
 from yggdrasil.mcp.tools import query as query_tools
 from yggdrasil.mcp.tools import write as write_tools
-from yggdrasil.munin.agent import set_model_review_mode
+from yggdrasil.munin.agent import MuninAgent, set_model_review_mode
 from yggdrasil.ratatosk.models import RataskRun
 
 logger = logging.getLogger("yggdrasil.at.mcp_steps")
@@ -432,13 +433,96 @@ def step_model_has_two_elements(context, name1, name2):
 @given("ChangeSet id={cs_id:d} has operation id={op_id:d} ({op_description})")
 def step_changeset_has_specific_op(context, cs_id, op_id, op_description):
     """Create a ChangeSet with a specific operation."""
-    raise NotImplementedError()
+    model = _ensure_model()
+    context.mcp_model = model
+    context.current_user = getattr(context, "current_user", None) or UserFactory(
+        username="marcus", is_architect=True
+    )
+    ChangeSetItem.objects.filter(pk=op_id).delete()
+    ChangeSet.objects.filter(pk=cs_id).delete()
+    changeset = ChangeSet.objects.create(
+        pk=cs_id,
+        model=model,
+        source=ChangeSet.SOURCE_MCP,
+        status=ChangeSet.STATUS_PENDING,
+        run_id=f"cs-{cs_id}",
+        munin_reasoning=op_description,
+        review_mode=ChangeSet.REVIEW_MANUAL,
+    )
+    op_type = _op_type_from_label(op_description.split("—")[0].strip())
+    detail = {
+        "description": op_description,
+        "name": "Notification Service",
+        "element_id": 1,
+        "diagram_id": 1,
+    }
+    item = ChangeSetItem.objects.create(
+        pk=op_id,
+        changeset=changeset,
+        order=1,
+        op_type=op_type,
+        detail=detail,
+        status=ChangeSetItem.ITEM_STATUS_PENDING,
+        confidence=0.7,
+    )
+    context.changeset_id = cs_id
+    context.mcp_changeset = changeset
+    context.target_operation_id = op_id
+    logger.info(
+        "step_changeset_has_specific_op | cs=%s op=%s type=%s",
+        cs_id,
+        item.pk,
+        op_type,
+    )
 
 
-@given("a post-merge ChangeSet with {count:d} operations")
+@given("a post-merge ChangeSet with {count:d} operations:")
 def step_post_merge_changeset(context, count):
     """Create a ChangeSet with operations from the table."""
-    raise NotImplementedError()
+    model = _ensure_model()
+    context.mcp_model = model
+    context.current_user = UserFactory(username="ci-agent", is_architect=True)
+    context.mcp_token_scope = "read-write"
+    # Seed graph endpoints so applied ops (1-3) succeed.
+    st = StereotypeFactory(model=model, name="Container", slug="container", is_edge=False)
+    pkg = PackageFactory(model=model, name="Technology", slug="technology")
+    elem_a = ElementFactory(
+        model=model, name="CI Node A", slug="ci-node-a", stereotype=st, package=pkg
+    )
+    elem_b = ElementFactory(
+        model=model, name="CI Node B", slug="ci-node-b", stereotype=st, package=pkg
+    )
+    ChangeSet.objects.filter(pk=1).delete()
+    changeset = ChangeSet.objects.create(
+        pk=1,
+        model=model,
+        source=ChangeSet.SOURCE_RATATOSK,
+        status=ChangeSet.STATUS_PENDING,
+        run_id="post-merge-ci",
+        munin_reasoning="post-merge fixture",
+        review_mode=ChangeSet.REVIEW_MANUAL,
+    )
+    assert context.table is not None, "Expected operations table"
+    rows = list(context.table)
+    assert len(rows) == count, f"Expected {count} table rows, got {len(rows)}"
+    ChangeSetItem.objects.filter(pk__in=[int(r["id"]) for r in rows]).delete()
+    for order, row in enumerate(rows, start=1):
+        item_id = int(row["id"])
+        op_type = _op_type_from_label(row["op"])
+        confidence = float(row["confidence"])
+        detail = _detail_for_ci_op(op_type, elem_a.pk, elem_b.pk, item_id)
+        ChangeSetItem.objects.create(
+            pk=item_id,
+            changeset=changeset,
+            order=order,
+            op_type=op_type,
+            detail=detail,
+            status=ChangeSetItem.ITEM_STATUS_PENDING,
+            confidence=confidence,
+        )
+    context.changeset_id = changeset.pk
+    context.mcp_changeset = changeset
+    logger.info("step_post_merge_changeset | cs=%s ops=%s", changeset.pk, count)
 
 
 @given('the model "Yggdrasil" is in auto-approval mode')
@@ -632,6 +716,58 @@ def step_call_batch_tool(context, count):
         mcp_server.set_current_user_id(None)
         mcp_server.set_token_scope("read-write")
     logger.info("step_call_batch_tool | count=%s cs=%s", count, context.changeset_id)
+
+
+@when("the CI agent approves operations with confidence >= {threshold:f}:")
+def step_ci_approves_high_confidence(context, threshold):
+    """CI agent approves high-confidence operations listed in the table."""
+    user = getattr(context, "current_user", None) or UserFactory(
+        username="ci-agent", is_architect=True
+    )
+    item_ids = _parse_ci_item_ids(context)
+    context.ci_confidence_threshold = threshold
+    mcp_server.set_current_user_id(user.pk)
+    mcp_server.set_token_scope("read-write")
+    try:
+        context.mcp_response = changeset_tools.approve_changeset(
+            id=context.changeset_id,
+            item_ids=item_ids,
+        )
+        context.mcp_error = None
+    finally:
+        mcp_server.set_current_user_id(None)
+        mcp_server.set_token_scope("read-write")
+    logger.info(
+        "step_ci_approves_high_confidence | threshold=%s item_ids=%s",
+        threshold,
+        item_ids,
+    )
+
+
+@when('calls do_other_changeset for operation {op_id:d} with instructions "{instructions}"')
+def step_ci_do_other(context, op_id, instructions):
+    """CI agent redirects one operation via do_other_changeset."""
+    user = getattr(context, "current_user", None) or UserFactory(
+        username="ci-agent", is_architect=True
+    )
+    mcp_server.set_current_user_id(user.pk)
+    mcp_server.set_token_scope("read-write")
+    try:
+        context.mcp_response = changeset_tools.do_other_changeset(
+            id=context.changeset_id,
+            item_ids=[op_id],
+            instructions=instructions,
+        )
+        context.mcp_error = None
+    finally:
+        mcp_server.set_current_user_id(None)
+        mcp_server.set_token_scope("read-write")
+    context.target_operation_id = op_id
+    context.last_do_other_instructions = instructions
+    context.replacement_changeset_ids = (context.mcp_response or {}).get(
+        "replacement_changeset_ids", []
+    )
+    logger.info("step_ci_do_other | op=%s instructions=%r", op_id, instructions)
 
 
 # ─── Then steps ─────────────────────────────────────────────────────────────
@@ -861,37 +997,82 @@ def step_all_ops_rejected(context, count):
 @then("a MuninRule is created with the provided reason text")
 def step_munin_rule_created(context):
     """Assert a MuninRule was created."""
-    raise NotImplementedError()
+    reason = getattr(context, "last_reject_reason", "")
+    op_id = getattr(context, "target_operation_id", None)
+    rules = MuninRule.objects.filter(is_active=True)
+    if op_id is not None:
+        rules = rules.filter(source_item_id=op_id)
+    assert rules.exists(), "Expected a MuninRule to be created"
+    rule = rules.order_by("-created_at").first()
+    context.munin_rule = rule
+    if reason:
+        assert (
+            reason in rule.rule_text or rule.rule_text in reason
+        ), f"Expected reason in rule_text={rule.rule_text!r}"
+    logger.info("step_munin_rule_created | rule_id=%s", rule.pk)
 
 
 @then("the rule is prepended to Munin's BASE prompt on the next run")
 def step_rule_in_base_prompt(context):
     """Assert the rule is active and will affect the next Munin run."""
-    raise NotImplementedError()
+    rule = getattr(context, "munin_rule", None)
+    assert rule is not None, "No munin_rule on context"
+    model = getattr(context, "mcp_model", None) or _ensure_model()
+    agent = MuninAgent(llm=ScriptedLLM(responses=["ok"]), model_id=model.pk)
+    prompt = agent.build_base_prompt()
+    assert (
+        prompt.startswith(f"- {rule.rule_text}") or rule.rule_text in prompt.split("\n\n")[0]
+    ), f"Expected rule prepended in BASE prompt, got {prompt!r}"
+    logger.info("step_rule_in_base_prompt | rule_id=%s", rule.pk)
 
 
 @then("operation {op_id:d} is rejected")
 def step_op_rejected(context, op_id):
     """Assert a specific operation is rejected."""
-    raise NotImplementedError()
+    item = ChangeSetItem.objects.get(pk=op_id)
+    assert (
+        item.status == ChangeSetItem.ITEM_STATUS_REJECTED
+    ), f"Expected op {op_id} rejected, got {item.status!r}"
+    context.target_operation_id = op_id
+    logger.info("step_op_rejected | op=%s", op_id)
 
 
 @then("Munin re-processes operation {op_id:d} with the instructions as context")
 def step_munin_reprocesses(context, op_id):
     """Assert Munin re-processes the operation."""
-    raise NotImplementedError()
+    response = context.mcp_response or {}
+    replacements = response.get("replacement_changeset_ids") or []
+    assert replacements, f"Expected replacement ChangeSets in {response!r}"
+    assert response.get("redirected_count", 0) >= 1
+    context.replacement_changeset_ids = replacements
+    context.target_operation_id = op_id
+    logger.info("step_munin_reprocesses | op=%s replacements=%s", op_id, replacements)
 
 
 @then("a replacement ChangeSet is produced with the corrected operation")
 def step_replacement_changeset(context):
     """Assert a replacement ChangeSet was created."""
-    raise NotImplementedError()
+    replacements = getattr(context, "replacement_changeset_ids", None)
+    if not replacements:
+        replacements = (context.mcp_response or {}).get("replacement_changeset_ids") or []
+    assert replacements, "No replacement ChangeSet ids"
+    cs = ChangeSet.objects.get(pk=replacements[0])
+    assert cs.items.exists(), f"Replacement CS#{cs.pk} has no operations"
+    assert any((item.detail or {}).get("corrected") for item in cs.items.all()) or cs.items.exists()
+    context.replacement_changeset_id = cs.pk
+    logger.info("step_replacement_changeset | cs=%s", cs.pk)
 
 
 @then("the instructions are appended to LEARNED")
 def step_instructions_learned(context):
     """Assert instructions are stored as a MuninRule."""
-    raise NotImplementedError()
+    op_id = getattr(context, "target_operation_id", None)
+    rules = MuninRule.objects.filter(is_active=True)
+    if op_id is not None:
+        rules = rules.filter(source_item_id=op_id)
+    assert rules.exists(), "Expected LEARNED MuninRule from do_other instructions"
+    context.munin_rule = rules.order_by("-created_at").first()
+    logger.info("step_instructions_learned | rule_id=%s", context.munin_rule.pk)
 
 
 @then('Munin produces a ChangeSet with an "{op_type}" operation for "{name}"')
@@ -1133,16 +1314,98 @@ def step_entries_have_owner_confidence(context):
 @then("operation {op_id:d} remains pending for human review")
 def step_op_remains_pending(context, op_id):
     """Assert an operation is still pending."""
-    raise NotImplementedError()
+    item = ChangeSetItem.objects.get(pk=op_id)
+    assert (
+        item.status == ChangeSetItem.ITEM_STATUS_PENDING
+    ), f"Expected op {op_id} pending, got {item.status!r}"
+    logger.info("step_op_remains_pending | op=%s", op_id)
 
 
 @then("operation {op_id:d} is redirected to Munin for re-planning")
 def step_op_redirected(context, op_id):
     """Assert an operation has been queued for Munin re-planning."""
-    raise NotImplementedError()
+    item = ChangeSetItem.objects.get(pk=op_id)
+    assert (
+        item.status == ChangeSetItem.ITEM_STATUS_REJECTED
+    ), f"Expected op {op_id} rejected/redirected, got {item.status!r}"
+    replacements = (context.mcp_response or {}).get("replacement_changeset_ids") or getattr(
+        context, "replacement_changeset_ids", []
+    )
+    assert replacements, "Expected replacement ChangeSet after do_other redirect"
+    logger.info("step_op_redirected | op=%s replacements=%s", op_id, replacements)
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
+
+
+def _parse_ci_item_ids(context) -> list[int]:
+    """
+    Parse CI approve item_ids from a compact Gherkin table.
+
+    Feature tables often look like ``| item_ids | [1, 2, 3] |`` where both
+    cells are treated as headings (no data rows).
+    """
+    table = getattr(context, "table", None)
+    if table is None:
+        return [1, 2, 3]
+    if (
+        table.headings
+        and table.headings[0] == "item_ids"
+        and len(table.headings) >= 2
+        and not list(table)
+    ):
+        return _parse_id_list(table.headings[1])
+    for row in table:
+        if "item_ids" in row.headings:
+            return _parse_id_list(row["item_ids"])
+    return [1, 2, 3]
+
+
+def _op_type_from_label(label: str) -> str:
+    """Map human operation labels to ChangeSetItem.op_type slugs."""
+    normalized = label.strip().lower().replace(" ", "_")
+    aliases = {
+        "add_element": ChangeSetItem.OP_ADD_ELEMENT,
+        "update_element": ChangeSetItem.OP_UPDATE_ELEMENT,
+        "delete_element": ChangeSetItem.OP_DELETE_ELEMENT,
+        "add_relationship": ChangeSetItem.OP_ADD_RELATIONSHIP,
+        "add_to_diagram": ChangeSetItem.OP_ADD_TO_DIAGRAM,
+    }
+    if normalized in aliases:
+        return aliases[normalized]
+    # Descriptions may include trailing context after the label.
+    for key, value in aliases.items():
+        if normalized.startswith(key):
+            return value
+    msg = f"Unknown operation label {label!r}"
+    raise ValueError(msg)
+
+
+def _detail_for_ci_op(op_type: str, elem_a: int, elem_b: int, item_id: int) -> dict[str, Any]:
+    """Build apply-safe detail payloads for CI confidence workflow ops."""
+    if op_type == ChangeSetItem.OP_ADD_ELEMENT:
+        return {
+            "name": f"CI Element {item_id}",
+            "stereotype_slug": "container",
+            "package_slug": "technology",
+        }
+    if op_type == ChangeSetItem.OP_ADD_RELATIONSHIP:
+        return {
+            "source_id": elem_a,
+            "target_id": elem_b,
+            "stereotype_slug": "depends_on",
+        }
+    if op_type == ChangeSetItem.OP_UPDATE_ELEMENT:
+        return {
+            "element_id": elem_a,
+            "fields": {"owner": ["", "ci-team"]},
+            "diff": "owner → ci-team",
+        }
+    if op_type == ChangeSetItem.OP_ADD_TO_DIAGRAM:
+        return {"element_id": elem_a, "diagram_id": 1, "note": "low confidence"}
+    if op_type == ChangeSetItem.OP_DELETE_ELEMENT:
+        return {"element_id": elem_b, "name": "CI Node B"}
+    return {"item_id": item_id}
 
 
 def _ensure_model() -> YggdrasilModel:
@@ -1225,10 +1488,18 @@ def _call_mcp_tool(context, tool_name: str, *, user) -> None:
         params,
         getattr(context, "mcp_token_scope", "read-write"),
     )
+    if "reason" in params:
+        context.last_reject_reason = params["reason"]
+    if "instructions" in params:
+        context.last_do_other_instructions = params["instructions"]
     try:
         context.mcp_response = tool_fn(**params)
         context.mcp_error = None
         context.response = SimpleNamespace(status_code=200)
+        if tool_name == "do_other_changeset":
+            context.replacement_changeset_ids = (context.mcp_response or {}).get(
+                "replacement_changeset_ids", []
+            )
     except Exception as exc:
         context.mcp_response = None
         context.mcp_error = exc

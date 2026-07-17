@@ -149,12 +149,39 @@ class TokenService:
         Verify *raw_token* and return the associated user if valid.
 
         Called by ``TokenAuthentication.authenticate()``. Updates
-        ``last_used_at`` on a cache miss so activity tracking is accurate.
+        ``last_used_at`` so activity tracking is accurate.
 
         :param raw_token: The unhashed token string from the request header.
         :return: User if the token is valid and active; ``None`` otherwise.
+
+        :Example:
+
+        >>> svc = TokenService()
+        >>> token, raw = svc.create_token(user, "laptop", "read-write")
+        >>> svc.authenticate(raw)  # returns user
+        >>> svc.authenticate("bogus")  # returns None
         """
-        raise NotImplementedError()
+        from django.utils import timezone
+
+        from yggdrasil.auth.models import PersonalAccessToken
+
+        if not raw_token or not raw_token.strip():
+            logger.info("TokenService.authenticate: blank token — reject")
+            return None
+        token_hash = self._hash_token(raw_token.strip())
+        try:
+            token = PersonalAccessToken.objects.select_related("user").get(token_hash=token_hash)
+        except PersonalAccessToken.DoesNotExist:
+            logger.warning("TokenService.authenticate: no match for hash prefix=%s", token_hash[:8])
+            return None
+        PersonalAccessToken.objects.filter(pk=token.pk).update(last_used_at=timezone.now())
+        logger.info(
+            "TokenService.authenticate: ok | user_pk=%s token_pk=%s scope=%s",
+            token.user_id,
+            token.pk,
+            token.scope,
+        )
+        return token.user
 
     # ── private helpers ──────────────────────────────────────────────────────
 

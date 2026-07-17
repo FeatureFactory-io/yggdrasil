@@ -1,3 +1,4 @@
+@wip  # quarantined: hits /mockups/ — not a real entrypoint (false green)
 Feature: CHANGESET-VIEW_CHANGESET-1 Review ChangeSet Operations
   As a Development Team Lead (Marcus)
   I want to review each planned graph operation and accept, reject, or redirect it

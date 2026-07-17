@@ -6,6 +6,11 @@ acceptance tests. See also: [`tests/fixtures/CATALOG.md`](../tests/fixtures/CATA
 **Rule (ESM-05):** search this catalog before writing any step phrase. If the pattern you need
 is not here, invoke **TFK-07** — do not invent ad-hoc steps.
 
+**Rule (AT honesty):** Acceptance tests MUST hit real app URLs (`/auth/…`, `/api/…`,
+service entrypoints). `/mockups/` is DEBUG design reference only — never an AT target.
+MCP ATs that call Python tool functions directly are T2 only; T1 (FastMCP Client) and
+T3 (`manage.py mcp_server` stdio) live under `tests/integration/mcp_harness/`.
+
 ---
 
 ## How to Use (ESM-05)
@@ -58,10 +63,11 @@ Additional entries added by BPE-04 when new AT scenarios are added to `docs/feat
 
 | Pattern | Runner | Preconditions | Example |
 |---------|--------|---------------|---------|
-| `Given the user is logged in as "{role}"` | AT only | `role` ∈ `admin`, `architect`, `viewer` | `Given the user is logged in as "architect"` |
+| `Given the user is logged in as "{role}"` | AT only | `role` ∈ `admin`, `architect`, `viewer` | Session setup for non-login screens |
+| `Given a user exists with email "{email}" and password "{password}"` | AT only | Creates DB user, no session | Login POST scenarios |
 | `Given the user is not authenticated` | AT+E2E | — | `Given the user is not authenticated` |
 
-**AT implementation:** `UserFactory(is_architect=True)` + `force_login()` — no HTTP login round-trip.
+**AT implementation:** `force_login()` is for non-login screens only. Login itself must POST `/auth/login/`.
 
 **E2E:** `the user is logged in as "{role}"` raises `NotImplementedError` until login page ships (BPE).
 `the user is not authenticated` clears Playwright cookies.
@@ -171,8 +177,11 @@ When the user confirms the dialog
 | Pattern | Runner | Notes |
 |---------|--------|-------|
 | `Given the application is running` | AT only | GET /health/ → 200 |
-| `When I GET "{path}"` | AT only | Raw path, e.g. `"/mockups/auth/login/"` |
+| `When I GET "{path}"` | AT only | Real app path, e.g. `"/auth/login/"` — never `/mockups/` |
+| `When I POST "/auth/login/" with email "{email}" and password "{password}"` | AT only | Real LoginView POST |
 | `Then the response status is {status:d}` | AT only | Asserts status code |
+| `Then the response Location contains "{fragment}"` | AT only | Redirect Location substring |
+| `Then the response redirects away from "{path}"` | AT only | 3xx and Location ≠ path |
 | `Then the response body contains "{key}": "{value}"` | AT only | JSON body key-value check |
 
 **Example:**
@@ -219,7 +228,12 @@ assertions and in form step fields.
 | Revoke token | `revoke-token-{id}` |
 | Token name field (modal) | `token-name-input` |
 | Token value (shown once) | `token-value` |
+| New-token banner | `new-token-banner` |
 | Create token submit | `create-token-submit` |
+| Copy shell snippet | `snippet-copy-shell` |
+| Copy Ratatosk CLI snippet | `snippet-copy-ratatosk` |
+| Copy MCP Docker snippet | `snippet-copy-mcp-docker` |
+| Copy MCP direct snippet | `snippet-copy-mcp-direct` |
 
 ### MUNIN-BRIEFING-1 (`munin/briefing.html`)
 
@@ -496,9 +510,19 @@ assertions and in form step fields.
 
 ### Form option lists
 
+Owned by Metamodel `c4` (Django admin / `ensure_c4_metamodel()`), not by each Model:
+
 - **Element stereotypes:** System, Container, Component, Person, External
 - **Packages:** Context, Technology, Application, Code
-- **Edge stereotypes:** calls, depends_on, serves, reads_from, contains
+- **Edge stereotypes:** calls, depends_on, uses
+
+### Metamodel AT steps (CLI)
+
+| Step | Notes |
+|------|-------|
+| `Given the Metamodel "{slug}" exists with C4 stereotypes and packages` | Seeds catalog via `ensure_c4_metamodel()` when slug=`c4` |
+| `Then the model's metamodel is "{slug}"` | Asserts immutable Model→Metamodel binding |
+| `Then the model's metamodel contains packages from:` | Packages live on Metamodel |
 
 ---
 

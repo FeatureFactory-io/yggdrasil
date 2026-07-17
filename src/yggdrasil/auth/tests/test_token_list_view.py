@@ -88,14 +88,16 @@ def test_token_list_does_not_leak_other_users_tokens(client, django_user_model):
 @pytest.mark.django_db
 def test_token_page_shows_usage_snippets(client, django_user_model):
     """
-    Authenticated GET /auth/tokens/ includes CLI usage snippets for Ratatosk and MCP.
+    Authenticated GET /auth/tokens/ includes CLI and MCP usage snippets.
 
-    Verifies that the page contains the install command and the token env-var
-    name so users can copy-paste without consulting external docs.
+    Verifies the page contains the Ratatosk install command, the token env-var,
+    the local MCP stdio command, and the local HTTP+SSE URL so users can
+    connect real clients without consulting external docs.
 
     :Example:
 
-    force_login → GET /auth/tokens/ → 200, "pip install ratatosk" in body
+    force_login → GET /auth/tokens/ → 200, "pip install ratatosk" and
+    "mcp_server" and "localhost:8001" in body
     """
     user = django_user_model.objects.create_user(username="snippet_user", password="p")
     client.force_login(user)
@@ -105,6 +107,11 @@ def test_token_page_shows_usage_snippets(client, django_user_model):
     assert response.status_code == 200
     assert b"pip install ratatosk" in response.content
     assert b"YGGDRASIL_TOKEN" in response.content
+    # Docker snippet: local server URL, not cloud
+    assert b"localhost:8000" in response.content
+    assert b"featurefactory-io/yggdrasil-mcp:latest" in response.content
+    # uv snippet: local manage.py mcp_server command
+    assert b"mcp_server" in response.content
 
 
 @pytest.mark.django_db
@@ -164,3 +171,93 @@ def test_login_page_has_no_navbar(client):
     assert response.status_code == 200
     assert b'data-testid="nav-settings"' not in response.content
     assert b'data-testid="user-menu"' not in response.content
+
+
+@pytest.mark.django_db
+def test_token_list_view_shows_snippet_copy_buttons(client, django_user_model):
+    """
+    Authenticated GET /auth/tokens/ renders all four snippet copy buttons.
+
+    Each snippet block (Shell, Ratatosk CLI, MCP Docker, MCP Direct) must
+    have a copy button with the expected data-testid so users can copy
+    config without manually selecting text.
+
+    :Example:
+
+    force_login → GET /auth/tokens/ → 200, all snippet-copy-* testids present
+    """
+    user = django_user_model.objects.create_user(username="copy_btn_user", password="p")
+    client.force_login(user)
+
+    response = client.get(reverse("auth:token_list"))
+
+    assert response.status_code == 200
+    assert b'data-testid="snippet-copy-shell"' in response.content
+    assert b'data-testid="snippet-copy-ratatosk"' in response.content
+    assert b'data-testid="snippet-copy-mcp-docker"' in response.content
+    assert b'data-testid="snippet-copy-mcp-direct"' in response.content
+
+
+@pytest.mark.django_db
+def test_token_create_view_snippets_contain_raw_token(client, django_user_model):
+    """
+    POST /auth/tokens/create/ renders snippets with the real token value.
+
+    The raw token is available only on the creation response; the template
+    must inject it server-side into the Shell and MCP snippet blocks so
+    the user can copy a ready-to-use command without manual editing.
+
+    :Example:
+
+    POST /auth/tokens/create/ name=ci-bot scope=read-write
+    → 200, snippet blocks contain the raw token value (not literal '<token>')
+    """
+    user = django_user_model.objects.create_user(username="snippet_token_user", password="p")
+    client.force_login(user)
+
+    response = client.post(
+        reverse("auth:token_create"),
+        {"name": "ci-bot", "scope": "read-write"},
+    )
+
+    assert response.status_code == 200
+    # Banner present
+    assert b'data-testid="new-token-banner"' in response.content
+    # Snippet copy buttons still rendered
+    assert b'data-testid="snippet-copy-shell"' in response.content
+    # Raw token injected: literal placeholder must be absent
+    assert b"&lt;token&gt;" not in response.content
+    # Shell snippet prefix present
+    assert b"export YGGDRASIL_TOKEN=" in response.content
+    # Docker snippet points to local server, not cloud
+    assert b"localhost:8000" in response.content
+
+
+@pytest.mark.django_db
+def test_new_token_banner_absent_on_subsequent_get(client, django_user_model):
+    """
+    GET /auth/tokens/ never renders the new-token-banner.
+
+    The raw value is shown exactly once — in the POST response.  A subsequent
+    GET (e.g. user refreshes) must not re-render the banner because the raw
+    token is not stored and must not be reconstructed.
+
+    :Example:
+
+    POST /auth/tokens/create/ → 200, banner present
+    GET  /auth/tokens/        → 200, banner ABSENT
+    """
+    user = django_user_model.objects.create_user(username="banner_once_user", password="p")
+    client.force_login(user)
+
+    # First: POST creates token and shows banner
+    post_response = client.post(
+        reverse("auth:token_create"),
+        {"name": "once-only", "scope": "read-only"},
+    )
+    assert b'data-testid="new-token-banner"' in post_response.content
+
+    # Second: GET must not show the banner
+    get_response = client.get(reverse("auth:token_list"))
+    assert get_response.status_code == 200
+    assert b'data-testid="new-token-banner"' not in get_response.content

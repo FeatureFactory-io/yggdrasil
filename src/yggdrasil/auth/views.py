@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import authenticate, get_user_model, login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponseForbidden, HttpResponseNotFound
 from django.shortcuts import redirect, render
@@ -88,17 +88,53 @@ class LoginView(View):
             email,
             request.META.get("REMOTE_ADDR"),
         )
-        user = authenticate(request, username=email, password=password)
+        user = self._authenticate_by_email(request, email, password)
         if user is None:
             logger.warning("LoginView.post: authentication failed | email=%s", email)
             return render(
                 request,
                 self.template_name,
-                {"error": "Invalid email or password."},
+                {"error": "Invalid email or password.", "field_email": email},
             )
         login(request, user)
         logger.info("LoginView.post: login success | user_pk=%s", user.pk)
         return self._redirect_after_login(request)
+
+    def _authenticate_by_email(self, request: HttpRequest, email: str, password: str):
+        """
+        Resolve a user by email, then authenticate with their username.
+
+        Django's default ``authenticate`` matches on ``username``. Superusers
+        and provisioned accounts often have ``email != username``, so look up
+        by email first.
+
+        :param request: Incoming request (passed to ``authenticate``).
+        :param email: Email from the login form. Example: ``elena@example.com``
+        :param password: Plaintext password. Example: ``test-pass-only-1234``
+        :return: Authenticated user or ``None``.
+        """
+        user_model = get_user_model()
+        # Prefer username==email (common for provisioned accounts), then email lookup.
+        user = authenticate(request, username=email, password=password)
+        if user is not None:
+            logger.info(
+                "LoginView._authenticate_by_email: matched as username | email=%s",
+                email,
+            )
+            return user
+        matched = user_model.objects.filter(email__iexact=email).order_by("pk").first()
+        if matched is None:
+            logger.info(
+                "LoginView._authenticate_by_email: no user for email=%s",
+                email,
+            )
+            return None
+        logger.info(
+            "LoginView._authenticate_by_email: resolved email=%s → username=%s",
+            email,
+            matched.get_username(),
+        )
+        return authenticate(request, username=matched.get_username(), password=password)
 
     def _redirect_after_login(self, request: HttpRequest) -> HttpResponse:
         """

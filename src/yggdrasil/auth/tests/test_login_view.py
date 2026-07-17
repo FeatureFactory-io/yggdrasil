@@ -74,3 +74,54 @@ def test_redirect_ignores_external_next_param(client, django_user_model):
     response = client.get(reverse("auth:login") + "?next=http://evil.com")
     assert response.status_code == 302
     assert response["Location"] == "/"
+
+
+@pytest.mark.django_db
+def test_login_post_success_redirects(client, django_user_model):
+    """
+    POST valid credentials to /auth/login/ starts a session and redirects.
+
+    Hits the real LoginView — not force_login, not a mockup.
+
+    :Example:
+
+    POST email=elena@example.com password=secret → 302 Location: /
+    """
+    user = django_user_model.objects.create_user(
+        username="elena",
+        email="elena@example.com",
+        password="test-pass-only-1234",
+    )
+    response = client.post(
+        reverse("auth:login"),
+        {"email": "elena@example.com", "password": "test-pass-only-1234"},
+    )
+    assert response.status_code == 302
+    assert response["Location"] == "/"
+    # Session is authenticated
+    assert "_auth_user_id" in client.session
+    assert int(client.session["_auth_user_id"]) == user.pk
+
+
+@pytest.mark.django_db
+def test_login_post_failure_rerenders_with_error(client, django_user_model):
+    """
+    POST invalid password re-renders login with an error message.
+
+    :Example:
+
+    POST email=elena@example.com password=wrong → 200, error text present
+    """
+    django_user_model.objects.create_user(
+        username="elena2",
+        email="elena2@example.com",
+        password="test-pass-only-1234",
+    )
+    response = client.post(
+        reverse("auth:login"),
+        {"email": "elena2@example.com", "password": "wrong-password"},
+    )
+    assert response.status_code == 200
+    assert b"Invalid email or password" in response.content
+    assert b'data-testid="login-error"' in response.content
+    assert "_auth_user_id" not in client.session

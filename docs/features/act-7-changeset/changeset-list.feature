@@ -1,3 +1,4 @@
+@wip  # quarantined: hits /mockups/ — not a real entrypoint (false green)
 Feature: CHANGESET-LIST+FIND-1 ChangeSet Queue
   As a Development Team Lead (Marcus)
   I want to see all pending and applied ChangeSets in a filterable list

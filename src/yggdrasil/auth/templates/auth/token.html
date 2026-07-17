@@ -1,89 +1,254 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>API Access — Yggdrasil</title>
-</head>
-<body>
-  <!-- Navbar — nav-settings links to AUTH-TOKEN-1; user-menu for profile/logout -->
-  <nav>
-    <a href="{% url 'auth:token_list' %}" data-testid="nav-settings">Settings</a>
-    <div data-testid="user-menu">
-      {% if user.is_authenticated %}{{ user.username }}{% endif %}
-    </div>
-  </nav>
+{% extends "base.html" %}
+{% block screen_id %}AUTH-TOKEN-1{% endblock %}
+{% block title %}API Access{% endblock %}
 
-  <!-- Screen: AUTH-TOKEN-1 -->
-  <div data-testid="auth-token-page">
-    <h1>API Access</h1>
-    <button data-testid="generate-token-btn" type="button">Generate New Token</button>
-    <table aria-label="API tokens">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Scope</th>
-          <th>Created</th>
-          <th>Last used</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for token in tokens %}
-        <tr data-testid="token-row-{{ token.pk }}">
-          <td>{{ token.name }}</td>
-          <td>{{ token.scope }}</td>
-          <td>{{ token.created_at|date:"Y-m-d" }}</td>
-          <td>{{ token.last_used_at|date:"Y-m-d"|default:"Never" }}</td>
-          <td>
-            <form method="post" action="{% url 'auth:token_revoke' token.pk %}">
-              {% csrf_token %}
-              <button type="submit" data-testid="revoke-token-{{ token.pk }}">Revoke</button>
-            </form>
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="5">No tokens yet.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+{% block page_header %}
+<div class="d-flex align-items-center justify-content-between">
+  <div>
+    <h1 class="hg-page-title">API Access</h1>
+    <p class="text-muted small mb-0">AUTH-TOKEN-1 · Personal access tokens for Ratatosk CLI and MCP clients</p>
+  </div>
+  <button class="btn btn-primary btn-sm" data-bs-toggle="modal"
+          data-bs-target="#generateTokenModal" data-testid="generate-token-btn">
+    <i class="fa-solid fa-plus me-1" aria-hidden="true"></i>Generate New Token
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<div data-testid="auth-token-page" class="row g-4">
+
+  <!-- Existing tokens -->
+  <div class="col-12">
+    <div class="hg-card">
+      <div class="px-3 pt-3 pb-2">
+        <div class="hg-section-label">Existing tokens</div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0" aria-label="API tokens">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Scope</th>
+              <th>Created</th>
+              <th>Last used</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for token in tokens %}
+            <tr data-testid="token-row-{{ token.pk }}">
+              <td class="fw-semibold">{{ token.name }}</td>
+              <td>
+                <span class="hg-badge-source {% if token.scope == 'read-write' %}hg-badge-ratatosk{% else %}hg-badge-human{% endif %}">
+                  {{ token.scope }}
+                </span>
+              </td>
+              <td class="text-muted">{{ token.created_at|date:"Y-m-d" }}</td>
+              <td class="text-muted">{{ token.last_used_at|date:"Y-m-d"|default:"Never" }}</td>
+              <td class="text-end">
+                <form method="post" action="{% url 'auth:token_revoke' token.pk %}" class="d-inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger"
+                          data-testid="revoke-token-{{ token.pk }}">
+                    Revoke
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="5" class="text-center text-muted py-4">No tokens yet.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
+  {% if new_token_raw %}
+  <!-- Newly generated token — shown once; dismiss button removes it from this page view -->
+  <div class="col-12">
+    <div class="alert alert-success alert-dismissible fade show" role="alert"
+         data-testid="new-token-banner">
+      <div class="d-flex align-items-start gap-2">
+        <i class="fa-solid fa-circle-check mt-1 text-success" aria-hidden="true"></i>
+        <div class="flex-grow-1">
+          <strong>Token generated.</strong> Copy it now — it will not be shown again.
+          <div class="input-group mt-2">
+            <input type="text" class="form-control font-monospace" value="{{ new_token_raw }}"
+                   readonly id="newTokenValue" data-testid="token-value">
+            <button class="btn btn-outline-secondary" type="button"
+                    onclick="navigator.clipboard.writeText(document.getElementById('newTokenValue').value).then(function(){ console.log('[auth-token-1] token banner value copied'); })">
+              <i class="fa-solid fa-copy" aria-hidden="true"></i> Copy
+            </button>
+          </div>
+        </div>
+      </div>
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss"
+              onclick="console.log('[auth-token-1] new-token-banner dismissed by user')"></button>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Usage snippets -->
-  <div data-testid="usage-snippets">
-    <h2>Usage snippets</h2>
-    <h3>Shell</h3>
-    <pre>export YGGDRASIL_TOKEN=&lt;token&gt;</pre>
-    <h3>Ratatosk CLI</h3>
-    <pre>pip install ratatosk
+  <div class="col-12">
+    <div class="hg-card p-3">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <div class="hg-section-label mb-0">Usage snippets</div>
+        {% if new_token_raw %}
+        <span class="text-success" style="font-size:0.72rem;font-weight:600;">
+          <i class="fa-solid fa-check-circle me-1" aria-hidden="true"></i>token filled in
+        </span>
+        {% else %}
+        <span class="text-muted" style="font-size:0.72rem;">
+          <i class="fa-solid fa-circle-info me-1" aria-hidden="true"></i>
+          Token value shown once at generation — generate a new token to pre-fill these snippets
+        </span>
+        {% endif %}
+      </div>
+      <!-- Equal-height rows: each col is a flex column; pre stretches to fill -->
+      <div class="row g-3 align-items-stretch">
+
+        <div class="col-md-6 d-flex flex-column">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <div class="hg-section-label mb-0">Shell</div>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+                    data-testid="snippet-copy-shell"
+                    onclick="copySnippet(this)"
+                    style="font-size:0.72rem;">
+              <i class="fa-solid fa-copy me-1" aria-hidden="true"></i>Copy
+            </button>
+          </div>
+          <pre class="bg-dark text-white rounded p-3 small mb-0 flex-grow-1" style="font-size:0.78rem;">export YGGDRASIL_TOKEN={% if new_token_raw %}{{ new_token_raw }}{% else %}&lt;token&gt;{% endif %}</pre>
+        </div>
+
+        <div class="col-md-6 d-flex flex-column">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <div class="hg-section-label mb-0">Ratatosk CLI</div>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+                    data-testid="snippet-copy-ratatosk"
+                    onclick="copySnippet(this)"
+                    style="font-size:0.72rem;">
+              <i class="fa-solid fa-copy me-1" aria-hidden="true"></i>Copy
+            </button>
+          </div>
+          <pre class="bg-dark text-white rounded p-3 small mb-0 flex-grow-1" style="font-size:0.78rem;">pip install ratatosk
 ratatosk bootstrap ./repo --token=$YGGDRASIL_TOKEN</pre>
-    <h3>MCP via Docker</h3>
-    <pre>{
+        </div>
+
+        <div class="col-md-6 d-flex flex-column">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <div class="hg-section-label mb-0">Docker (stdio — recommended)</div>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+                    data-testid="snippet-copy-mcp-docker"
+                    onclick="copySnippet(this)"
+                    style="font-size:0.72rem;">
+              <i class="fa-solid fa-copy me-1" aria-hidden="true"></i>Copy
+            </button>
+          </div>
+          <pre class="bg-dark text-white rounded p-3 small mb-0 flex-grow-1" style="font-size:0.78rem;">{
   "mcpServers": {
     "yggdrasil": {
       "command": "docker",
       "args": [
         "run", "--rm", "-i",
-        "-e", "YGGDRASIL_TOKEN=&lt;token&gt;",
-        "-e", "YGGDRASIL_SERVER_URL=https://yggdrasil.featurefactory.io",
+        "-e", "YGGDRASIL_TOKEN={% if new_token_raw %}{{ new_token_raw }}{% else %}&lt;token&gt;{% endif %}",
+        "-e", "YGGDRASIL_SERVER_URL=http://localhost:8000",
         "featurefactory-io/yggdrasil-mcp:latest"
       ]
     }
   }
 }</pre>
-    <h3>MCP direct</h3>
-    <pre>{
+        </div>
+
+        <div class="col-md-6 d-flex flex-column">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <div class="hg-section-label mb-0">uv (stdio — local dev)</div>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+                    data-testid="snippet-copy-mcp-direct"
+                    onclick="copySnippet(this)"
+                    style="font-size:0.72rem;">
+              <i class="fa-solid fa-copy me-1" aria-hidden="true"></i>Copy
+            </button>
+          </div>
+          <pre class="bg-dark text-white rounded p-3 small mb-0 flex-grow-1" style="font-size:0.78rem;">{
   "mcpServers": {
     "yggdrasil": {
-      "url": "https://yggdrasil.featurefactory.io/mcp/sse",
-      "headers": {
-        "Authorization": "Bearer &lt;token&gt;"
+      "command": "uv",
+      "args": [
+        "run", "--directory", "&lt;path-to-yggdrasil&gt;",
+        "python", "manage.py",
+        "mcp_server", "--transport", "stdio"
+      ],
+      "env": {
+        "YGGDRASIL_TOKEN": "{% if new_token_raw %}{{ new_token_raw }}{% else %}&lt;token&gt;{% endif %}",
+        "DJANGO_SETTINGS_MODULE": "yggdrasil.settings",
+        "PYTHONPATH": "&lt;path-to-yggdrasil&gt;/src"
       }
     }
   }
 }</pre>
+        </div>
+
+      </div>
+    </div>
   </div>
-</body>
-</html>
+</div>
+
+<!-- Generate token modal -->
+<div class="modal fade" id="generateTokenModal" tabindex="-1"
+     aria-labelledby="generateTokenModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="generateTokenModalLabel">Generate new token</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="post" action="{% url 'auth:token_create' %}">
+        {% csrf_token %}
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="tokenName" class="form-label" style="font-size:0.82rem;font-weight:600;">Name</label>
+            <input type="text" class="form-control" id="tokenName" name="name"
+                   placeholder="e.g. laptop-ratatosk" data-testid="token-name-input" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" style="font-size:0.82rem;font-weight:600;">Scope</label>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="scope" id="scopeRW" value="read-write" checked>
+              <label class="form-check-label" for="scopeRW">Read-write</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="scope" id="scopeRO" value="read-only">
+              <label class="form-check-label" for="scopeRO">Read-only</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm" data-testid="create-token-submit">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  console.log('[auth-token-1] page loaded, tokens={{ tokens|length }}, has_new_token={{ new_token_raw|yesno:"true,false" }}');
+
+  function copySnippet(btn) {
+    var pre = btn.closest('div').nextElementSibling;
+    if (!pre) return;
+    navigator.clipboard.writeText(pre.textContent.trim()).then(function () {
+      var orig = btn.innerHTML;
+      btn.innerHTML = '<i class="fa-solid fa-check me-1" aria-hidden="true"></i>Copied';
+      console.log('[auth-token-1] snippet copied, testid=' + btn.dataset.testid);
+      setTimeout(function () { btn.innerHTML = orig; }, 2000);
+    });
+  }
+</script>
+{% endblock %}

@@ -101,6 +101,137 @@
 ## 16. Documentation Strategy
 <!-- Decision from DTA-17 -->
 
+## 17. AI Agent Architecture
+<!-- Decision from DTA-19 — omit this section if no in-app agent -->
+<!--
+Skip condition: write "Not applicable — no in-app LLM agent." and remove the subsections below
+if DTA-19 was not run.
+Reference: docs/architecture/artifacts/56-AI_Agent_Reference_Architecture.md
+-->
+
+### Mission Assessment
+
+<!-- Answer Q1–Q10 from artifact 56 §1.1, or "Not applicable" -->
+| # | Question | Answer | Impact |
+|---|----------|--------|--------|
+| Q1 | Conversational, batch/pipeline, or both? | | |
+| Q2 | Must work survive process crash / 429 mid-flight? | | |
+| Q3 | Does the agent need tools against domain services? | | |
+| Q4 | Multi-turn reasoning with evolving intent inside one task? | | |
+| Q5 | Should the agent improve from user feedback / outcomes? | | |
+| Q6 | Large body of knowledge only partly relevant per task? | | |
+| Q7 | Do users need live tokens / plan progress? | | |
+| Q8 | Should domain events proactively message the user? | | |
+| Q9 | Multiple personas or model tiers (planner vs. field)? | | |
+| Q10 | Destructive actions need human approval? | | |
+
+### Module Selection
+
+| Module | Required / Optional / Skip | Rationale |
+|--------|---------------------------|-----------|
+| LLM Port | | |
+| Prompt Stack | | |
+| Tool Surface | | |
+| Agent Loop | | |
+| Plan & Steps | | |
+| Worker | | |
+| Agent Blackboard | | |
+| Learning | | |
+| Knowledge Index | | |
+| Chat Streaming | | |
+| Event Ingress | | |
+| Agent Factory / Identities | | |
+
+### Assembly Profile
+
+- **Profile**: {conversational planner | compiled pipeline | field/batch specialist | custom}
+- **Dependency check**: _passed / see note_
+
+### Agent Blackboard (if selected)
+
+| Key | Role | Durability |
+|-----|------|-----------|
+| | | |
+
+- Durability tier: {A — in-process | B — run-persistent}
+- Max board size (chars): ______
+
+### Plan & Steps State Machine (if selected)
+
+- States: `pending → running → completed | failed | waiting_retry`
+- Hybrid step types in use: {is_critical, is_planning, is_variable_assessment, data-only}
+- Step synthesis chain: {Yes | No}
+- Per-step model tier routing: {Yes | No}
+
+### Model Tiers & Agent Identities
+
+| Tier | Model | Used for |
+|------|-------|---------|
+| Planning (large) | | |
+| Execution (medium) | | |
+| Batch / field (small) | | |
+
+| Identity | Role | Model tier | Allowed tools |
+|----------|------|------------|---------------|
+| | | | |
+
+### Agent Integration Proof (DoD Gate)
+
+| Profile | Test file | Scenario |
+|---------|-----------|---------|
+| Happy path | | |
+| Failed step | | |
+| 429 / rate limit | | |
+| Bad LLM output | | |
+| Crash / resume | | |
+| Destructive HITL | | |
+
+## 18. MCP Architecture
+<!-- Decision from DTA-20 — omit this section if no MCP interface -->
+<!--
+Skip condition: write "Not applicable — no MCP interface." and remove the subsections below
+if DTA-20 was not run.
+Reference: docs/architecture/artifacts/57-MCP_FastMCP_Reference_Architecture.md
+-->
+
+### Integration Case
+
+- **Chosen**: {Case A — Service Bridge | Case B — API Facade | Hybrid}
+- **Rationale**: _____
+
+### Transport Topology
+
+| Target | Transport | Port / Path | Notes |
+|--------|-----------|------------|-------|
+| Local IDE | stdio | n/a | |
+| Remote AI clients | HTTP+SSE | | |
+
+### Tool Inventory
+
+| Tool name | Service method | Write? | HITL? | Case |
+|-----------|---------------|--------|-------|------|
+| | | | | |
+
+- Write-tool policy: {Require explicit confirmation param | HITL prompt before execute | Audit log only}
+
+### Auth Pattern
+
+- **Selected**: {Process user | PAT per call | Session cookie | Mixed}
+- **PAT injection point**: {Tool argument | HTTP header (Bearer)}
+- **Rationale**: _____
+
+### Stdout Hygiene (if stdio)
+
+- Logging redirected to stderr / file: {Yes | N/A}
+- Third-party stdout suppressed: {Yes | N/A}
+- Boot noise test added: {Yes | N/A}
+
+### API Readiness Contract (if Case B)
+
+| Tool | HTTP endpoint | Method | Auth header |
+|------|--------------|--------|-------------|
+| | | | |
+
 ## Technology Stack Table
 
 Machine-readable table consumed by Bootstrap Project (BSP) for automated provisioning.
@@ -131,6 +262,8 @@ Machine-readable table consumed by Bootstrap Project (BSP) for automated provisi
 | Backup & Recovery | | |
 | Developer Experience | | |
 | Documentation Strategy | | |
+| AI Agent Architecture | | |
+| MCP Architecture | | |
 
 ## Key Decisions with Rationale
 
@@ -161,4 +294,3 @@ Machine-readable table consumed by Bootstrap Project (BSP) for automated provisi
 |---------|-------------------|--------------|------------------|
 | | | | |
 -->
-

@@ -40,6 +40,7 @@ Read the feature specification thoroughly. If none exists, propose creating one 
 - Scenarios must be independently executable
 - If specification has >2 scenarios, work scenario-by-scenario
 - If scenarios are >10 lines, suggest breaking them down
+- Step phrases: either reuse an exact pattern from [`docs/features/CATALOG.md`](../../../docs/features/CATALOG.md) (and fixtures from [`tests/fixtures/CATALOG.md`](../../../tests/fixtures/CATALOG.md)), **or** explicitly design a new catalogued step/fixture for this occasion (invoke TFK-07 and update the catalog). Do not invent one-off Gherkin that never lands in the catalog.
 
 ### Step 4: Assess Codebase State
 Systematically review existing codebase:
@@ -67,6 +68,18 @@ c) **Build context map:**
    ```
 
    The context map is the primary orientation tool for any implementor (human or AI) starting with zero context. If you cannot identify 3 meaningful references, the codebase assessment in step (a) is incomplete.
+
+d) **Detect MCP / Agent surface:**
+   - Check SAO §18 — is MCP in scope for this feature?
+     If yes: locate `mcp/server.py` (or equivalent). Verify `initialize_mcp()` exists and is called on startup. If missing: add initialization to the plan before any tool registration step.
+   - Check SAO §17 — does this feature add or extend agent capabilities?
+     If yes: locate `ToolExecutor` (see artifact 56 §4.3). Verify it is instantiated and injected into the agent loop. If missing: add ToolExecutor initialization to the plan before service wiring.
+   - Record the findings as additional one-liners in the Context Map (Step 4c):
+     ```
+     | mcp/server.py | <line> | FastMCP singleton — register new tools here |
+     | llm/executor.py | <line> | ToolExecutor — wire service callables here |
+     ```
+     Skip a row if that surface is not in scope for this feature.
 
 ### Step 5: Clarification Questions
 Ask clarification questions scenario-by-scenario: UI/UX details, data validation rules, error handling expectations, integration points, performance requirements.
@@ -104,6 +117,40 @@ If SAO.md has no applicable constraints for this feature, write: "No SAO.md cons
 - §MCP Access Rules: draft = full CRUD, released = read-only
 ```
 
+**Mandatory Section D — Tests to Create** (prove what's working):
+Every plan must name the tests that will prove the scenario done. Empty "write some tests" is not enough — each row must state what it asserts.
+```
+## Tests to Create
+| Test | Level | Proves |
+|------|-------|--------|
+| `test_create_token_rejects_blank_name` | unit | blank name → ValueError, no row written |
+| `test_token_list_view_owner_isolation` | integration | user B cannot see user A's tokens (no mocks) |
+| `test_login_view_get_renders_form` | view | 200 + email/password/submit testids present |
+```
+Rules: [`../rules/do-test-first.mdc`](../rules/do-test-first.mdc) · [`../rules/do-not-mock-in-integration-tests.mdc`](../rules/do-not-mock-in-integration-tests.mdc) · [`../rules/do-fix-tests.mdc`](../rules/do-fix-tests.mdc) · [`../rules/pytest.mdc`](../rules/pytest.mdc)
+
+**Mandatory Section E — Logs to Emit** (diagnose what's not):
+Every plan must name the decision points that will be logged at INFO. Empty "add logging" is not enough — each row must answer who/what/when/why when read from `logs/app.log`.
+```
+## Logs to Emit
+| Where | Trigger | Must include |
+|-------|---------|--------------|
+| `TokenService.create_token` entry | method called | user_id, name, scope |
+| `TokenService.create_token` reject | blank name | reason=blank_name (no raw token) |
+| `TokenCreateView.post` exit | success/fail | status_code, token_id or error class |
+```
+Rules: [`../rules/do-informative-logging.mdc`](../rules/do-informative-logging.mdc) · [`../rules/add-logging.mdc`](../rules/add-logging.mdc)
+
+**Mandatory Section F — MCP Tools to Expose** (skip with "Not applicable" if MCP is not in scope):
+Every new service method that an MCP client must call needs a row. Omit write tools without a write-tool policy decision.
+```
+## MCP Tools to Expose
+| Tool name | Service method | Write? | HITL? | Auth injection |
+|-----------|---------------|--------|-------|----------------|
+| `create_foo` | `FooService.create` | Yes | No | server-side user_id |
+```
+Rules: artifact 57 §3.2 (tool schema + descriptor), §3.3 (auth injection — never accept `user_id` from args), §3.4 (write-tool policy)
+
 **Implementation Steps** (following the mandatory sections):
 
 *Initial Setup:*
@@ -117,10 +164,29 @@ If SAO.md has no applicable constraints for this feature, write: "No SAO.md cons
    - Register new models with `/admin` module
    - Create utility/helper functions
    - Implement services (business logic shared by MCP and Web UI)
-   - Add repository methods for data access
+   - Add repository methods for data access (only if SAO allows — default: services call ORM)
    - Create Django Views (returning HTML templates)
    - Design URL patterns
-   - Write tests: unit, integration (NO MOCKING!), view tests
+   - **Rules to apply:**
+     - Skeletons before bodies → [`../rules/do-skeletons-first.mdc`](../rules/do-skeletons-first.mdc)
+     - Public methods ≤ 20–30 lines → [`../rules/do-write-concise-methods.mdc`](../rules/do-write-concise-methods.mdc)
+     - Sphinx docstrings with examples → [`../rules/do-docstring-format.mdc`](../rules/do-docstring-format.mdc)
+     - INFO logs on entry / branches / exit → [`../rules/do-informative-logging.mdc`](../rules/do-informative-logging.mdc)
+
+6. **MCP Tool Registration (if SAO §18 in scope and Mandatory Section F is populated):**
+   - For each row in Section F: declare the tool in `mcp/tools/` (or the project's tool module) wrapping the service method.
+   - Apply auth injection: inject `user_id` server-side — never accept it as a client-supplied argument.
+   - Register the tool with the FastMCP server in `initialize_mcp()`.
+   - Apply stdout hygiene if stdio transport is selected (see artifact 57 §6: redirect logging to stderr, suppress startup noise).
+   - **Rules to apply:**
+     - Artifact 57 §3–§4 (tool schema, auth, descriptors) — [`../artifacts/57-MCP_FastMCP_Reference_Architecture.md`](../artifacts/57-MCP_FastMCP_Reference_Architecture.md)
+
+7. **ToolExecutor Wiring (if SAO §17 in scope):**
+   - Register the service callable in `ToolExecutor` under the tool name expected by the agent loop.
+   - Ensure the return envelope matches the stable format (dict with `result` key or equivalent).
+   - Mark the tool as HITL if it is destructive — no immediate execute without approval.
+   - **Rules to apply:**
+     - Artifact 56 §4.3 (Tool Surface + ToolExecutor) — [`../artifacts/56-AI_Agent_Reference_Architecture.md`](../artifacts/56-AI_Agent_Reference_Architecture.md)
 
 2. **Frontend Implementation:**
    - Design Django templates with semantic HTML
@@ -129,19 +195,44 @@ If SAO.md has no applicable constraints for this feature, write: "No SAO.md cons
    - Add graph visualizations with Graphviz (if needed)
    - Implement form handling and validation
    - Add semantic `data-testid` attributes for all interactive elements
+   - **Rules to apply:**
+     - Stable `data-testid` on interactive elements → [`../rules/do-semantic-versioning-on-ui-elements.mdc`](../rules/do-semantic-versioning-on-ui-elements.mdc)
+     - Visual pass via human eye / screenshot → [`../rules/do-look-via-human-eye.mdc`](../rules/do-look-via-human-eye.mdc)
 
-3. **Testing:**
-   Explicitly list all tests to be created:
-   - Unit tests: Test individual functions/methods in isolation
-   - Integration tests: Test complete workflows WITHOUT mocking
-   - View tests: Test Django views return correct templates/status codes
-   - Specify what each test validates
+3. **Testing — prove what's working:**
+   Fill Mandatory Section D before coding. For each listed test:
+   - Write the failing test first (red) → implement minimum to pass (green) → refactor
+   - Unit: isolate pure logic / validators
+   - Integration: real DB, real services, **no mocks**
+   - View: status codes, templates, `data-testid` presence
+   - **Rules to apply:**
+     - [`../rules/do-test-first.mdc`](../rules/do-test-first.mdc)
+     - [`../rules/do-not-mock-in-integration-tests.mdc`](../rules/do-not-mock-in-integration-tests.mdc)
+     - [`../rules/do-fix-tests.mdc`](../rules/do-fix-tests.mdc)
+     - [`../rules/pytest.mdc`](../rules/pytest.mdc)
+     - Continuous run after each slice → [`../rules/do-continuous-testing.mdc`](../rules/do-continuous-testing.mdc)
+   - **MCP tools** (if Mandatory Section F is populated): the Tests to Create table must include at least one T1 and one T2 row per new tool:
+     - **T1 (FastMCP Client)** — `async with Client(transport=mcp) as c: await c.call_tool(...)` — proves schema, registration, async path.
+     - **T2 (Direct service)** — call the service method directly with a real DB — proves service/ORM wiring.
+     - **T3 (Process / subprocess JSON-RPC)** — required when stdio transport is selected — proves entrypoint cleanliness (no stdout noise).
+     - Full recipes in artifact 57 §7 — [`../artifacts/57-MCP_FastMCP_Reference_Architecture.md`](../artifacts/57-MCP_FastMCP_Reference_Architecture.md)
 
-4. **Commit Strategy:**
+4. **Observability — diagnose what's not:**
+   Fill Mandatory Section E before coding. For each listed log point:
+   - Emit INFO that answers who / what / when / why (never raw secrets/tokens)
+   - Log decision branches (accept vs reject, redirect target class, ownership check)
+   - After a failure: read `logs/app.log` before guessing
+   - **Rules to apply:**
+     - [`../rules/do-informative-logging.mdc`](../rules/do-informative-logging.mdc)
+     - [`../rules/add-logging.mdc`](../rules/add-logging.mdc)
+
+5. **Commit Strategy:**
    After every principal step commit with Angular convention message format.
+   Rule: [`../rules/do-follow-commit-convention.mdc`](../rules/do-follow-commit-convention.mdc) · small increments → [`../rules/do-small-increments.mdc`](../rules/do-small-increments.mdc)
 
-### Step 7: Add Rule References
-For each major step in the plan, add explicit reminders to review relevant rules.
+### Step 7: Confirm Rule References
+Rule links are embedded in Implementation Steps (items 1–5) and Mandatory Sections D–E.
+Before submitting the plan: verify every major step still cites the applicable rule path under `../rules/`. Do not invent rules — only link files that exist.
 
 ### Step 8: No Time Estimates
 Do NOT add hours/days to the plan - it's for AI to execute.
@@ -154,11 +245,13 @@ Do not proceed to implementation without explicit approval.
 ### Step 10: GitHub Issue Management
 If project has GitHub integration, search for existing issue or create new one.
 
-**The issue body must contain all three mandatory sections inline — do not link to the plan file.** An implementor starting with zero context must be able to orient and implement using only the issue body. Required inline content:
+**The issue body must contain all five mandatory sections inline — do not link to the plan file.** An implementor starting with zero context must be able to orient and implement using only the issue body. Required inline content:
 
 - Full `## Context Map` table
 - Full `## Do Not Do` list
 - Full `## SAO.md Sections That Apply` list
+- Full `## Tests to Create` table (what each test proves)
+- Full `## Logs to Emit` table (decision points + required context fields)
 - Checkpoint command (single pytest command proving the scenario done)
 - Complete implementation plan (full text, not a link)
 
@@ -184,12 +277,20 @@ do_not_do:
 ## SAO.md Sections That Apply
 {list from Step 6}
 
+## Tests to Create
+{table from Step 6 — Mandatory Section D}
+
+## Logs to Emit
+{table from Step 6 — Mandatory Section E}
+
 ## Implementation Plan
 {full plan text}
 
 ## Acceptance Criteria
 - [ ] `{checkpoint command}` passes
 - [ ] No regressions: `pytest tests/ -x` passes
+- [ ] Each row in Tests to Create has a passing test
+- [ ] Each row in Logs to Emit appears in `logs/app.log` on the happy path (and reject path where listed)
 ```
 
 Add labels: Feature/Scenario/Enhancement/Bug/Refactoring/Infra and easy/medium/hard.
@@ -201,6 +302,7 @@ Before creating issue — check if issue with this prefix already exists.
 ### I. Test-First Development
 Every function/method must begin with a test. Tests prove that your implementation works as intended. As long as tests are not passing, you cannot claim that the scenario/class/method is implemented.
 
+- The plan's **Tests to Create** table is the contract: each row must become a real passing test
 - Review current implementation you are about to start testing to learn methods, properties, fields etc. you can use
 - If actual implementation contradicts docstring - ask user what takes precedence
 - Review design documentation for guidance on how things shall be implemented
@@ -214,6 +316,13 @@ Every function/method must begin with a test. Tests prove that your implementati
 - All tests must be placed in the `tests/` directory structure: unit tests in tests/unit/, integration tests in tests/integration/, API tests in tests/api/, E2E tests in tests/e2e/, service tests in tests/services/
 - Never place test files in the root directory of the repository
 
+### I-bis. Observable by Default (Logging)
+Tests prove green; logs explain red. You cannot claim a scenario is done if `logs/app.log` cannot answer who did what, with which data, and why a branch was taken.
+
+- The plan's **Logs to Emit** table is the contract: each row must appear at INFO on the listed path
+- Never log secrets (raw tokens, passwords, API keys)
+- Follow [`../rules/do-informative-logging.mdc`](../rules/do-informative-logging.mdc) and [`../rules/add-logging.mdc`](../rules/add-logging.mdc)
+
 ### II. Small Increments
 Work in method-by-method steps. Implement small vertical slices. After every change: write → run → test → evaluate → fix. No large PRs or 1000-line commits.
 
@@ -225,7 +334,7 @@ Each helper/private method should do one thing and have a clear, descriptive nam
 ### IV. GitHub Issue Management
 When creating an Issue, create a task for the person with very little knowledge of the domain. Create a very detailed to-do, giving the person very little space to misinterpret what needs to be done.
 
-The issue must be self-sufficient: context map, do-not-do list, SAO sections, and implementation plan all inline — not linked. A cold-start implementor should be able to begin without reading any other file first.
+The issue must be self-sufficient: context map, do-not-do list, SAO sections, tests-to-create, logs-to-emit, and implementation plan all inline — not linked. A cold-start implementor should be able to begin without reading any other file first.
 
 ### V. Commit Convention
 Follow Angular convention:
@@ -243,11 +352,13 @@ Types: feat, fix, docs, style, refactor, test, chore
 - Feature specification exists and is clear
 - All clarification questions answered
 - Codebase assessment complete, including context map (3–5 file:line_range references)
-- Implementation plan contains all three mandatory sections: Context Map, Do-Not-Do, SAO.md Sections
-- All tests are explicitly listed with what they test
+- Implementation plan contains all five mandatory sections: Context Map, Do-Not-Do, SAO.md Sections, Tests to Create, Logs to Emit
+- All tests are explicitly listed with what they prove (not vague "add tests")
+- All log decision points are explicitly listed with required context fields (not vague "add logging")
 - Plan reviewed and approved by user
-- GitHub issue created/updated with all mandatory sections inline (not linked)
+- GitHub issue created/updated with all five mandatory sections inline (not linked)
 - Plan document saved to `docs/plans/`
+- If MCP tools added: Tests to Create table contains T1 + T2 rows for each new tool (plus T3 if stdio transport)
 
 ## Inputs
 

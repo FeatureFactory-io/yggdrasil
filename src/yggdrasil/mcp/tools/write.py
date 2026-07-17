@@ -15,7 +15,7 @@ from django.contrib.auth.models import User
 from django.db.models import Q
 
 from yggdrasil.changeset.models import ChangeSet
-from yggdrasil.graph.models import YggdrasilModel
+from yggdrasil.graph.models import Element, YggdrasilModel
 from yggdrasil.llm.base import ScriptedLLM
 from yggdrasil.mcp.server import get_current_user_id
 from yggdrasil.munin.agent import MuninAgent
@@ -109,7 +109,44 @@ def update_element(
     :raises PermissionError: If current user token has read-only scope.
     :raises ValueError: If element not found.
     """
-    raise NotImplementedError()
+    user = _resolve_current_user()
+    logger.info(
+        "update_element | id=%s model=%s fields=%s user=%s",
+        id,
+        model,
+        sorted(fields.keys()),
+        getattr(user, "pk", None),
+    )
+    if not fields:
+        msg = "update_element requires at least one field to update"
+        raise ValueError(msg)
+    ymodel = _resolve_model(model) if model else None
+    model_id = ymodel.pk if ymodel else _model_id_for_element(id)
+    llm = ScriptedLLM(responses=[f"Proposed Update Element id={id}"])
+    agent = MuninAgent(llm=llm, model_id=model_id, user_id=getattr(user, "pk", None))
+    field_parts = "|".join(f"{key}={value}" for key, value in fields.items())
+    message = f"TOOL:update_element|id={id}|{field_parts}"
+    resp = agent.chat(message, history=[])
+    if resp.changeset_id is None:
+        msg = "Munin did not produce a ChangeSet for update_element"
+        raise ValueError(msg)
+    cs = ChangeSet.objects.get(pk=resp.changeset_id)
+    op = cs.items.first()
+    result = {
+        "changeset_id": cs.pk,
+        "status": cs.status,
+        "operation": {
+            "op_type": op.op_type if op else "update_element",
+            "detail": op.detail if op else {},
+        },
+    }
+    logger.info(
+        "update_element | id=%s changeset_id=%s status=%s",
+        id,
+        cs.pk,
+        cs.status,
+    )
+    return result
 
 
 def delete_element(id: int, model: str | None = None) -> dict:
@@ -192,4 +229,13 @@ def _resolve_model(model: str) -> YggdrasilModel:
         return YggdrasilModel.objects.get(Q(slug__iexact=model) | Q(name__iexact=model))
     except YggdrasilModel.DoesNotExist as exc:
         msg = f"Model {model!r} not found"
+        raise ValueError(msg) from exc
+
+
+def _model_id_for_element(element_id: int) -> int:
+    """Return the owning model PK for an element."""
+    try:
+        return Element.objects.values_list("model_id", flat=True).get(pk=element_id)
+    except Element.DoesNotExist as exc:
+        msg = f"Element id={element_id} not found"
         raise ValueError(msg) from exc

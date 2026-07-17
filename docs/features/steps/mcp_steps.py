@@ -297,7 +297,43 @@ def step_changeset_has_operations(context, cs_id, item_ids):
 @given('the model contains element "{name}" with owner "{owner}"')
 def step_model_has_element_with_owner(context, name, owner):
     """Ensure an element exists with the given owner."""
-    raise NotImplementedError()
+    model = _ensure_model()
+    context.mcp_model = model
+    context.current_user = getattr(context, "current_user", None) or UserFactory(
+        username="priya", is_architect=True
+    )
+    # WRITE-03 uses id=3 for Order Domain — pin PK for stable tool args.
+    element_pk = 3 if name == "Order Domain" else None
+    stereotype = StereotypeFactory(
+        model=model,
+        name="Component",
+        slug="component",
+        is_edge=False,
+    )
+    package = PackageFactory(model=model, name="Application", slug="application")
+    element_kwargs: dict[str, Any] = {
+        "model": model,
+        "name": name,
+        "slug": slugify(name),
+        "stereotype": stereotype,
+        "package": package,
+        "owner": owner,
+    }
+    if element_pk is not None:
+        Element.objects.filter(pk=element_pk).delete()
+        element_kwargs["pk"] = element_pk
+    element = ElementFactory(**element_kwargs)
+    # Factory django_get_or_create may ignore owner on existing row — force it.
+    if element.owner != owner:
+        element.owner = owner
+        element.save(update_fields=["owner"])
+    context.target_element = element
+    logger.info(
+        "step_model_has_element_with_owner | id=%s name=%s owner=%s",
+        element.pk,
+        name,
+        owner,
+    )
 
 
 @given('the model contains element "{name}" (id={elem_id:d}) with {count:d} relationships')
@@ -798,13 +834,32 @@ def step_changeset_has_op_with_status(context, count, status):
 @then('a ChangeSet with an "{op_type}" operation is produced')
 def step_changeset_with_op(context, op_type):
     """Assert a ChangeSet with the given operation type is produced."""
-    raise NotImplementedError()
+    response = context.mcp_response
+    assert response is not None, "No mcp_response"
+    cs_id = response.get("changeset_id")
+    assert cs_id, f"No changeset_id in {response!r}"
+    cs = ChangeSet.objects.get(pk=cs_id)
+    context.changeset_id = cs_id
+    op_slug = op_type.lower().replace(" ", "_")
+    match = next((item for item in cs.items.all() if item.op_type == op_slug), None)
+    assert match is not None, f"No {op_type!r} op in CS#{cs_id}"
+    context.mcp_operation = match
+    logger.info("step_changeset_with_op | cs=%s op=%s", cs_id, op_type)
 
 
 @then('the operation detail contains "{detail}"')
 def step_op_detail_contains(context, detail):
     """Assert the operation detail contains the given string."""
-    raise NotImplementedError()
+    op = getattr(context, "mcp_operation", None)
+    if op is None:
+        cs = ChangeSet.objects.get(pk=context.changeset_id)
+        op = cs.items.first()
+    assert op is not None, "No operation on context"
+    blob = repr(op.detail)
+    assert detail in blob or detail in (
+        op.detail.get("diff") or ""
+    ), f"Expected {detail!r} in detail {op.detail!r}"
+    logger.info("step_op_detail_contains | detail=%s", detail)
 
 
 @then('Munin checks the blast-radius of deleting "{name}"')

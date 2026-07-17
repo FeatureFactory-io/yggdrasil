@@ -25,6 +25,7 @@ from django.utils.text import slugify
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
 from yggdrasil.changeset.services import ChangeSetService
+from yggdrasil.graph.models import Element
 from yggdrasil.llm.base import LLMMessage
 
 if TYPE_CHECKING:
@@ -134,6 +135,8 @@ class MuninAgent:
         )
         if message.startswith("TOOL:create_element"):
             return self._handle_create_element_tool(message)
+        if message.startswith("TOOL:update_element"):
+            return self._handle_update_element_tool(message)
         # Full ReAct loop for free-form chat lands with CHAT-MUNIN scenarios.
         system = "You are Munin, the Yggdrasil architecture planner."
         llm_resp = self._llm.complete(
@@ -243,6 +246,67 @@ class MuninAgent:
             text=llm_note,
             changeset_id=changeset.pk,
             tool_calls=[{"tool": "create_element", "name": name}],
+        )
+
+    def _handle_update_element_tool(self, message: str) -> MuninResponse:
+        """Propose an update_element ChangeSet from a structured tool message."""
+        params = self._parse_tool_message(message)
+        element_id_raw = params.pop("id", "")
+        if not element_id_raw:
+            msg = "update_element tool message missing id="
+            raise ValueError(msg)
+        element_id = int(element_id_raw)
+        try:
+            element = Element.objects.get(pk=element_id, model_id=self._model_id)
+        except Element.DoesNotExist as exc:
+            msg = f"Element id={element_id} not found in model_id={self._model_id}"
+            raise ValueError(msg) from exc
+        field_diffs: dict[str, list] = {}
+        summaries: list[str] = []
+        for field_name, new_value in params.items():
+            if not hasattr(element, field_name):
+                continue
+            old_value = getattr(element, field_name)
+            field_diffs[field_name] = [old_value, new_value]
+            summaries.append(f"{field_name} → {new_value}")
+        if not field_diffs:
+            msg = "update_element has no recognised fields to change"
+            raise ValueError(msg)
+        review_mode = get_model_review_mode(self._model_id)
+        user = self._load_user()
+        llm_note = self._llm.complete(
+            messages=[LLMMessage(role="user", content=f"Summarise updating element {element_id}")],
+            system="You are Munin.",
+        ).content
+        changeset = _service.propose(
+            model_id=self._model_id,
+            source=ChangeSet.SOURCE_MCP,
+            operations=[
+                {
+                    "op_type": ChangeSetItem.OP_UPDATE_ELEMENT,
+                    "detail": {
+                        "element_id": element_id,
+                        "fields": field_diffs,
+                        "diff": "; ".join(summaries),
+                    },
+                    "confidence": 0.9,
+                }
+            ],
+            munin_reasoning=llm_note,
+            review_mode=review_mode,
+            user=user,
+        )
+        if review_mode == ChangeSet.REVIEW_AUTO:
+            changeset = _service.approve(changeset_id=changeset.pk, user=user)
+        logger.info(
+            "chat | turn=update_element proposed cs_id=%s status=%s",
+            changeset.pk,
+            changeset.status,
+        )
+        return MuninResponse(
+            text=llm_note,
+            changeset_id=changeset.pk,
+            tool_calls=[{"tool": "update_element", "id": element_id, "fields": list(field_diffs)}],
         )
 
     def _parse_tool_message(self, message: str) -> dict[str, str]:

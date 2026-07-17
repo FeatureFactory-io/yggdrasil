@@ -20,10 +20,36 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from django.contrib.auth.models import User
+from django.utils.text import slugify
+
+from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
+from yggdrasil.changeset.services import ChangeSetService
+from yggdrasil.llm.base import LLMMessage
+
 if TYPE_CHECKING:
     from yggdrasil.llm.base import BaseLLM
 
 logger = logging.getLogger("yggdrasil.munin.agent")
+
+_service = ChangeSetService()
+
+# Interim review-mode store until YggdrasilModel.review_mode lands (SAO §7).
+_MODEL_REVIEW_MODES: dict[int, str] = {}
+
+
+def get_model_review_mode(model_pk: int) -> str:
+    """Return interim review mode for a model PK (default manual)."""
+    return _MODEL_REVIEW_MODES.get(model_pk, ChangeSet.REVIEW_MANUAL)
+
+
+def set_model_review_mode(model_pk: int, mode: str) -> None:
+    """Set interim review mode for AT / set_model_mode tool."""
+    if mode not in {ChangeSet.REVIEW_AUTO, ChangeSet.REVIEW_MANUAL}:
+        msg = f"Invalid review mode={mode!r}"
+        raise ValueError(msg)
+    _MODEL_REVIEW_MODES[model_pk] = mode
+    logger.info("set_model_review_mode | model_pk=%s mode=%s", model_pk, mode)
 
 
 @dataclass
@@ -100,7 +126,21 @@ class MuninAgent:
         :return: MuninResponse with text, cited elements, navigation URL.
         :raises LLMError: If the LLM call fails.
         """
-        raise NotImplementedError()
+        logger.info(
+            "chat | model_id=%s user_id=%s message=%r",
+            self._model_id,
+            self._user_id,
+            message[:120],
+        )
+        if message.startswith("TOOL:create_element"):
+            return self._handle_create_element_tool(message)
+        # Full ReAct loop for free-form chat lands with CHAT-MUNIN scenarios.
+        system = "You are Munin, the Yggdrasil architecture planner."
+        llm_resp = self._llm.complete(
+            messages=[LLMMessage(role="user", content=message)],
+            system=system,
+        )
+        return MuninResponse(text=llm_resp.content)
 
     def replan_operation(
         self,
@@ -154,3 +194,75 @@ class MuninAgent:
     ) -> MuninResponse:
         """Build a structured MuninResponse from tool results and the LLM answer."""
         raise NotImplementedError()
+
+    def _handle_create_element_tool(self, message: str) -> MuninResponse:
+        """Propose (and optionally auto-apply) an add_element ChangeSet from a tool message."""
+        params = self._parse_tool_message(message)
+        name = params.get("name", "")
+        if not name:
+            msg = "create_element tool message missing name="
+            raise ValueError(msg)
+        stereotype = slugify(params.get("stereotype", "container"))
+        package = (
+            slugify(params.get("package", "technology")) if params.get("package") else "technology"
+        )
+        owner = params.get("owner", "")
+        review_mode = get_model_review_mode(self._model_id)
+        user = self._load_user()
+        llm_note = self._llm.complete(
+            messages=[LLMMessage(role="user", content=f"Summarise adding {name}")],
+            system="You are Munin.",
+        ).content
+        changeset = _service.propose(
+            model_id=self._model_id,
+            source=ChangeSet.SOURCE_MCP,
+            operations=[
+                {
+                    "op_type": ChangeSetItem.OP_ADD_ELEMENT,
+                    "detail": {
+                        "name": name,
+                        "stereotype_slug": stereotype,
+                        "package_slug": package,
+                        "owner": owner,
+                    },
+                    "confidence": 0.92,
+                }
+            ],
+            munin_reasoning=llm_note,
+            review_mode=review_mode,
+            user=user,
+        )
+        if review_mode == ChangeSet.REVIEW_AUTO:
+            changeset = _service.approve(changeset_id=changeset.pk, user=user)
+        logger.info(
+            "chat | turn=create_element proposed cs_id=%s status=%s",
+            changeset.pk,
+            changeset.status,
+        )
+        return MuninResponse(
+            text=llm_note,
+            changeset_id=changeset.pk,
+            tool_calls=[{"tool": "create_element", "name": name}],
+        )
+
+    def _parse_tool_message(self, message: str) -> dict[str, str]:
+        """Parse TOOL:name|k=v|k=v messages into a dict."""
+        body = message.split(":", 1)[1] if ":" in message else message
+        parts = body.split("|")
+        params: dict[str, str] = {}
+        for part in parts[1:]:  # skip tool name segment
+            if "=" not in part:
+                continue
+            key, value = part.split("=", 1)
+            params[key] = value
+        return params
+
+    def _load_user(self) -> User | None:
+        """Load the actor User for ChangeSet audit fields."""
+        if self._user_id is None:
+            return None
+        try:
+            return User.objects.get(pk=self._user_id)
+        except User.DoesNotExist:
+            logger.info("_load_user | user_id=%s not found", self._user_id)
+            return None

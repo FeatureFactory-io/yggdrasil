@@ -35,6 +35,8 @@ from yggdrasil.graph.models import Element, YggdrasilModel
 from yggdrasil.mcp import server as mcp_server
 from yggdrasil.mcp.tools import changeset as changeset_tools
 from yggdrasil.mcp.tools import query as query_tools
+from yggdrasil.mcp.tools import write as write_tools
+from yggdrasil.munin.agent import set_model_review_mode
 from yggdrasil.ratatosk.models import RataskRun
 
 logger = logging.getLogger("yggdrasil.at.mcp_steps")
@@ -52,6 +54,12 @@ _TOOL_REGISTRY: dict[str, Any] = {
     "get_changeset": query_tools.get_changeset,
     "list_stereotypes": query_tools.list_stereotypes,
     "list_ratatosk_runs": query_tools.list_ratatosk_runs,
+    "create_element": write_tools.create_element,
+    "update_element": write_tools.update_element,
+    "delete_element": write_tools.delete_element,
+    "create_relationship": write_tools.create_relationship,
+    "update_relationships_batch": write_tools.update_relationships_batch,
+    "set_model_mode": write_tools.set_model_mode,
 }
 
 _SEED_ELEMENTS: list[tuple[str, str, str]] = [
@@ -316,16 +324,38 @@ def step_post_merge_changeset(context, count):
     raise NotImplementedError()
 
 
+@given('the model "Yggdrasil" is in auto-approval mode')
+def step_model_auto_approval(context):
+    """Set the model to auto-approval review mode."""
+    _set_yggdrasil_review_mode(context, "auto")
+
+
+@given('the model "Yggdrasil" is in manual-review mode')
+def step_model_manual_review(context):
+    """Set the model to manual-review mode."""
+    _set_yggdrasil_review_mode(context, "manual")
+
+
 @given('the model "Yggdrasil" is in {mode}-review mode')
 def step_model_in_mode(context, mode):
     """Set the model review mode."""
-    raise NotImplementedError()
+    normalized = "auto" if mode.startswith("auto") else "manual"
+    _set_yggdrasil_review_mode(context, normalized)
 
 
 @given('the model "Yggdrasil" is currently in {mode}-review mode')
 def step_model_currently_in_mode(context, mode):
     """Set the model review mode (alias)."""
-    raise NotImplementedError()
+    normalized = "auto" if mode.startswith("auto") else "manual"
+    _set_yggdrasil_review_mode(context, normalized)
+
+
+def _set_yggdrasil_review_mode(context, mode: str) -> None:
+    """Persist interim review mode for the default Yggdrasil model."""
+    model = _ensure_model()
+    set_model_review_mode(model.pk, mode)
+    context.mcp_model = model
+    logger.info("_set_yggdrasil_review_mode | model_id=%s mode=%s", model.pk, mode)
 
 
 @given("Elena wants to see the domain model as of {date}")
@@ -701,19 +731,42 @@ def step_instructions_learned(context):
 @then('Munin produces a ChangeSet with an "{op_type}" operation for "{name}"')
 def step_munin_produces_changeset(context, op_type, name):
     """Assert Munin produced a ChangeSet with the specified operation."""
-    raise NotImplementedError()
+    response = context.mcp_response
+    assert response is not None, "No mcp_response"
+    cs_id = response.get("changeset_id")
+    assert cs_id, f"No changeset_id in {response!r}"
+    cs = ChangeSet.objects.get(pk=cs_id)
+    context.changeset_id = cs_id
+    op_slug = op_type.lower().replace(" ", "_")
+    match = next(
+        (item for item in cs.items.all() if item.op_type == op_slug and name in repr(item.detail)),
+        None,
+    )
+    assert match is not None, f"No {op_type!r} op for {name!r} in CS#{cs_id}"
+    logger.info(
+        "step_munin_produces_changeset | cs=%s op=%s name=%s",
+        cs_id,
+        op_type,
+        name,
+    )
 
 
 @then("in auto-approval mode the operation is applied directly")
 def step_auto_applied(context):
     """Assert the operation was applied (not queued)."""
-    raise NotImplementedError()
+    cs = ChangeSet.objects.get(pk=context.changeset_id)
+    assert (
+        cs.status == ChangeSet.STATUS_APPLIED
+    ), f"Expected applied, got {cs.status!r} for CS#{cs.pk}"
+    assert cs.items.filter(status=ChangeSetItem.ITEM_STATUS_ACCEPTED).exists()
+    logger.info("step_auto_applied | cs=%s", cs.pk)
 
 
 @then("the ChangeSet is retained as an audit trail")
 def step_changeset_retained(context):
     """Assert the ChangeSet exists even after auto-apply."""
-    raise NotImplementedError()
+    assert ChangeSet.objects.filter(pk=context.changeset_id).exists()
+    logger.info("step_changeset_retained | cs=%s", context.changeset_id)
 
 
 @then('a ChangeSet with status "{status}" is created')
@@ -875,6 +928,9 @@ def _call_mcp_tool(context, tool_name: str, *, user) -> None:
     tool_fn = _TOOL_REGISTRY.get(tool_name)
     assert tool_fn is not None, f"Unknown MCP tool {tool_name!r}"
     params = _parse_tool_table(context)
+    if tool_name == "create_element" and "model" not in params:
+        model = getattr(context, "mcp_model", None)
+        params["model"] = model.slug if model is not None else "Yggdrasil"
     mcp_server.set_current_user_id(user.pk)
     context.current_user = user
     logger.info(

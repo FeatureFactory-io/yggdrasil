@@ -20,7 +20,14 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem, MuninRule
-from yggdrasil.graph.models import Diagram, Element, Package, Relationship, Stereotype
+from yggdrasil.graph.models import (
+    Diagram,
+    Element,
+    Package,
+    Relationship,
+    Stereotype,
+    YggdrasilModel,
+)
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -84,7 +91,52 @@ class ChangeSetService:
         >>> cs.status
         'pending'
         """
-        raise NotImplementedError()
+        if not operations:
+            msg = "operations must not be empty"
+            raise ValueError(msg)
+        valid_sources = {c[0] for c in ChangeSet.SOURCE_CHOICES}
+        if source not in valid_sources:
+            msg = f"Invalid source={source!r}; expected one of {sorted(valid_sources)}"
+            raise ValueError(msg)
+        user_label = getattr(user, "pk", None)
+        logger.info(
+            "propose | model_id=%s source=%s ops=%s user=%s",
+            model_id,
+            source,
+            len(operations),
+            user_label,
+        )
+        with transaction.atomic():
+            try:
+                model = YggdrasilModel.objects.get(pk=model_id)
+            except YggdrasilModel.DoesNotExist as exc:
+                msg = f"YggdrasilModel id={model_id} not found"
+                raise ValueError(msg) from exc
+            changeset = ChangeSet.objects.create(
+                model=model,
+                source=source,
+                status=ChangeSet.STATUS_PENDING,
+                review_mode=review_mode,
+                run_id=run_id,
+                munin_reasoning=munin_reasoning,
+            )
+            for order, op in enumerate(operations, start=1):
+                ChangeSetItem.objects.create(
+                    changeset=changeset,
+                    order=order,
+                    op_type=op["op_type"],
+                    detail=op.get("detail") or {},
+                    confidence=float(op.get("confidence", 1.0)),
+                    status=ChangeSetItem.ITEM_STATUS_PENDING,
+                )
+        logger.info(
+            "propose | changeset_id=%s model_id=%s ops=%s user=%s",
+            changeset.pk,
+            model_id,
+            len(operations),
+            user_label,
+        )
+        return changeset
 
     def approve(
         self,

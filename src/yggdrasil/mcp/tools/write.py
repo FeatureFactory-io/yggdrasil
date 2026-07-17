@@ -11,6 +11,15 @@ from __future__ import annotations
 
 import logging
 
+from django.contrib.auth.models import User
+from django.db.models import Q
+
+from yggdrasil.changeset.models import ChangeSet
+from yggdrasil.graph.models import YggdrasilModel
+from yggdrasil.llm.base import ScriptedLLM
+from yggdrasil.mcp.server import get_current_user_id
+from yggdrasil.munin.agent import MuninAgent
+
 logger = logging.getLogger("yggdrasil.mcp.tools.write")
 
 
@@ -38,7 +47,47 @@ def create_element(
     :raises PermissionError: If current user token has read-only scope.
     :raises ValueError: If stereotype or model not found.
     """
-    raise NotImplementedError()
+    user = _resolve_current_user()
+    logger.info(
+        "create_element | name=%s model=%s user=%s",
+        name,
+        model,
+        getattr(user, "pk", None),
+    )
+    ymodel = _resolve_model(model)
+    llm = ScriptedLLM(responses=[f"Proposed Add Element for {name}"])
+    agent = MuninAgent(
+        llm=llm,
+        model_id=ymodel.pk,
+        user_id=getattr(user, "pk", None),
+    )
+    message = (
+        f"TOOL:create_element|name={name}|stereotype={stereotype}"
+        f"|package={package or ''}|owner={owner}|model={ymodel.slug}"
+    )
+    if properties:
+        message += f"|properties={properties!r}"
+    resp = agent.chat(message, history=[])
+    if resp.changeset_id is None:
+        msg = "Munin did not produce a ChangeSet for create_element"
+        raise ValueError(msg)
+    cs = ChangeSet.objects.get(pk=resp.changeset_id)
+    op = cs.items.first()
+    result = {
+        "changeset_id": cs.pk,
+        "status": cs.status,
+        "operation": {
+            "op_type": op.op_type if op else "add_element",
+            "detail": op.detail if op else {},
+        },
+    }
+    logger.info(
+        "create_element | name=%s changeset_id=%s status=%s",
+        name,
+        cs.pk,
+        cs.status,
+    )
+    return result
 
 
 def update_element(
@@ -81,22 +130,20 @@ def delete_element(id: int, model: str | None = None) -> dict:
 
 def create_relationship(
     from_id: int,
-    stereotype: str,
     to_id: int,
+    stereotype: str,
     model: str | None = None,
     properties: dict | None = None,
 ) -> dict:
     """
-    Propose adding a new relationship via Munin after edge-rule validation.
+    Propose a new relationship between two elements.
 
     :param from_id: Source element PK. Example: 6
-    :param stereotype: Edge stereotype slug. Example: "calls"
     :param to_id: Target element PK. Example: 2
-    :param model: Model slug for validation. Example: "yggdrasil"
-    :param properties: Edge properties dict. Example: {"label": "async"}
+    :param stereotype: Edge stereotype slug. Example: "calls"
+    :param model: Model slug. Example: "yggdrasil"
+    :param properties: Edge properties. Example: {"label": "HTTP"}
     :return: {"changeset_id": N, "status": ..., "operation": {...}}
-    :raises PermissionError: If read-only scope.
-    :raises ValueError: If edge stereotype not valid for source→target types.
     """
     raise NotImplementedError()
 
@@ -106,17 +153,12 @@ def update_relationships_batch(
     model: str | None = None,
 ) -> dict:
     """
-    Plan exactly one ChangeSet containing multiple relationship operations.
+    Propose a batch of relationship create/update/delete operations.
 
-    Useful for CI agents that need to wire multiple edges in a single review unit.
-
-    :param operations: List of operation dicts, each with from_id, stereotype,
-        to_id, and optional properties. Example:
-        [{"from_id": 1, "stereotype": "calls", "to_id": 2}]
+    :param operations: List of op dicts. Example:
+        [{"op": "create", "from_id": 1, "to_id": 2, "stereotype": "calls"}]
     :param model: Model slug. Example: "yggdrasil"
-    :return: {"changeset_id": N, "status": ..., "operation_count": N}
-    :raises PermissionError: If read-only scope.
-    :raises ValueError: If any operation violates edge rules.
+    :return: {"changeset_id": N, "status": "pending", "operations_count": N}
     """
     raise NotImplementedError()
 
@@ -128,7 +170,26 @@ def set_model_mode(model_id: str, mode: str) -> dict:
     :param model_id: Model slug. Example: "yggdrasil"
     :param mode: "auto" or "manual". Example: "auto"
     :return: {"model": "yggdrasil", "review_mode": "auto"}
-    :raises PermissionError: If user is not a model owner/admin.
-    :raises ValueError: If mode is not "auto" or "manual".
     """
     raise NotImplementedError()
+
+
+def _resolve_current_user() -> User | None:
+    """Load authenticated user from MCP ContextVar."""
+    user_id = get_current_user_id()
+    if user_id is None:
+        return None
+    try:
+        return User.objects.get(pk=user_id)
+    except User.DoesNotExist as exc:
+        msg = f"MCP user_id={user_id} not found"
+        raise PermissionError(msg) from exc
+
+
+def _resolve_model(model: str) -> YggdrasilModel:
+    """Resolve model by slug or name."""
+    try:
+        return YggdrasilModel.objects.get(Q(slug__iexact=model) | Q(name__iexact=model))
+    except YggdrasilModel.DoesNotExist as exc:
+        msg = f"Model {model!r} not found"
+        raise ValueError(msg) from exc

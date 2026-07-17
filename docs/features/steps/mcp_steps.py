@@ -772,13 +772,27 @@ def step_changeset_retained(context):
 @then('a ChangeSet with status "{status}" is created')
 def step_changeset_created_with_status(context, status):
     """Assert a ChangeSet with the given status was created."""
-    raise NotImplementedError()
+    response = context.mcp_response
+    cs_id = response.get("changeset_id") if response else None
+    assert cs_id, f"No changeset_id in {response!r}"
+    cs = ChangeSet.objects.get(pk=cs_id)
+    context.changeset_id = cs_id
+    assert cs.status == status, f"Expected status={status!r}, got {cs.status!r}"
+    logger.info("step_changeset_created_with_status | cs=%s status=%s", cs_id, status)
 
 
 @then('the ChangeSet contains {count:d} operation with status "{status}"')
 def step_changeset_has_op_with_status(context, count, status):
     """Assert the ChangeSet has N operations with the given status."""
-    raise NotImplementedError()
+    cs_id = context.changeset_id
+    matched = ChangeSetItem.objects.filter(changeset_id=cs_id, status=status).count()
+    assert matched == count, f"Expected {count} ops status={status!r}, got {matched}"
+    logger.info(
+        "step_changeset_has_op_with_status | cs=%s count=%s status=%s",
+        cs_id,
+        count,
+        status,
+    )
 
 
 @then('a ChangeSet with an "{op_type}" operation is produced')

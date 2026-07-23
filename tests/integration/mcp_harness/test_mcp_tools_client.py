@@ -43,4 +43,5 @@ def test_t1_tools_list_via_fastmcp_client():
     assert "list_stereotypes" in names
     assert "ask_munin" in names
     assert "update_element" in names
-    assert len(names) == 22
+    assert len(names) == 23
+    assert "list_packages" in names

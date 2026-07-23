@@ -45,4 +45,5 @@ def test_mcp_server_stdio_entrypoint_lists_tools():
     assert "list_elements" in names
     assert "update_element" in names
     assert "ask_munin" in names
-    assert len(names) == 18
+    assert len(names) == 23
+    assert "list_packages" in names

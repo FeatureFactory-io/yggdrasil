@@ -106,6 +106,7 @@ def _register_tools(mcp) -> None:
         query_tools.list_changesets,
         query_tools.get_changeset,
         query_tools.list_stereotypes,
+        query_tools.list_packages,
         query_tools.list_relationships,
         query_tools.list_ratatosk_runs,
     ]

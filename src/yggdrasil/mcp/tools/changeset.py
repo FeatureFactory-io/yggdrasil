@@ -14,7 +14,7 @@ from django.contrib.auth.models import User
 
 from yggdrasil.changeset.models import ChangeSetItem, MuninRule
 from yggdrasil.changeset.services import ChangeSetService
-from yggdrasil.mcp.server import get_current_user_id
+from yggdrasil.mcp.server import get_current_user_id, get_token_scope
 
 logger = logging.getLogger("yggdrasil.mcp.tools.changeset")
 
@@ -35,6 +35,7 @@ def approve_changeset(
     :raises PermissionError: If current user lacks write access.
     :raises ValueError: If ChangeSet not found or already applied.
     """
+    _require_write_scope()
     user = _resolve_current_user()
     logger.info(
         "approve_changeset | id=%s user=%s item_ids=%s",
@@ -74,6 +75,15 @@ def _resolve_current_user() -> User | None:
     except User.DoesNotExist as exc:
         msg = f"MCP user_id={user_id} not found"
         raise PermissionError(msg) from exc
+
+
+def _require_write_scope() -> None:
+    """Reject write tools when the current token is read-only."""
+    scope = get_token_scope()
+    if scope == "read-only":
+        msg = "permission denied: read-only token cannot write"
+        logger.info("changeset | reject reason=permission scope=%s", scope)
+        raise PermissionError(msg)
 
 
 def reject_changeset(

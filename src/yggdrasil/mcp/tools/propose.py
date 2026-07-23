@@ -115,11 +115,24 @@ def propose_changeset(
         logger.info("propose_changeset | reject reason=empty_ops")
         raise ValueError(msg)
 
+    from yggdrasil.munin.bootstrap_planner import (
+        plan_bootstrap_changeset,
+        should_enrich_ratatosk_ops,
+    )
+
+    reasoning = munin_reasoning
+    if should_enrich_ratatosk_ops(source, ops):
+        ops, reasoning = plan_bootstrap_changeset(
+            model_id=ymodel.pk,
+            element_ops=ops,
+            user_id=getattr(user, "pk", None),
+        )
+
     changeset = _service.propose(
         model_id=ymodel.pk,
         source=source,
         operations=ops,
-        munin_reasoning=munin_reasoning,
+        munin_reasoning=reasoning,
         run_id=run_id,
         review_mode=ChangeSet.REVIEW_MANUAL,
         user=user,

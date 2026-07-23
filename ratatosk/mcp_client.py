@@ -99,8 +99,43 @@ class RatatoskMcpClient:
         if isinstance(payload, dict) and "result" in payload:
             result = payload["result"]
             if isinstance(result, dict):
+                self._log_tool_result(name, result)
                 return result
             return {"value": result}
         if isinstance(payload, dict):
+            self._log_tool_result(name, payload)
             return payload
         return {"value": payload}
+
+    def _log_tool_result(self, name: str, result: dict[str, Any]) -> None:
+        """Log a concise summary of MCP tool results."""
+        if "items" in result:
+            total = result.get("total", len(result.get("items") or []))
+            logger.info(
+                "RatatoskMcpClient.call_tool | result tool=%s items=%s total=%s",
+                name,
+                len(result.get("items") or []),
+                total,
+            )
+            return
+        if "changeset_id" in result:
+            logger.info(
+                "RatatoskMcpClient.call_tool | result tool=%s changeset_id=%s operations=%s pending=%s",
+                name,
+                result.get("changeset_id"),
+                result.get("operations_count"),
+                result.get("pending_count"),
+            )
+            return
+        if "slug" in result:
+            logger.info(
+                "RatatoskMcpClient.call_tool | result tool=%s slug=%s",
+                name,
+                result.get("slug"),
+            )
+            return
+        logger.info(
+            "RatatoskMcpClient.call_tool | result tool=%s keys=%s",
+            name,
+            sorted(result.keys()),
+        )

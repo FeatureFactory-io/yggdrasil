@@ -11,20 +11,64 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 import click
 
+from ratatosk.config import build_llm_from_config, load_bootstrap_config
 from ratatosk.discovery.runner import STDIN_SIZE_CAP_BYTES, run_cli_discovery
-from ratatosk.discovery.scripted_llm import ScriptedDiscoveryLLM
 from ratatosk.mcp_client import McpClientError, RatatoskMcpClient
 
 logger = logging.getLogger("ratatosk.cli")
+
+
+def _configure_cli_logging() -> None:
+    """Configure stderr + rotating file logging once at CLI entry."""
+    level_name = os.environ.get("RATATOSK_LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    log_file = os.environ.get("RATATOSK_LOG_FILE", "logs/ratatosk.log")
+
+    root = logging.getLogger()
+    if root.handlers:
+        root.setLevel(level)
+        return
+
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s | %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%S",
+    )
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setLevel(level)
+    stderr_handler.setFormatter(formatter)
+    root.addHandler(stderr_handler)
+
+    log_path = Path(log_file)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    if log_path.exists():
+        log_path.write_text("", encoding="utf-8")
+    file_handler = RotatingFileHandler(
+        log_path,
+        maxBytes=5_000_000,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    file_handler.setLevel(level)
+    file_handler.setFormatter(formatter)
+    root.addHandler(file_handler)
+    root.setLevel(level)
+    logger.info(
+        "_configure_cli_logging | level=%s file=%s reason=cli_entry",
+        level_name,
+        log_path.resolve(),
+    )
 
 
 @click.group()
 @click.version_option(package_name="ratatosk")
 def main() -> None:
     """Ratatosk — Yggdrasil field agent CLI."""
+    _configure_cli_logging()
 
 
 def _require_token(token: str | None) -> str:
@@ -35,22 +79,11 @@ def _require_token(token: str | None) -> str:
     return token
 
 
-def _build_llm():
-    """Resolve LLM for CLI (scripted when LLM_PROVIDER=scripted)."""
-    provider = os.environ.get("LLM_PROVIDER", "").strip().lower()
-    if provider == "scripted":
-        logger.info("cli | LLM_PROVIDER=scripted")
-        return ScriptedDiscoveryLLM()
-    # Prefer scripted when Ollama is not configured — avoid hard failure in CI.
-    if provider in {"", "scripted"} or os.environ.get("RATATOSK_USE_SCRIPTED", ""):
-        return ScriptedDiscoveryLLM()
-    try:
-        from yggdrasil.llm.adapters.ollama import OllamaClient
-
-        return OllamaClient()
-    except Exception:  # noqa: BLE001
-        logger.info("cli | falling back to ScriptedDiscoveryLLM")
-        return ScriptedDiscoveryLLM()
+def _build_llm(config=None):
+    """Resolve LLM for CLI from BootstrapConfig."""
+    if config is None:
+        config = load_bootstrap_config()
+    return build_llm_from_config(config)
 
 
 @main.command()
@@ -82,12 +115,15 @@ def bootstrap(
 ) -> None:
     """Scan PATH and propose architecture elements via MCP ChangeSet handoff."""
     token = _require_token(token)
+    config = load_bootstrap_config(
+        flags={"server": server, "metamodel": metamodel},
+    )
     logger.info("bootstrap | model=%s metamodel=%s path=%s", model_name, metamodel, path)
     if not os.path.exists(path):
         click.echo(f"Error: Repository path does not exist: {path}", err=True)
         sys.exit(1)
     client = RatatoskMcpClient(server=server, token=token)
-    llm = _build_llm()
+    llm = _build_llm(config)
     try:
         _run_id, _buckets, output = run_cli_discovery(
             client=client,
@@ -161,8 +197,9 @@ def update(
         )
         sys.exit(1)
     logger.info("update | model=%s metamodel=%s bytes=%s", model_name, metamodel, len(stdin_text))
+    config = load_bootstrap_config(flags={"server": server, "metamodel": metamodel})
     client = RatatoskMcpClient(server=server, token=token)
-    llm = _build_llm()
+    llm = _build_llm(config)
     try:
         _run_id, _buckets, output = run_cli_discovery(
             client=client,

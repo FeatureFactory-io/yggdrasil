@@ -98,7 +98,7 @@ def test_cli_bootstrap_no_django_setup() -> None:
         )
     assert django_setup.call_count == 0
     assert result.exit_code == 0, result.output + result.stderr
-    assert "fetching existing model state via MCP" in result.output
+    assert "building ModelSummary" in result.output
     assert "ChangeSet #42" in result.output
     tools_called = [c.args[0] for c in fake_client.call_tool.call_args_list]
     assert "list_elements" in tools_called

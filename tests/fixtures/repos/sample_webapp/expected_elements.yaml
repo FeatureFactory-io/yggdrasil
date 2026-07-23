@@ -24,3 +24,15 @@ minimum:
     source_paths:
       - README.md
       - src/billing_worker/worker.py
+
+relationships:
+  minimum:
+    - source: Order Domain
+      target: Order Service
+      stereotype: depends_on
+    - source: Billing Worker
+      target: Order Domain
+      stereotype: depends_on
+    - source: Order Service
+      target: Payment API
+      stereotype: depends_on

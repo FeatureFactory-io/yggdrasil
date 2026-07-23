@@ -136,7 +136,7 @@ def test_bootstrap_discovers_containers_and_components_from_fixture() -> None:
     )
     assert run.status == RataskRun.STATUS_COMPLETE
     assert buckets.total_ops >= 1
-    assert "fetching existing model state via MCP" in output
+    assert "building ModelSummary" in output
     assert ChangeSet.objects.filter(source=ChangeSet.SOURCE_RATATOSK).exists()
     stereotypes = set(
         Element.objects.filter(model=run.model).values_list("stereotype__name", flat=True)
@@ -380,7 +380,7 @@ def test_update_prose_stdin() -> None:
     )
     assert run.blackboard.get("input_mode") == "stdin"
     assert run.blackboard.get("stdin_kind") == "prose"
-    assert "fetching existing model state via MCP" in output
+    assert "building ModelSummary" in output
     assert buckets.total_ops >= 1 or run.changeset is not None
 
 
@@ -489,3 +489,34 @@ def test_agent_execute_filesystem_loop_directly() -> None:
     assert "tree" in run.blackboard
     assert "cleanup" in run.blackboard
     assert buckets is not None
+
+
+@pytest.mark.django_db
+def test_disc15_blackboard_has_model_summary_chars() -> None:
+    """DISC-15: model_summary key on blackboard after bootstrap."""
+    ensure_c4_metamodel()
+    run, _buckets, _output = bootstrap_repository(
+        repo_path=str(SAMPLE_WEBAPP),
+        model_name="Yggdrasil",
+        metamodel="c4",
+        llm=ScriptedDiscoveryLLM(),
+        snapshot=LocalOrmSnapshotPort(),
+    )
+    summary = (run.blackboard or {}).get("model_summary") or {}
+    assert "model_summary_chars" in summary
+    assert int(summary["model_summary_chars"]) > 0
+
+
+@pytest.mark.django_db
+def test_disc15_summary_under_budget() -> None:
+    """DISC-15: ModelSummary chars within 8000-token proxy budget."""
+    ensure_c4_metamodel()
+    run, _buckets, _output = bootstrap_repository(
+        repo_path=str(SAMPLE_WEBAPP),
+        model_name="Yggdrasil",
+        metamodel="c4",
+        llm=ScriptedDiscoveryLLM(),
+        snapshot=LocalOrmSnapshotPort(),
+    )
+    chars = int((run.blackboard or {}).get("model_summary", {}).get("model_summary_chars", 0))
+    assert chars <= 8000 * 4

@@ -7,7 +7,6 @@ Never imports Django.
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 import uuid
@@ -15,8 +14,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+from ratatosk.discovery.model_summary import build_model_summary
+from yggdrasil.llm.structured import extract_json_array as _parse_candidate_json
+from yggdrasil.llm.structured import extract_json_object as _parse_json_object
+
 logger = logging.getLogger("ratatosk.discovery.runner")
 
+_PREVIEW_CHARS = 1200
 STDIN_SIZE_CAP_BYTES = 512_000
 DEFAULT_CONFIDENCE_THRESHOLD = 0.80
 _IGNORE_DIR_NAMES = {
@@ -68,11 +72,26 @@ def run_cli_discovery(
     :return: (run_id, buckets, CLI output text)
     """
     logger.info(
-        "run_cli_discovery | mode=%s model=%s metamodel=%s",
+        "run_cli_discovery | entry mode=%s model=%s metamodel=%s confidence_threshold=%s",
         mode,
         model_name,
         metamodel,
+        confidence_threshold,
     )
+    if mode == "filesystem":
+        logger.info(
+            "run_cli_discovery | validation repo_path=%s exists=%s",
+            repo_path,
+            bool(repo_path and Path(repo_path).exists()),
+        )
+    else:
+        stdin_bytes = len(stdin_text.encode("utf-8"))
+        logger.info(
+            "run_cli_discovery | validation stdin_bytes=%s cap=%s within_cap=%s",
+            stdin_bytes,
+            STDIN_SIZE_CAP_BYTES,
+            stdin_bytes <= STDIN_SIZE_CAP_BYTES,
+        )
     ensured = client.call_tool("ensure_model", {"model": model_name, "metamodel": metamodel})
     model_slug = str(ensured["slug"])
 
@@ -91,6 +110,21 @@ def run_cli_discovery(
         if item.get("name") or item.get("slug")
     }
 
+    wipe_line = ""
+    if mode == "filesystem":
+        if element_count == 0:
+            wipe_line = "wipe no-op for empty graph"
+        else:
+            wipe_line = f"wiping {element_count} elements before bootstrap rescan"
+        logger.info("run_cli_discovery | %s", wipe_line)
+
+    summary_text, summary_meta = build_model_summary(elements, relationships)
+    logger.info(
+        "run_cli_discovery | building ModelSummary chars=%s depth=%s",
+        summary_meta.get("model_summary_chars"),
+        summary_meta.get("depth_reached"),
+    )
+
     stereotypes = client.call_tool("list_stereotypes", {"model": model_slug})
     ontology, element_slugs, package_slugs = _guidance_from_stereotypes(
         stereotypes.get("items") or []
@@ -101,6 +135,7 @@ def run_cli_discovery(
             "elements": element_count,
             "relationships": relationship_count,
         },
+        "model_summary": summary_meta,
         "metamodel": {"slug": metamodel},
     }
 
@@ -133,7 +168,21 @@ def run_cli_discovery(
     cleaned = _cleanup(candidates, element_slugs, package_slugs)
     blackboard["cleanup"] = {"raw": len(candidates), "accepted": len(cleaned)}
     blackboard["extract"] = {"candidates": len(cleaned)}
+    logger.info(
+        "run_cli_discovery | cleanup raw=%s accepted=%s element_slugs=%s package_slugs=%s",
+        len(candidates),
+        len(cleaned),
+        len(element_slugs),
+        len(package_slugs),
+    )
     buckets = _reconcile(cleaned, by_slug)
+    logger.info(
+        "run_cli_discovery | reconcile to_add=%s to_update=%s to_delete=%s unchanged=%s",
+        len(buckets.to_add),
+        len(buckets.to_update),
+        len(buckets.to_delete),
+        len(buckets.unchanged),
+    )
 
     run_id = f"run-{uuid.uuid4().hex[:12]}"
     operations = _buckets_to_operations(buckets, confidence_threshold)
@@ -162,6 +211,12 @@ def run_cli_discovery(
         "ops": propose.get("operations_count", len(operations)),
         "source": "ratatosk",
     }
+    logger.info(
+        "run_cli_discovery | propose_changeset changeset_id=%s operations=%s pending=%s",
+        changeset_id,
+        propose.get("operations_count", len(operations)),
+        propose.get("pending_count", 0),
+    )
     client.call_tool(
         "record_ratatosk_run",
         {
@@ -182,16 +237,21 @@ def run_cli_discovery(
         },
     )
 
-    output_lines = [
-        "fetching existing model state via MCP",
-        f"found {element_count} existing elements",
-        f"found {relationship_count} relationships",
-        f"to_add: {len(buckets.to_add)}",
-        f"to_update: {len(buckets.to_update)}",
-        f"to_delete: {len(buckets.to_delete)}",
-        f"unchanged: {len(buckets.unchanged)}",
-        f"trigger: ratatosk {'bootstrap' if mode == 'filesystem' else 'update'}",
-    ]
+    output_lines: list[str] = []
+    if wipe_line:
+        output_lines.append(wipe_line)
+    output_lines.extend(
+        [
+            "building ModelSummary",
+            f"found {element_count} existing elements",
+            f"found {relationship_count} relationships",
+            f"to_add: {len(buckets.to_add)}",
+            f"to_update: {len(buckets.to_update)}",
+            f"to_delete: {len(buckets.to_delete)}",
+            f"unchanged: {len(buckets.unchanged)}",
+            f"trigger: ratatosk {'bootstrap' if mode == 'filesystem' else 'update'}",
+        ]
+    )
     if mode == "filesystem" and blackboard.get("tree", {}).get("count") == 0:
         output_lines.append("nothing to scan")
     if buckets.total_ops == 0:
@@ -270,24 +330,48 @@ def _guidance_from_stereotypes(
 def _llm_project_map(llm: Any, tree: list[str], ontology: str) -> dict[str, Any]:
     from ratatosk.discovery.scripted_llm import LLMMessage
 
+    logger.info(
+        "_llm_project_map | entry tree_paths=%s ontology_chars=%s llm=%s",
+        len(tree),
+        len(ontology),
+        getattr(llm, "model_id", type(llm).__name__),
+    )
     tree_preview = "\n".join(tree[:200])
+    system = "You are Ratatosk mapping a repository. Return JSON only."
+    user_content = (
+        "Given this repository file tree (paths only), return ONLY JSON:\n"
+        '{"project_kind": "...", "targets": ["path", ...]}\n'
+        f"File tree:\n{tree_preview}\n\n{ontology}\n"
+    )
+    logger.info(
+        "_llm_project_map | request system_chars=%s user_chars=%s preview=%s",
+        len(system),
+        len(user_content),
+        _preview(user_content),
+    )
     response = llm.complete(
-        messages=[
-            LLMMessage(
-                role="user",
-                content=(
-                    "Given this repository file tree (paths only), return ONLY JSON:\n"
-                    '{"project_kind": "...", "targets": ["path", ...]}\n'
-                    f"File tree:\n{tree_preview}\n\n{ontology}\n"
-                ),
-            )
-        ],
-        system="You are Ratatosk mapping a repository. Return JSON only.",
+        messages=[LLMMessage(role="user", content=user_content)],
+        system=system,
     ).content
+    logger.info(
+        "_llm_project_map | response chars=%s preview=%s",
+        len(response),
+        _preview(response),
+    )
     parsed = _parse_json_object(response) or {}
     targets = [str(t) for t in (parsed.get("targets") or []) if str(t) in tree]
     if not targets:
         targets = tree[:_MAX_EXTRACT_TARGETS]
+        logger.info(
+            "_llm_project_map | branch=fallback_tree_head targets=%s reason=empty_or_invalid_json",
+            len(targets),
+        )
+    else:
+        logger.info(
+            "_llm_project_map | branch=llm_targets count=%s project_kind=%s",
+            len(targets),
+            parsed.get("project_kind"),
+        )
     return {
         "project_kind": str(parsed.get("project_kind") or "unknown"),
         "targets": targets[:_MAX_EXTRACT_TARGETS],
@@ -299,20 +383,42 @@ def _llm_map_stdin(
 ) -> dict[str, Any]:
     from ratatosk.discovery.scripted_llm import LLMMessage
 
+    logger.info(
+        "_llm_map_stdin | entry kind=%s blob_chars=%s instructions_chars=%s llm=%s",
+        kind,
+        len(blob),
+        len(instructions),
+        getattr(llm, "model_id", type(llm).__name__),
+    )
+    system = "You are Ratatosk mapping stdin. JSON only."
+    user_content = (
+        f"Classify this {kind} stdin for architecture extraction.\n"
+        f"{ontology}\nInstructions: {instructions[:500] or '(none)'}\n"
+        f"Stdin:\n{blob[:4000]}"
+    )
+    logger.info(
+        "_llm_map_stdin | request system_chars=%s user_chars=%s preview=%s",
+        len(system),
+        len(user_content),
+        _preview(user_content),
+    )
     response = llm.complete(
-        messages=[
-            LLMMessage(
-                role="user",
-                content=(
-                    f"Classify this {kind} stdin for architecture extraction.\n"
-                    f"{ontology}\nInstructions: {instructions[:500] or '(none)'}\n"
-                    f"Stdin:\n{blob[:4000]}"
-                ),
-            )
-        ],
-        system="You are Ratatosk mapping stdin. JSON only.",
+        messages=[LLMMessage(role="user", content=user_content)],
+        system=system,
     ).content
-    return _parse_json_object(response) or {}
+    logger.info(
+        "_llm_map_stdin | response chars=%s preview=%s",
+        len(response),
+        _preview(response),
+    )
+    parsed = _parse_json_object(response) or {}
+    logger.info(
+        "_llm_map_stdin | kind=%s focus=%s summary_chars=%s",
+        kind,
+        parsed.get("focus"),
+        len(str(parsed.get("summary") or "")),
+    )
+    return parsed
 
 
 def _llm_extract_files(
@@ -343,23 +449,48 @@ def _llm_extract_text(
 ) -> list[dict]:
     from ratatosk.discovery.scripted_llm import LLMMessage
 
+    logger.info(
+        "_llm_extract_text | entry source=%s kind=%s text_chars=%s llm=%s",
+        source_label,
+        kind,
+        len(text),
+        getattr(llm, "model_id", type(llm).__name__),
+    )
+    system = "You are Ratatosk. Use only listed stereotype slugs. Prefer [] over inventing."
+    user_content = (
+        f"Extract architecture candidates from this {kind} ({source_label}).\n"
+        "Return ONLY a JSON array of objects with keys: "
+        "name, stereotype, package, confidence.\n"
+        "If none, return [].\n\n"
+        f"{ontology}\nInstructions: {instructions[:500] or '(none)'}\n\n"
+        f"Content:\n{text[:_MAX_FILE_CHARS]}"
+    )
+    logger.info(
+        "_llm_extract_text | request source=%s system_chars=%s user_chars=%s preview=%s",
+        source_label,
+        len(system),
+        len(user_content),
+        _preview(user_content),
+    )
     response = llm.complete(
-        messages=[
-            LLMMessage(
-                role="user",
-                content=(
-                    f"Extract architecture candidates from this {kind} ({source_label}).\n"
-                    "Return ONLY a JSON array of objects with keys: "
-                    "name, stereotype, package, confidence.\n"
-                    "If none, return [].\n\n"
-                    f"{ontology}\nInstructions: {instructions[:500] or '(none)'}\n\n"
-                    f"Content:\n{text[:_MAX_FILE_CHARS]}"
-                ),
-            )
-        ],
-        system="You are Ratatosk. Use only listed stereotype slugs. Prefer [] over inventing.",
+        messages=[LLMMessage(role="user", content=user_content)],
+        system=system,
     ).content
-    return _parse_candidate_json(response) or []
+    logger.info(
+        "_llm_extract_text | response source=%s chars=%s preview=%s",
+        source_label,
+        len(response),
+        _preview(response),
+    )
+    candidates = _parse_candidate_json(response) or []
+    logger.info(
+        "_llm_extract_text | source=%s kind=%s raw_candidates=%s parse_ok=%s",
+        source_label,
+        kind,
+        len(candidates),
+        candidates != [] or response.strip() in {"[]", ""},
+    )
+    return candidates
 
 
 def _cleanup(
@@ -452,43 +583,15 @@ def _buckets_to_operations(buckets: DeltaBuckets, threshold: float) -> list[dict
     return [op for op in all_ops if float(op.get("confidence", 0)) >= threshold]
 
 
+def _preview(text: str, limit: int = _PREVIEW_CHARS) -> str:
+    """Single-line preview for discovery log lines."""
+    collapsed = text.replace("\n", "\\n")
+    if len(collapsed) <= limit:
+        return collapsed
+    return f"{collapsed[:limit]}…({len(text)} chars total)"
+
+
 def _slugify(value: str) -> str:
     text = value.strip().lower()
     text = re.sub(r"[^\w\s-]", "", text)
     return re.sub(r"[-\s]+", "-", text).strip("-")
-
-
-def _parse_candidate_json(raw: str) -> list[dict] | None:
-    text = (raw or "").strip()
-    if not text:
-        return None
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        start, end = text.find("["), text.rfind("]")
-        if start < 0 or end <= start:
-            return None
-        try:
-            data = json.loads(text[start : end + 1])
-        except json.JSONDecodeError:
-            return None
-    if not isinstance(data, list):
-        return None
-    return [item for item in data if isinstance(item, dict) and item.get("name")]
-
-
-def _parse_json_object(raw: str) -> dict | None:
-    text = (raw or "").strip()
-    if not text:
-        return None
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        start, end = text.find("{"), text.rfind("}")
-        if start < 0 or end <= start:
-            return None
-        try:
-            data = json.loads(text[start : end + 1])
-        except json.JSONDecodeError:
-            return None
-    return data if isinstance(data, dict) else None

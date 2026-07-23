@@ -25,9 +25,12 @@ from django.utils.text import slugify
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
 from yggdrasil.changeset.services import ChangeSetService
 from yggdrasil.graph.models import Metamodel, YggdrasilModel, ensure_c4_metamodel
-from yggdrasil.llm.base import LLMMessage
+from yggdrasil.llm.base import BaseLLM, LLMMessage
+from yggdrasil.llm.structured import extract_json_array as _parse_candidate_json
+from yggdrasil.llm.structured import extract_json_object as _parse_json_object
 from yggdrasil.ratatosk.handoff import HandoffPort, LocalOrmHandoffPort
 from yggdrasil.ratatosk.llm_factory import build_discovery_llm
+from yggdrasil.ratatosk.model_summary import build_model_summary
 from yggdrasil.ratatosk.models import RataskRun
 from yggdrasil.ratatosk.prompts import (
     SYSTEM_MAP_FILESYSTEM,
@@ -38,8 +41,6 @@ from yggdrasil.ratatosk.snapshot import LocalOrmSnapshotPort, SnapshotPort
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
-
-    from yggdrasil.llm.base import BaseLLM
 
 logger = logging.getLogger("yggdrasil.ratatosk.agent")
 
@@ -159,6 +160,17 @@ class RataskAgent:
             },
         )
 
+        summary_text, summary_meta = build_model_summary(
+            existing.get("elements") or [],
+            existing.get("relationships") or [],
+        )
+        self._update_blackboard("model_summary", summary_meta)
+        logger.info(
+            "execute | building ModelSummary chars=%s depth=%s",
+            summary_meta.get("model_summary_chars"),
+            summary_meta.get("depth_reached"),
+        )
+
         # 2 — Metamodel guidance
         metamodel = self._run.model.metamodel
         ontology = _metamodel_guidance(metamodel)
@@ -168,7 +180,7 @@ class RataskAgent:
         )
 
         # 3-5 — Materialize, map, extract (mode-specific)
-        snapshot_ctx = snapshot_context_line(existing)
+        snapshot_ctx = f"ModelSummary:\n{summary_text}\n\n{snapshot_context_line(existing)}"
         raw_candidates = self._materialize_and_extract(d_input, ontology, snapshot_ctx)
         if raw_candidates is None:
             return DeltaBuckets()
@@ -363,6 +375,7 @@ class RataskAgent:
         repo_path: str,
         targets: list[str],
         ontology: str,
+        snapshot_ctx: str = "",
     ) -> list[dict]:
         """Step 5 (filesystem): read targets and extract candidates via LLM."""
         root = Path(repo_path)
@@ -381,6 +394,7 @@ class RataskAgent:
                 kind="file",
                 ontology=ontology,
                 source_label=rel,
+                snapshot_ctx=snapshot_ctx,
             )
             all_candidates.extend(batch)
         return all_candidates
@@ -391,10 +405,12 @@ class RataskAgent:
         kind: str,
         ontology: str,
         source_label: str = "",
+        snapshot_ctx: str = "",
     ) -> list[dict]:
         """Step 5: one LLM extract turn over a text blob."""
         preview = text[:_MAX_FILE_CHARS]
         label = source_label or kind
+        ctx_block = f"{snapshot_ctx}\n\n" if snapshot_ctx else ""
         response = self._llm.complete(
             messages=[
                 LLMMessage(
@@ -406,6 +422,7 @@ class RataskAgent:
                         "package (package slug), confidence (0..1), "
                         "properties (object, optional). No markdown fences.\n"
                         "If there are no architecture-relevant findings, return [].\n\n"
+                        f"{ctx_block}"
                         f"{ontology}\n\n"
                         f"Extra instructions: {self._run.instructions[:500] or '(none)'}\n\n"
                         f"Content:\n{preview}"
@@ -644,16 +661,24 @@ def _run_discovery(
     fetched = (run.blackboard or {}).get("fetched_model") or {}
     element_count = int(fetched.get("elements") or 0)
     relationship_count = int(fetched.get("relationships") or 0)
-    output_lines = [
-        "fetching existing model state via MCP",
-        f"found {element_count} existing elements",
-        f"found {relationship_count} relationships",
-        f"to_add: {len(buckets.to_add)}",
-        f"to_update: {len(buckets.to_update)}",
-        f"to_delete: {len(buckets.to_delete)}",
-        f"unchanged: {len(buckets.unchanged)}",
-        f"trigger: ratatosk {trigger}",
-    ]
+    output_lines: list[str] = []
+    if trigger == "bootstrap":
+        if element_count == 0:
+            output_lines.append("wipe no-op for empty graph")
+        else:
+            output_lines.append(f"wiping {element_count} elements before bootstrap rescan")
+    output_lines.extend(
+        [
+            "building ModelSummary",
+            f"found {element_count} existing elements",
+            f"found {relationship_count} relationships",
+            f"to_add: {len(buckets.to_add)}",
+            f"to_update: {len(buckets.to_update)}",
+            f"to_delete: {len(buckets.to_delete)}",
+            f"unchanged: {len(buckets.unchanged)}",
+            f"trigger: ratatosk {trigger}",
+        ]
+    )
 
     tree = (run.blackboard or {}).get("tree") or {}
     if d_input.mode == "filesystem" and tree.get("count") == 0:
@@ -904,54 +929,6 @@ def _stereotype_guidance_block(st: Any) -> list[str]:
         f"- property_schema: {schema}",
         f"- allowed_edge_rules (outbound): [{rules_txt}]",
     ]
-
-
-def _parse_candidate_json(raw: str) -> list[dict] | None:
-    """Parse a JSON array of candidate dicts from LLM output, or None."""
-    text = (raw or "").strip()
-    if not text:
-        return None
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:].strip()
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        start = text.find("[")
-        end = text.rfind("]")
-        if start < 0 or end <= start:
-            return None
-        try:
-            data = json.loads(text[start : end + 1])
-        except json.JSONDecodeError:
-            return None
-    if not isinstance(data, list):
-        return None
-    return [item for item in data if isinstance(item, dict) and item.get("name")]
-
-
-def _parse_json_object(raw: str) -> dict | None:
-    """Parse a JSON object from LLM output, or None."""
-    text = (raw or "").strip()
-    if not text:
-        return None
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.startswith("json"):
-            text = text[4:].strip()
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        start = text.find("{")
-        end = text.rfind("}")
-        if start < 0 or end <= start:
-            return None
-        try:
-            data = json.loads(text[start : end + 1])
-        except json.JSONDecodeError:
-            return None
-    return data if isinstance(data, dict) else None
 
 
 def _constrain_candidates_to_metamodel(

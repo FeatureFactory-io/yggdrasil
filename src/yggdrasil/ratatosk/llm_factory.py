@@ -16,7 +16,7 @@ from yggdrasil.llm.base import LLMMessage, LLMResponse
 
 logger = logging.getLogger("yggdrasil.ratatosk.llm_factory")
 
-# Deterministic AT candidates — only used by ScriptedDiscoveryLLM explicitly.
+# Deterministic AT candidates — aligned with sample_webapp expected_elements.yaml.
 _SCRIPTED_CANDIDATES = [
     {
         "name": "Payment API",
@@ -25,34 +25,22 @@ _SCRIPTED_CANDIDATES = [
         "confidence": 0.95,
     },
     {
+        "name": "Order Service",
+        "stereotype": "container",
+        "package": "technology",
+        "confidence": 0.93,
+    },
+    {
         "name": "Order Domain",
         "stereotype": "component",
         "package": "application",
         "confidence": 0.92,
     },
     {
-        "name": "Mobile App",
-        "stereotype": "system",
-        "package": "context",
-        "confidence": 0.9,
-    },
-    {
-        "name": "Notification Service",
-        "stereotype": "container",
-        "package": "technology",
-        "confidence": 0.88,
-    },
-    {
         "name": "Billing Worker",
-        "stereotype": "container",
-        "package": "technology",
-        "confidence": 0.86,
-    },
-    {
-        "name": "Legacy Batch",
-        "stereotype": "container",
-        "package": "technology",
-        "confidence": 0.55,
+        "stereotype": "component",
+        "package": "application",
+        "confidence": 0.90,
     },
 ]
 
@@ -139,15 +127,6 @@ class ScriptedDiscoveryLLM:
             )
 
         candidates = list(_SCRIPTED_CANDIDATES)
-        if "instruction" in prompt or "extra pass" in system.lower() or "domain" in prompt:
-            candidates.append(
-                {
-                    "name": "Domain Logic Probe",
-                    "stereotype": "component",
-                    "package": "application",
-                    "confidence": 0.84,
-                }
-            )
         if self._extra_candidate:
             candidates.append(dict(self._extra_candidate))
         if "noise" in prompt or "test_health" in prompt:

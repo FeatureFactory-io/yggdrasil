@@ -56,6 +56,7 @@ Answer before selecting modules:
 | Q8 | Should domain events proactively message the user? | Event Ingress |
 | Q9 | Multiple personas or model tiers (planner vs field)? | Agent Factory / Identities |
 | Q10 | Destructive actions need human approval? | HITL on Tool Surface |
+| Q11 | Does the agent parse structured JSON from LLM output (map/extract/metric steps)? | Requires thinking-aware normalization + Structured Output Extraction (§4.1) |
 
 ## 1.2 Capability → module map
 
@@ -170,7 +171,9 @@ Provenance tags mark where a pattern was observed. Status: `implemented` = seen 
 | HITL suggested actions | Tool Surface | implemented | taciturn2 | Approve destructive tools |
 | Scripted LLM test double | LLM Port | implemented | huginn | Deterministic integration tests |
 | `status_callback` on LLM retries | LLM Port | implemented | taciturn2, huginn | Conversation status update during rate-limit waits; no SSE required |
-| Extended thinking mode | LLM Port | implemented | huginn | `budget_tokens` passed to provider reasoning; optional, model-dependent |
+| Extended thinking mode (request-side) | LLM Port | implemented | huginn | `budget_tokens` passed to provider reasoning; optional, model-dependent |
+| Thinking-aware response normalization | LLM Port | implemented | yggdrasil | `LLMResponse.content` vs `LLMResponse.thinking`; adapters isolate reasoning at boundary |
+| Structured output extraction | LLM Port | implemented | yggdrasil | Shared strip + JSON extract for map/extract steps; prevents silent empty ops |
 | Prompt caching via system_blocks | LLM Port / Prompt Stack | implemented | huginn, taciturn2 | Anthropic `cache_control: ephemeral` on stable blocks; reduces cost+latency |
 | Workflow / Recipe Template layer | Prompt Stack | implemented | taciturn2 | DB-stored template (name, prompt_template, required_tools, expected_steps) injected as Layer 3 |
 | Intra-plan tool result cache | Tool Surface | implemented | huginn | Per-plan read cache keyed by tool+args SHA; clear on plan complete/fail |
@@ -210,9 +213,42 @@ Each module: **When to use**, **How**, **Implementation guidance**, **Integrates
 
 **Prompt caching via `system_blocks`:** For Anthropic-compatible providers, accept `system_blocks: list[dict]` alongside `system_prompt: str`. Each block: `{"type": "text", "text": "...", "cache_control": {"type": "ephemeral"}}`. Pass blocks directly to the provider `messages.create(system=system_blocks, ...)`. Static content (foundation prompt, domain rules, SA capsule) goes in system blocks; dynamic data (current observations, user context) goes in the user message. This keeps cached tokens warm across multiple calls in the same plan run. Providers without block support fall back to a single concatenated `system_prompt`. Observed: huginn `agent.py` `_build_system_blocks`, taciturn2 `ClaudeLLM`.
 
-**Extended thinking (optional, model-dependent):** Some providers (Anthropic Claude) accept `thinking: {"type": "enabled", "budget_tokens": N}`. Expose as an optional parameter on `generate_with_tools`. Use for planning steps that benefit from multi-step reasoning before tool selection; do not use for cheap data or assessment steps where it adds latency and cost without benefit. Observed: huginn `ClaudeLLM.THINKING_BUDGET = 8000`.
+**Extended thinking — request-side (optional, model-dependent):** Some providers (Anthropic Claude) accept `thinking: {"type": "enabled", "budget_tokens": N}`. Expose as an optional parameter on `generate_with_tools`. Use for planning steps that benefit from multi-step reasoning before tool selection; do not use for cheap data or assessment steps where it adds latency and cost without benefit. Observed: huginn `ClaudeLLM.THINKING_BUDGET = 8000`. This controls whether the model *generates* a reasoning trace — see response normalization below for how to *consume* it.
 
-**Integrates with:** Agent Factory, Agent Loop, Worker, Chat Streaming (token source), Prompt Stack (system_blocks source).
+**Thinking model response normalization (mandatory when Q11 is yes or models may emit reasoning):** Thinking/reasoning models are becoming the default across providers. Adapters must normalize at the boundary so downstream parsers never see mixed prose + JSON.
+
+**Response contract:**
+
+| Field | Semantics | Consumers |
+|-------|-----------|-----------|
+| `LLMResponse.content` | Machine-consumable answer only — JSON for map/extract steps, natural language for chat | Structured extractors, tool parsers, UI |
+| `LLMResponse.thinking` | Optional provider reasoning trace | DEBUG logs, audit, optional blackboard — never parsed as domain output |
+
+**Provider shapes (illustrative — normalize all to the contract above):**
+
+| Provider / model | Reasoning shape | Adapter action |
+|------------------|-----------------|----------------|
+| Ollama / Qwen3 | `message.thinking` field and/or `` inline in `content` | Copy field → `thinking`; strip tags from `content` |
+| Anthropic Claude | Extended thinking blocks separate from text | Map blocks → `thinking`; text blocks → `content` |
+| OpenAI o-series / reasoning | Internal reasoning tokens / separate content parts | Map per SDK; never pass reasoning to JSON parsers |
+
+**Implementation guidance:**
+
+- Normalize in `_parse_response` (or equivalent) — not in agent/runner code. One adapter fix protects all callers.
+- Prefer provider flags to disable thinking when supported (e.g. Ollama `think=false`) for cheap field steps — but **still parse defensively**; flags are not portable.
+- Field/batch tier default `max_tokens` must assume thinking consumes output budget. Illustrative default: **8000** when models may emit reasoning before JSON arrays. Truncated JSON fails parse → silent empty ops (worse than extra tokens).
+- Log `content_chars` and `thinking_chars` at INFO at adapter boundary; log thinking preview at DEBUG only.
+- **Failure mode to design against:** parse returns `None` → pipeline treats as zero ops → job exits 0 with empty graph. Structured steps must fail loud or retry — never silently succeed.
+
+**Structured output extraction (companion utility):** Provide a shared module (names illustrative: `normalize_llm_text`, `extract_json_array`, `extract_json_object`) that:
+
+1. Strips inline thinking blocks (`` tags)
+2. Strips markdown fences (`` ```json ``)
+3. Attempts full-text JSON parse, then bracket/brace slice fallback
+
+Wire all map/extract/metric parsers through this module — do not duplicate strip/parse logic in agent vs runner. Observed: yggdrasil `llm.structured`.
+
+**Integrates with:** Agent Factory, Agent Loop, Worker, Chat Streaming (token source), Prompt Stack (system_blocks source), Field/batch pipelines (§6.3).
 
 ## 4.2 Prompt Stack
 
@@ -570,6 +606,8 @@ class AgentBlackboard(Protocol):
 
 **Modules:** LLM Port (small tier), Prompt Stack, Tool Surface (narrow), Agent Factory; Agent Loop or linear pipeline; Agent Blackboard if multi-step in-run; Worker if rate-limited/long; Plan & Steps if resume required.
 
+**Thinking models note:** Field/batch agents that parse JSON from LLM output (map/extract/discovery) almost always need Structured Output Extraction (§4.1) even when using a "small" tier — Qwen3-class models emit reasoning regardless of tier. Budget `max_tokens` for thinking headroom; do not assume compact JSON-only responses.
+
 **Flow:** Input batch → decide/extract → services → optional blackboard across items → result record.
 
 ## 6.4 Custom assembly
@@ -619,6 +657,7 @@ Do not mock Tool Surface, services, or plan models.
 | Failed step | Step marked failed; policy continue vs abort honored; no silent success |
 | 429 / rate limit | Job enters retry/wait; completed steps not re-executed; eventually resumes or fails cleanly |
 | Bad LLM output | Agent Blackboard **retained**; no crash; user-visible or logged recovery |
+| Thinking-wrapped JSON | Structured extract succeeds; parse failure does **not** produce silent zero-op success |
 | Crash / resume | Mid-plan restart continues from next pending step; completed steps skipped |
 | Destructive HITL | Delete/mutation not executed until approval (if HITL selected) |
 
@@ -628,6 +667,7 @@ Do not mock Tool Surface, services, or plan models.
 - Tool envelopes with `success=false` surface as step/loop errors per policy.
 - Retry fields / `waiting_retry` populated on 429.
 - Blackboard keys after happy path; unchanged after parse-fail script.
+- Thinking-wrapped JSON fixtures parse to expected structured output; empty parse does not exit 0 with zero side effects.
 - No duplicate side effects on resume (idempotent relative to completed steps).
 - Logs include run/plan/step identifiers for troubleshooting.
 
@@ -645,6 +685,8 @@ Project SAO / test strategy must name these integration tests as the **Agent DoD
 - Circuit breaker optional for repeated provider errors.
 - Orphan plan recovery on a schedule.
 - Blackboard retain-on-failure.
+- Thinking-aware JSON extraction at LLM adapter boundary; shared structured extract utility for all map/extract steps.
+- Structured step parse failure must fail loud or retry — never silently succeed with zero ops.
 - Structural validate-before-LLM when inputs are machine-checkable (cheap reject).
 
 ## 8.2 Security
@@ -664,14 +706,16 @@ Rationale: prompt injection can cause the model to include an attacker-supplied 
 
 ## 8.3 Observability
 
-- INFO logs at: loop iteration, tool execute, plan state change, blackboard update, worker retry.
+- INFO logs at: loop iteration, tool execute, plan state change, blackboard update, worker retry, adapter `content_chars` / `thinking_chars`.
+- Reasoning traces (`LLMResponse.thinking`) at DEBUG only — never INFO in production logs.
 - Correlate with `run_id` / `plan_id` / `conversation_id`.
 - Token usage from `LLMResponse.usage` persisted when cost matters.
 
 ## 8.4 Testing strategy (beyond §7)
 
 - Contract tests for each `BaseLLM` adapter (optional, may hit sandbox APIs).
-- Unit tests for extract/truncate blackboard and envelope shaping.
+- Unit tests for extract/truncate blackboard, structured JSON extraction (thinking tags, fences, slice fallback), and envelope shaping.
+- `ScriptedLLM` fixtures must include thinking-wrapped JSON when Q11 is yes.
 - `ScriptedLLM` is the default for CI agent proofs.
 
 ---
@@ -682,7 +726,7 @@ Adopt in order; each slice ends with tests green. Gate Agent-facing slices on §
 
 | Slice | Deliver | Proof |
 |-------|---------|-------|
-| 1 | LLM Port + ScriptedLLM + one real adapter | Adapter contract / ScriptedLLM unit |
+| 1 | LLM Port + ScriptedLLM + thinking normalization + structured extract utility + one real adapter | Adapter contract; thinking fixture unit tests |
 | 2 | Tool Surface over one domain service | Executor envelope integration |
 | 3 | Prompt Stack + Agent Factory | Factory builds agent with ScriptedLLM |
 | 4 | Agent Loop (no plan) happy path | §7 conversational happy (tools only) |
@@ -708,6 +752,7 @@ Patterns were harvested from prior systems for grounding. This appendix is **not
 | `observed:taciturn2` | taciturn2 | BaseLLM, agentic loop, ToolExecutor, Plan/Step worker, dual 429, prompt layers, HITL, learning fields |
 | `observed:huginn` | huginn gjallarhorn | LLM ABC, ScriptedLLM, hybrid steps, tool envelope cache, atomic plan ownership, orphan recovery, SSE contract (designed) |
 | `observed:labyrinth` | labyrinth | Agent Blackboard prior/inject/retain, capped schema, snapshot-wins |
+| `observed:yggdrasil` | yggdrasil | Thinking-aware LLMResponse normalization, structured JSON extraction, field-tier token headroom |
 | `observed:mimir` | mimir Galdr | Thin client + stub factory, structural validate-before-LLM |
 | `observed:ontology-sao` | graph/ontology agent SAOs | Two-tier missions, append-only learned rules, run-scoped durable state, Celery long loops |
 | `designed:rag` | taciturn2 docs | Knowledge Index / prompt caching RAG |
@@ -732,11 +777,12 @@ from typing import Any, Iterator
 
 @dataclass(frozen=True)
 class LLMResponse:
-    content: str
-    stop_reason: str  # end_turn | tool_use | length | ...
+    content: str          # machine-consumable answer; thinking stripped
+    stop_reason: str      # end_turn | tool_use | length | ...
     usage: dict[str, int]
     tool_calls: list[dict[str, Any]] | None = None
     model: str | None = None
+    thinking: str = ""    # optional provider reasoning trace (DEBUG / audit only)
 
 
 class BaseLLM(ABC):
@@ -865,6 +911,10 @@ When copying into a project SAO during DTA:
 - [ ] §7 proof scenarios named as test files / DoD gate
 - [ ] Explicit “MCP out of scope / see MCP reference-arch” if tools will be exposed later
 - [ ] Model tiers and identities listed
+- [ ] Q11 answered — if yes: `content`/`thinking` separation documented in SAO LLM section
+- [ ] Structured extraction utility named; no duplicate parsers in agent vs runner
+- [ ] Field-tier `max_tokens` accounts for thinking headroom
+- [ ] Adverse proof: thinking-wrapped JSON scenario named in §7 test files
 
 ---
 
@@ -1001,5 +1051,75 @@ def convert_to_llm_schema(
 - Derive `input_schema` / `parameters` from type hints; include `required` for non-defaulted args.
 - Strip any parameter named `project_id` or `user_id` if it will be injected server-side.
 - Keep the same function list for both MCP tools and in-app agent tools; call the adapter once per provider at factory time.
+
+## B.10 Structured Output Extraction (thinking-aware)
+
+Companion utility to LLM Port — required when Q11 is yes. Lives adjacent to adapters; called by agent/runner, not inside vendor SDK code.
+
+```python
+import json
+import re
+
+_THINKING_BLOCK_RE = re.compile(
+    r"<\s*think(?:ing)?\s*>[\s\S]*?<\s*/\s*think(?:ing)?\s*>",
+    re.IGNORECASE,
+)
+
+
+def strip_thinking_blocks(text: str) -> str:
+    """Remove inline  blocks from model output."""
+    ...
+
+
+def strip_markdown_fence(text: str) -> str:
+    """Remove surrounding ```json fences if present."""
+    ...
+
+
+def normalize_llm_text(raw: str) -> str:
+    """Strip thinking + fences; does not parse JSON."""
+    ...
+
+
+def extract_json_array(raw: str) -> list[dict] | None:
+    """Parse JSON array of dicts; None on failure."""
+    ...
+
+
+def extract_json_object(raw: str) -> dict | None:
+    """Parse JSON object; None on failure."""
+    ...
+
+
+def _load_json_or_slice(text: str, *, start_char: str, end_char: str) -> object | None:
+    """Full parse, then bracket/brace slice fallback."""
+    ...
+```
+
+**Adapter + extractor flow:**
+
+```mermaid
+sequenceDiagram
+  participant Adapter as LLM_Adapter
+  participant Extract as StructuredExtract
+  participant Agent as Agent_or_Runner
+
+  Adapter->>Adapter: map provider fields → content + thinking
+  Adapter->>Agent: LLMResponse(content, thinking)
+  Agent->>Extract: extract_json_*(response.content)
+  Extract->>Agent: parsed dict/list or None
+  alt parse OK
+    Agent->>Agent: apply domain ops
+  else parse fail
+    Agent->>Agent: fail loud / retry — never silent zero-op
+  end
+```
+
+**Rules:**
+
+- Adapters call `normalize_llm_text` on `content` before returning (idempotent if extractor also normalizes).
+- Never pass `LLMResponse.thinking` to JSON extractors.
+- Unit-test fixtures must cover: separate thinking field, inline tags, markdown fences, truncated-array guard (integration).
+- Observed: yggdrasil `llm.structured`, `OllamaClient._parse_response`.
 
 *End of Artifact 56 — AI Agent Reference Architecture*

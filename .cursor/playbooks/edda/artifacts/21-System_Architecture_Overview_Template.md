@@ -124,6 +124,7 @@ Reference: docs/architecture/artifacts/56-AI_Agent_Reference_Architecture.md
 | Q8 | Should domain events proactively message the user? | | |
 | Q9 | Multiple personas or model tiers (planner vs. field)? | | |
 | Q10 | Destructive actions need human approval? | | |
+| Q11 | Does the agent parse structured JSON from LLM output? | | Requires thinking-aware normalization |
 
 ### Module Selection
 
@@ -175,6 +176,19 @@ Reference: docs/architecture/artifacts/56-AI_Agent_Reference_Architecture.md
 |----------|------|------------|---------------|
 | | | | |
 
+### Thinking Models (if Q11 yes)
+
+<!-- Omit if no structured JSON extraction from LLM output -->
+<!-- Reference: artifact 56 §4.1 — Thinking model response normalization -->
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Response contract | `LLMResponse.content` / `LLMResponse.thinking` | |
+| Adapter normalization | {adapter module} | |
+| Structured extract utility | {module path} | |
+| Field-tier max_tokens | | Thinking headroom before JSON |
+| Thinking log policy | DEBUG traces; INFO content/thinking char counts | |
+
 ### Agent Integration Proof (DoD Gate)
 
 | Profile | Test file | Scenario |
@@ -183,6 +197,7 @@ Reference: docs/architecture/artifacts/56-AI_Agent_Reference_Architecture.md
 | Failed step | | |
 | 429 / rate limit | | |
 | Bad LLM output | | |
+| Thinking-wrapped JSON | | Parse succeeds; no silent zero-op |
 | Crash / resume | | |
 | Destructive HITL | | |
 

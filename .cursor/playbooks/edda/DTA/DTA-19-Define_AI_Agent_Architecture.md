@@ -18,7 +18,7 @@ Define AI Agent Architecture
 
 Assess the AI agent mission, select modules from the AI Agent Reference Architecture, choose an assembly profile, and document all decisions in SAO §17 — so that implementation follows a coherent, testable agent stack.
 
-**Reference:** `.cursor/playbooks/edda/artifacts/56-AI_Agent_Reference_Architecture.md`
+**Reference:** Playbook artifact **AI Agent Reference Architecture** (latest released Edda version).
 
 ---
 
@@ -35,7 +35,7 @@ If MCP tools exist but the agent loop lives elsewhere (e.g. in the AI client), r
 
 ## Internal Process
 
-1. **Read the reference architecture** — `.cursor/playbooks/edda/artifacts/56-AI_Agent_Reference_Architecture.md` §0–§1 before answering any question below.
+1. **Fetch the latest AI Agent Reference Architecture** from the playbook and read §0–§1 before answering any question below.
 2. **Answer mission questions** — determine which modules are required.
 3. **Select modules** — use the §1.3 selection matrix.
 4. **Pick assembly profile** — §6, or compose a custom set and verify §2.2 dependency rules.
@@ -63,6 +63,7 @@ Answer each question Yes / No / Partial and note the impact:
 | Q8 | Should domain events proactively message the user? | | Event Ingress |
 | Q9 | Multiple personas or model tiers (planner vs. field)? | | Agent Factory / Identities |
 | Q10 | Destructive actions need human approval? | | HITL on Tool Surface |
+| Q11 | Does the agent parse structured JSON from LLM output? | | Requires thinking-aware normalization + Structured Output Extraction (artifact §4.1) |
 
 ### 2. Module Selection
 
@@ -137,6 +138,19 @@ Agent identities (name + role + allowed tools):
 |----------|------|------------|---------------|
 | | | | |
 
+### 6.5 Thinking Models (if Q11 is yes, or field/batch profile)
+
+Document how the project handles reasoning models that emit thinking separately from answers:
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Response contract | `content` = machine answer; `thinking` = optional trace | Downstream parsers never see mixed prose + JSON |
+| Normalization location | LLM adapter `_parse_response` | One fix protects all callers |
+| Structured extract utility | Module name / path | Single shared strip + JSON parse — no duplicate agent/runner parsers |
+| Field-tier `max_tokens` | e.g. 8000 | Thinking headroom before JSON arrays; truncation → silent empty ops |
+| Thinking log level | DEBUG for traces; INFO for content_chars/thinking_chars | Observability without log noise |
+| Disable thinking when possible? | e.g. Ollama `think=false` | Reduces cost; still parse defensively |
+
 ### 7. Agent Integration Proof (DoD Gate)
 
 Name the integration test files/scenarios required by artifact 56 §7. These are blocking DoD gates — a slice is not done until these pass.
@@ -147,6 +161,7 @@ Name the integration test files/scenarios required by artifact 56 §7. These are
 | Failed step | | Step marked failed; policy honored |
 | 429 / rate limit | | Retry; completed steps not re-run |
 | Bad LLM output | | Blackboard retained; no crash |
+| Thinking-wrapped JSON | | Structured extract succeeds; parse fail ≠ silent zero-op success |
 | Crash / resume | | Mid-plan restart; completed steps skipped |
 | Destructive HITL | | Mutation not executed until approval (if HITL selected) |
 
@@ -171,6 +186,7 @@ Report coverage and gaps.
 - ✅ **Model tiers + agent identities** defined
 - ✅ **Agent Integration Proof scenarios** named as DoD gate test files
 - ✅ **Skill coverage** assessed for this domain
+- ✅ **Thinking model handling documented** (if Q11 yes — content/thinking contract, extract utility, token headroom)
 - ✅ **Decision recorded** for inclusion in SAO §17 (DTA-18)
 
 ## Agent

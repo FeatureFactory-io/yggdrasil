@@ -145,6 +145,7 @@ markers = [
     "integration: tests requiring DB / services",
     "acceptance: acceptance tests (behave BDD)",
     "e2e: end-to-end browser tests (slow)",
+    "e2e_real: local-only real bootstrap + Ollama (requires YGGDRASIL_E2E=1)",
 ]
 
 # ---------------------------------------------------------------------------

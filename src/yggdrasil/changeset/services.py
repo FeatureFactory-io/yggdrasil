@@ -636,16 +636,49 @@ class ChangeSetService:
 
     def _apply_add_relationship(self, model, detail: dict) -> None:
         """Create a Relationship from add_relationship detail."""
+        source_id = detail.get("source_id")
+        target_id = detail.get("target_id")
+        if not source_id:
+            source_id = self._resolve_element_id(
+                model,
+                detail.get("source_name"),
+                detail.get("source_slug"),
+            )
+        if not target_id:
+            target_id = self._resolve_element_id(
+                model,
+                detail.get("target_name"),
+                detail.get("target_slug"),
+            )
         stereotype = self._get_or_create_stereotype(
             model, detail.get("stereotype_slug", "depends_on"), is_edge=True
         )
         Relationship.objects.get_or_create(
             model=model,
-            source_id=detail["source_id"],
-            target_id=detail["target_id"],
+            source_id=source_id,
+            target_id=target_id,
             stereotype=stereotype,
             defaults={"properties": detail.get("properties", {})},
         )
+
+    def _resolve_element_id(
+        self,
+        model,
+        name: str | None,
+        slug: str | None,
+    ) -> int:
+        """Resolve element PK by name or slug within model."""
+        qs = Element.objects.filter(model=model)
+        if slug:
+            el = qs.filter(slug=slug).first()
+            if el:
+                return el.pk
+        if name:
+            el = qs.filter(name=name).first()
+            if el:
+                return el.pk
+        msg = f"Element not found for relationship: name={name!r} slug={slug!r}"
+        raise ValueError(msg)
 
     def _apply_delete_relationship(self, detail: dict) -> None:
         """Delete relationship referenced by delete_relationship detail."""

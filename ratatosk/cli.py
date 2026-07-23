@@ -117,6 +117,7 @@ def bootstrap(
     token = _require_token(token)
     config = load_bootstrap_config(
         flags={"server": server, "metamodel": metamodel},
+        repo_path=path,
     )
     logger.info("bootstrap | model=%s metamodel=%s path=%s", model_name, metamodel, path)
     if not os.path.exists(path):

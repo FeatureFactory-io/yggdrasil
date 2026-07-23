@@ -164,10 +164,7 @@ def build_discovery_llm(
         return ScriptedDiscoveryLLM(empty_plan=empty_plan, extra_candidate=extra_candidate)
 
     logger.info("build_discovery_llm | provider=%s", provider)
-    if provider == "anthropic":
-        from yggdrasil.llm.adapters.anthropic import AnthropicClient
+    from ratatosk.config import build_llm_from_config, load_bootstrap_config
 
-        return AnthropicClient()
-    from yggdrasil.llm.adapters.ollama import OllamaClient
-
-    return OllamaClient()
+    config = load_bootstrap_config(env=os.environ)
+    return build_llm_from_config(config)

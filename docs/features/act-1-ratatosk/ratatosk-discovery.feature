@@ -124,6 +124,29 @@ Feature: ACT-1-DISC Ratatosk real discovery
     Then no ChangeSet operation references stereotype "microservice"
     And the model does not contain an element with stereotype "microservice"
 
+  # ── ACT-1-LLM — Anthropic bootstrap (@anthropic optional manual cert) ─────
+
+  @wip @anthropic
+  Scenario: ACT-1-LLM-05 Bootstrap uses Anthropic when LLM_PROVIDER is anthropic
+    Given the environment variable "LLM_PROVIDER" is set to "anthropic"
+    And the environment variable "ANTHROPIC_API_KEY" is set
+    And Priya has a Yggdrasil personal access token with read-write scope
+    And the Yggdrasil model "Yggdrasil" exists with no elements
+    And the fixture repository "sample_webapp" is available
+    When Priya runs ratatosk bootstrap against fixture "sample_webapp" via subprocess
+    Then the discovery LLM was invoked at least once
+    And the output does not contain "scripted-discovery"
+    And the output does not contain "Ollama request failed"
+
+  @wip @anthropic
+  Scenario: ACT-1-LLM-06 Bootstrap fails clearly when Anthropic API key is missing
+    Given the environment variable "LLM_PROVIDER" is set to "anthropic"
+    And the environment variable "ANTHROPIC_API_KEY" is not set
+    And the fixture repository "sample_webapp" is available
+    When Priya runs ratatosk bootstrap against fixture "sample_webapp" via subprocess
+    Then the exit code is not 0
+    And the output contains "ANTHROPIC_API_KEY"
+
   # ── MVP-W2 / edge cases ────────────────────────────────────────────────────
 
   @wip

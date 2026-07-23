@@ -556,6 +556,13 @@ Owned by Metamodel `c4` (Django admin / `ensure_c4_metamodel()`), not by each Mo
 | `Then the effective config key "{key}" is {value}` | CFG-* (@wip TFK-07) |
 | `When Priya runs ratatosk bootstrap with flag "{flag}"` | CFG-02 (@wip TFK-07) |
 | `Given a repo config file "ratatosk.yaml" with model_summary_token_budget {n:d}` | CFG-02 (@wip TFK-07) |
+| `Given a repo config file "{path}" with llm_provider "{value}"` | CFG-12, CFG-13 (@wip TFK-07) |
+| `Given a repo config file "{path}" with base_model "{value}"` | CFG-12 (@wip TFK-07) |
+| `When Ratatosk loads configuration for bootstrap with repo "{path}"` | CFG-12, CFG-13 (@wip TFK-07) |
+| `Then the effective config key "resolved_model" is "{value}"` | CFG-11, CFG-12 (@wip TFK-07) |
+| `Then the effective config key "resolved_model" contains "{substring}"` | CFG-11 (@wip TFK-07) |
+| `Given the environment variable "ANTHROPIC_API_KEY" is set` | LLM-05 manual (@wip TFK-07) |
+| `Given the environment variable "ANTHROPIC_API_KEY" is not set` | LLM-06 (@wip TFK-07) |
 
 **Ratatosk scout blackboard keys:** `evidence_plan`, `tool_calls`, `model_summary_chars`, `sources`, `scout_plan`.
 
@@ -567,7 +574,8 @@ Owned by Metamodel `c4` (Django admin / `ensure_c4_metamodel()`), not by each Mo
 CLI-01, CLI-06, CLI-07, CLI-08, CLI-09
 DISC-01, DISC-02, DISC-04, DISC-05, DISC-06, DISC-07, DISC-11, DISC-13, DISC-15, DISC-16, DISC-21
 LLM-01, LLM-02, LLM-03, LLM-04  (@ollama @wip)
-CFG-02, CFG-06, CFG-07, CFG-08, CFG-09
+LLM-05, LLM-06  (@anthropic @wip)
+CFG-02, CFG-06, CFG-07, CFG-08, CFG-09, CFG-10, CFG-11, CFG-12, CFG-13
 ```
 
 Tag **`@ollama`** on LLM scenarios for optional CI. Default AT uses ScriptedDiscoveryLLM until BPE implements OllamaClient.

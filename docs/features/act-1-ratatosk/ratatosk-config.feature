@@ -24,7 +24,11 @@ Feature: ACT-1-CFG Ratatosk CLI configuration
     When Ratatosk loads configuration for bootstrap
     Then the effective config key "ollama_base_url" is "http://localhost:11434"
 
-  Scenario: ACT-1-CFG-08 Default LLM model is qwen3:14b when unset
+  Scenario: ACT-1-CFG-08 Default LLM provider is ollama when unset
+    When Ratatosk loads configuration for bootstrap
+    Then the effective config key "llm_provider" is "ollama"
+
+  Scenario: ACT-1-CFG-08b Default LLM model is qwen3:14b when unset
     When Ratatosk loads configuration for bootstrap
     Then the effective config key "llm_ollama_model" is "qwen3:14b"
 
@@ -32,6 +36,35 @@ Feature: ACT-1-CFG Ratatosk CLI configuration
     Given the environment variable "YGGDRASIL_SERVER_URL" is set to "http://localhost:8000"
     When Ratatosk loads configuration for bootstrap
     Then the effective config key "yggdrasil_server_url" is "http://localhost:8000"
+
+  # ── ACT-1-LLM-ANTHROPIC — unified BASE_MODEL + provider swap ────────────────
+
+  Scenario: ACT-1-CFG-10 LLM_PROVIDER anthropic selects Anthropic not Ollama
+    Given the environment variable "LLM_PROVIDER" is set to "anthropic"
+    And the environment variable "ANTHROPIC_API_KEY" is set to "sk-test-key"
+    When Ratatosk loads configuration for bootstrap
+    Then the effective config key "llm_provider" is "anthropic"
+
+  Scenario: ACT-1-CFG-11 BASE_MODEL haiku resolves to Anthropic Haiku model id
+    Given the environment variable "LLM_PROVIDER" is set to "anthropic"
+    And the environment variable "BASE_MODEL" is set to "haiku"
+    And the environment variable "ANTHROPIC_API_KEY" is set to "sk-test-key"
+    When Ratatosk loads configuration for bootstrap
+    Then the effective config key "resolved_model" contains "haiku"
+
+  Scenario: ACT-1-CFG-12 Repo .ratatosk/config.yaml sets llm_provider for bootstrap
+    Given a repo config file ".ratatosk/config.yaml" with llm_provider "ollama"
+    And a repo config file ".ratatosk/config.yaml" with base_model "qwen3:14b"
+    When Ratatosk loads configuration for bootstrap with repo "./tests/fixtures/repos/sample_webapp"
+    Then the effective config key "llm_provider" is "ollama"
+    And the effective config key "resolved_model" is "qwen3:14b"
+
+  Scenario: ACT-1-CFG-13 Environment overrides repo config for llm_provider
+    Given a repo config file ".ratatosk/config.yaml" with llm_provider "ollama"
+    And the environment variable "LLM_PROVIDER" is set to "anthropic"
+    And the environment variable "ANTHROPIC_API_KEY" is set to "sk-test-key"
+    When Ratatosk loads configuration for bootstrap with repo "./tests/fixtures/repos/sample_webapp"
+    Then the effective config key "llm_provider" is "anthropic"
 
   # ── MVP-W2: scout / update / doctor ────────────────────────────────────────
 

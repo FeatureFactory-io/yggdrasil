@@ -17,6 +17,7 @@ import re
 import tempfile
 from pathlib import Path
 
+import yaml
 from behave import given, then, when  # type: ignore[import]
 from tests.fixtures.factories import UserFactory
 from tests.fixtures.factories.model_factories import (
@@ -568,6 +569,8 @@ def step_load_config_bootstrap(context):
     from ratatosk.config import load_bootstrap_config
 
     env = {**dict(os.environ), **getattr(context, "env_overrides", {})}
+    for key in getattr(context, "env_unset", set()):
+        env.pop(key, None)
     flags = getattr(context, "cli_flags", {})
     context.bootstrap_config = load_bootstrap_config(
         env=env,
@@ -594,3 +597,105 @@ def step_repo_config_budget(context, n):
     """CFG-02 repo config fixture — stub for future ratatosk.yaml merge."""
     context.repo_config_budget = n
     logger.info("step_repo_config_budget | budget=%s", n)
+
+
+def _repo_yaml_bucket(context) -> dict[str, dict[str, str]]:
+    if not hasattr(context, "repo_yaml_data"):
+        context.repo_yaml_data = {}
+    return context.repo_yaml_data
+
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+@given('a repo config file "{path}" with llm_provider "{value}"')
+def step_repo_config_llm_provider(context, path, value):
+    """CFG-12/13: accumulate repo YAML llm_provider."""
+    bucket = _repo_yaml_bucket(context)
+    bucket.setdefault(path, {})["llm_provider"] = value
+    logger.info("step_repo_config_llm_provider | path=%s value=%s", path, value)
+
+
+@given('a repo config file "{path}" with base_model "{value}"')
+def step_repo_config_base_model(context, path, value):
+    """CFG-12: accumulate repo YAML base_model."""
+    bucket = _repo_yaml_bucket(context)
+    bucket.setdefault(path, {})["base_model"] = value
+    logger.info("step_repo_config_base_model | path=%s value=%s", path, value)
+
+
+def _write_repo_yaml_files(context) -> None:
+    root = _project_root()
+    for rel_path, data in _repo_yaml_bucket(context).items():
+        target = root / rel_path.strip("./")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+        logger.info("step_write_repo_yaml | path=%s keys=%s", target, list(data))
+
+
+@when('Ratatosk loads configuration for bootstrap with repo "{path}"')
+def step_load_config_bootstrap_with_repo(context, path):
+    """CFG-12/13: load config with repo YAML merge."""
+    from ratatosk.config import load_bootstrap_config
+
+    _write_repo_yaml_files(context)
+    env = {**dict(os.environ), **getattr(context, "env_overrides", {})}
+    for key in getattr(context, "env_unset", set()):
+        env.pop(key, None)
+    flags = getattr(context, "cli_flags", {})
+    repo = str(_project_root() / path.strip("./"))
+    context.cli_repo_path = repo
+    context.bootstrap_config = load_bootstrap_config(
+        env=env,
+        repo_path=repo,
+        flags=flags,
+    )
+    logger.info(
+        "step_load_config_bootstrap_with_repo | repo=%s llm_provider=%s",
+        repo,
+        context.bootstrap_config.llm_provider,
+    )
+
+
+@then('the effective config key "resolved_model" is "{value}"')
+def step_effective_config_resolved_model_is(context, value):
+    """CFG-11/12: exact resolved_model assertion."""
+    config = getattr(context, "bootstrap_config", None)
+    assert config is not None, "load configuration step must run first"
+    actual = getattr(config, "resolved_model", None)
+    assert str(actual) == value, f"resolved_model: expected {value!r}, got {actual!r}"
+
+
+@then('the effective config key "resolved_model" contains "{substring}"')
+def step_effective_config_resolved_model_contains(context, substring):
+    """CFG-11: substring match on resolved_model."""
+    config = getattr(context, "bootstrap_config", None)
+    assert config is not None, "load configuration step must run first"
+    actual = getattr(config, "resolved_model", None)
+    assert actual is not None, "resolved_model not set on BootstrapConfig"
+    assert substring in str(actual), f"resolved_model {actual!r} missing {substring!r}"
+
+
+@given('the environment variable "ANTHROPIC_API_KEY" is set')
+def step_anthropic_api_key_set(context):
+    """LLM-05: require real ANTHROPIC_API_KEY in environment for manual cert."""
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise AssertionError(
+            "ANTHROPIC_API_KEY must be set in environment for @anthropic scenarios"
+        )
+    if not hasattr(context, "env_overrides"):
+        context.env_overrides = {}
+    context.env_overrides["ANTHROPIC_API_KEY"] = os.environ["ANTHROPIC_API_KEY"]
+    logger.info("step_anthropic_api_key_set | using env ANTHROPIC_API_KEY")
+
+
+@given('the environment variable "ANTHROPIC_API_KEY" is not set')
+def step_anthropic_api_key_not_set(context):
+    """LLM-06: ensure API key absent from effective env."""
+    if not hasattr(context, "env_unset"):
+        context.env_unset = set()
+    context.env_unset.add("ANTHROPIC_API_KEY")
+    if hasattr(context, "env_overrides"):
+        context.env_overrides.pop("ANTHROPIC_API_KEY", None)
+    logger.info("step_anthropic_api_key_not_set | ANTHROPIC_API_KEY excluded")

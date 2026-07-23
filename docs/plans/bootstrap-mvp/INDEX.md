@@ -52,6 +52,7 @@ Do not start wave *N+1* until wave *N* checkpoint is green.
 | ACT-1-DISC-06 | 1 | W4 | [04-discovery/ACT-1-DISC-06.md](04-discovery/ACT-1-DISC-06.md) | DISC-01 |
 | ACT-1-LLM-01 | 1 | W3 | [02-ollama-llm/ACT-1-LLM-01.md](02-ollama-llm/ACT-1-LLM-01.md) | CFG-06,07 |
 | ACT-1-LLM-03 | 1 | W3 | [02-ollama-llm/ACT-1-LLM-03.md](02-ollama-llm/ACT-1-LLM-03.md) | LLM-01 |
+| ACT-1-LLM-ANTHROPIC | 1 | W3 | [02-ollama-llm/ACT-1-LLM-ANTHROPIC-PROVIDER.md](02-ollama-llm/ACT-1-LLM-ANTHROPIC-PROVIDER.md) | LLM-01, CFG-06..09; CFG-10..13, LLM-05..06 |
 | ACT-1-CLI-08 | 1 | W5 | [03-cli-bootstrap/ACT-1-CLI-08.md](03-cli-bootstrap/ACT-1-CLI-08.md) | wipe in runner |
 | ACT-1-CLI-01 | 1 | W5 | [03-cli-bootstrap/ACT-1-CLI-01.md](03-cli-bootstrap/ACT-1-CLI-01.md) | DISC-01, CLI-08 |
 | ACT-1-CLI-09 | 1 | W5 | [03-cli-bootstrap/ACT-1-CLI-09.md](03-cli-bootstrap/ACT-1-CLI-09.md) | CFG-09, DISC-21 |
@@ -114,8 +115,9 @@ flowchart TB
 
 | Gap | Owner plan |
 |-----|------------|
-| No `ratatosk/config.py`; `_build_llm()` ignores CFG-06 | ACT-1-CFG-06 |
-| `OllamaClient.complete()` NotImplemented | ACT-1-LLM-01 |
+| No `ratatosk/config.py`; `_build_llm()` ignores CFG-06 | ACT-1-CFG-06 (done W1) |
+| `AnthropicClient.complete()` NotImplemented | ACT-1-LLM-ANTHROPIC |
+| `OllamaClient.complete()` NotImplemented | ACT-1-LLM-01 (done W3) |
 | Runner logs `fetching existing model state` not `building ModelSummary` | ACT-1-CLI-01, DISC-15 |
 | No bootstrap wipe step | ACT-1-CLI-08 |
 | `propose_changeset` skips Munin relationship planning | ACT-1-CLI-04 |

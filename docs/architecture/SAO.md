@@ -92,7 +92,11 @@ class LLMClient(Protocol):
     def stream(self, messages: list[Message], *, model: str) -> Iterator[str]: ...
 ```
 
-Concrete implementations: `AnthropicClient` (default), `OpenAIClient`, `OllamaClient`. Selected via `LLM_PROVIDER` env var. Ratatosk and Munin each specify their preferred model tier via config; the abstraction routes the call.
+Concrete implementations: `AnthropicClient` (default), `OpenAIClient`, `OllamaClient`. Selected via `LLM_PROVIDER` env var. Ratatosk CLI bootstrap subprocess resolves config via `ratatosk.config.load_bootstrap_config` (no Django): **flags → env → repo `.ratatosk/config.yaml` or `ratatosk.yaml` → `~/.ratatosk/config.yaml`**. `ANTHROPIC_API_KEY` is **env-only** (never YAML).
+
+**Ratatosk CLI defaults:** `LLM_PROVIDER=ollama`, `BASE_MODEL` unset → `qwen3:14b` (Ollama) or `claude-3-5-haiku-20241022` (Anthropic). Alias `BASE_MODEL=haiku|sonnet5` maps to concrete API ids. Legacy `LLM_OLLAMA_MODEL` / `LLM_ANTHROPIC_MODEL` override `BASE_MODEL` when set. Tests use explicit `LLM_PROVIDER=scripted`.
+
+Ratatosk and Munin each specify their preferred model tier via config; the abstraction routes the call.
 
 **Thinking models:** Providers increasingly return reasoning separately from the answer (Qwen3 `message.thinking`, Claude extended thinking, OpenAI reasoning). Adapters normalize at the boundary:
 
@@ -542,8 +546,9 @@ DEBUG=True
 DATABASE_URL=postgresql://yggdrasil:yggdrasil@localhost:5432/yggdrasil
 REDIS_URL=redis://localhost:6379/0
 SECRET_KEY=dev-only-insecure-key
-LLM_PROVIDER=ollama          # or anthropic, openai
-ANTHROPIC_API_KEY=           # optional for local
+LLM_PROVIDER=ollama          # or anthropic, openai (scripted for tests only)
+BASE_MODEL=                  # unified alias: haiku, sonnet5, qwen3:14b
+ANTHROPIC_API_KEY=           # env only; required if LLM_PROVIDER=anthropic
 OLLAMA_BASE_URL=http://ollama:11434
 ```
 

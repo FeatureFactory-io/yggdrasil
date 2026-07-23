@@ -12,6 +12,7 @@ AT integration tests use ScriptedLLM via LLM_PROVIDER=scripted env var.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import tempfile
 from pathlib import Path
@@ -542,29 +543,54 @@ def _extract_repo_path(command: str, context) -> str:
 
 @given('the environment variable "{name}" is set to "{value}"')
 def step_env_var_set(context, name, value):
-    """@wip — bootstrap env for CLI-09 / CFG-*."""
-    raise NotImplementedError("TFK-07: environment variable step")
+    """Bootstrap env for CLI-09 / CFG-*."""
+    if not hasattr(context, "env_overrides"):
+        context.env_overrides = {}
+    context.env_overrides[name] = value
+    logger.info("step_env_var_set | %s=%s", name, value)
 
 
 @when('Priya runs ratatosk bootstrap with flag "{flag}"')
 def step_bootstrap_with_flag(context, flag):
-    """@wip — CFG-02 CLI flag override."""
-    raise NotImplementedError("TFK-07: bootstrap with flag")
+    """CFG-02 CLI flag override — stored for config loader."""
+    context.cli_flags = getattr(context, "cli_flags", {})
+    if "=" in flag:
+        key, val = flag.split("=", 1)
+        context.cli_flags[key.lstrip("-")] = val
+    else:
+        context.cli_flags[flag.lstrip("-")] = True
+    logger.info("step_bootstrap_with_flag | flag=%s", flag)
 
 
 @when("Ratatosk loads configuration for bootstrap")
 def step_load_config_bootstrap(context):
-    """@wip — CFG-06..09 config loader."""
-    raise NotImplementedError("TFK-07: load config for bootstrap")
+    """CFG-06..09 config loader."""
+    from ratatosk.config import load_bootstrap_config
+
+    env = {**dict(os.environ), **getattr(context, "env_overrides", {})}
+    flags = getattr(context, "cli_flags", {})
+    context.bootstrap_config = load_bootstrap_config(
+        env=env,
+        repo_path=getattr(context, "cli_repo_path", ""),
+        flags=flags,
+    )
+    logger.info(
+        "step_load_config_bootstrap | llm_provider=%s",
+        context.bootstrap_config.llm_provider,
+    )
 
 
 @then('the effective config key "{key}" is {value}')
 def step_effective_config_key(context, key, value):
-    """@wip — CFG effective config assertion."""
-    raise NotImplementedError("TFK-07: effective config key")
+    """CFG effective config assertion."""
+    config = getattr(context, "bootstrap_config", None)
+    assert config is not None, "load configuration step must run first"
+    actual = getattr(config, key, None)
+    assert str(actual) == value.strip('"'), f"{key}: expected {value!r}, got {actual!r}"
 
 
 @given('a repo config file "ratatosk.yaml" with model_summary_token_budget {n:d}')
 def step_repo_config_budget(context, n):
-    """@wip — CFG-02 repo config fixture."""
-    raise NotImplementedError("TFK-07: repo ratatosk.yaml fixture")
+    """CFG-02 repo config fixture — stub for future ratatosk.yaml merge."""
+    context.repo_config_budget = n
+    logger.info("step_repo_config_budget | budget=%s", n)

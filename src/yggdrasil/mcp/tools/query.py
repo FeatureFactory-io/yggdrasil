@@ -19,7 +19,7 @@ import logging
 from django.db.models import Q
 
 from yggdrasil.changeset.models import ChangeSet
-from yggdrasil.graph.models import Element, Relationship, Stereotype, YggdrasilModel
+from yggdrasil.graph.models import Element, Package, Relationship, Stereotype, YggdrasilModel
 from yggdrasil.mcp.server import get_current_user_id
 from yggdrasil.ratatosk.models import RataskRun
 
@@ -257,6 +257,31 @@ def list_stereotypes(model: str) -> dict:
     ]
     result = {"items": items}
     logger.info("list_stereotypes | model=%s count=%s user=%s", model, len(items), user_id)
+    return result
+
+
+def list_packages(
+    model: str,
+    limit: int = 50,
+) -> dict:
+    """
+    Return packages defined on the model's metamodel.
+
+    :param model: Model slug. Example: "yggdrasil"
+    :param limit: Max results. Example: 50
+    :return: {"items": [...], "total": N}
+    :raises ValueError: If model slug not found.
+    """
+    user_id = get_current_user_id()
+    logger.info("list_packages | model=%s user=%s", model, user_id)
+    ymodel = _resolve_model(model)
+    page_limit = min(max(limit, 1), _MAX_LIMIT)
+    qs = Package.objects.filter(metamodel=ymodel.metamodel).order_by("name")[:page_limit]
+    items = [
+        {"name": pkg.name, "slug": pkg.slug, "description": pkg.description or ""} for pkg in qs
+    ]
+    result = {"items": items, "total": Package.objects.filter(metamodel=ymodel.metamodel).count()}
+    logger.info("list_packages | model=%s count=%s user=%s", model, len(items), user_id)
     return result
 
 

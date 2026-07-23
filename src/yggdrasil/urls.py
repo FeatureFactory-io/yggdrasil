@@ -14,11 +14,14 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 
+from yggdrasil.mcp.http_bridge import dispatch_tool
 from yggdrasil.web.views import health
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("health/", health, name="health"),
+    path("mcp/tools/<str:tool_name>/", dispatch_tool, name="mcp-tool-dispatch"),
+    path("mcp/tools/<str:tool_name>", dispatch_tool),
     path("auth/", include("yggdrasil.auth.urls", namespace="auth")),
     path("api/v1/", include("yggdrasil.api.urls", namespace="api")),
     path("changesets/", include("yggdrasil.changeset.urls")),

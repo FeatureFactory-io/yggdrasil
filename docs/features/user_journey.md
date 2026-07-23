@@ -76,41 +76,81 @@ Priya opens "Settings → API Access" from the user menu.
 ```bash
 $ export YGGDRASIL_TOKEN=<token>
 
-# Generic bootstrap — full NER pass, no existing model to compare against
+# First bootstrap — empty model, full filesystem scan
 $ ratatosk bootstrap ./repo --token=$YGGDRASIL_TOKEN --model Yggdrasil --metamodel=c4
 
-# Guided bootstrap — Ratatosk reads the existing model first, then focuses its pass
-$ ratatosk bootstrap ./repo --token=$YGGDRASIL_TOKEN --model Yggdrasil --metamodel=c4 \
-    --instructions "Do an extra pass on the business logic layer — check whether any Domain objects have drifted out of sync with their model representations."
-
-[ratatosk] fetching existing model state via MCP …
-[ratatosk] found 31 existing elements, 44 relationships in model Yggdrasil
-[ratatosk] scanning ./repo with instructions …
+[ratatosk] wiping 0 elements and 0 relationships on model Yggdrasil (bulk ChangeSet op; revertible)
+[ratatosk] building ModelSummary (8000 token budget) via MCP …
+[ratatosk] scanning ./repo …
 [ratatosk] found 3 services, 12 modules, 4 external dependencies, 8 domain objects
-[ratatosk] delta buckets:
-             to_add:    6 elements, 11 relationships
-             to_update: 3 elements (domain objects out of sync)
-             to_delete: 1 element (removed module)
-             unchanged: 22 elements
-[munin]    reading buckets, planning graph operations …
-[munin]    ChangeSet #4: 6 add-element ops, 11 add-relationship ops,
-                         3 update-element ops, 1 delete-element op
+[ratatosk] buckets (bootstrap — add-heavy):
+             to_add: 27 element candidates
+[munin]    reading candidates, planning graph operations …
+[munin]    ChangeSet #4: 27 add-element ops, 18 add-relationship ops
                          2 ops below threshold → queued for review
 [ratatosk] run complete — ChangeSet #4 pending
           → https://yggdrasil.featurefactory.io/runs/4
+
+# Re-bootstrap — populated model: wipe then rescan (NOT delta merge)
+$ ratatosk bootstrap ./repo --token=$YGGDRASIL_TOKEN --model Yggdrasil --metamodel=c4 \
+    --instructions "Do an extra pass on the business logic layer — check whether any Domain objects have drifted out of sync with their model representations."
+
+[ratatosk] wiping 31 elements and 44 relationships on model Yggdrasil (bulk ChangeSet op; revertible)
+[ratatosk] building ModelSummary via MCP …
+[ratatosk] scanning ./repo with instructions …
+[ratatosk] found 3 services, 12 modules, 4 external dependencies, 8 domain objects
+[ratatosk] buckets (bootstrap — post-wipe):
+             to_add: 27 element candidates
+[munin]    reading candidates, planning graph operations …
+[munin]    ChangeSet #5: 27 add-element ops, 19 add-relationship ops
+[ratatosk] run complete — ChangeSet #5 pending
+          → https://yggdrasil.featurefactory.io/runs/5
 ```
 
 C4 is the default — and only — Metamodel in MVP. It is a first-class type catalog (Stereotypes + Packages) established via Django admin / fixture seed — not invented by Ratatosk. Each Model is bound to a Metamodel at create time (immutable thereafter). Ratatosk takes `--metamodel=c4` as the slug for ontology guidance and populates Elements/Relationships under that catalog. There is no end-user metamodel picker yet; evolving metamodels beyond C4 is Key Feature 12, Part II.
 
-**Pipeline:**
+**Pipeline (bootstrap vs update — different step 0 and gather behavior):**
 
-1. **Ratatosk** (field agent — NER + reconciliation, small/fast/cheap LLM):
-   - If an existing model is present: calls MCP (`search`, `traverse`) to fetch current state first
-   - Runs its analysis pass, guided by `--instructions` if provided
-   - Classifies every finding into a delta bucket: `to_add` / `to_update` / `to_delete` / `unchanged`
-   - Hands the bucketed delta to Munin (skipping `unchanged` entirely — no noise for Munin to process)
+| Step | `ratatosk bootstrap` | `ratatosk update` |
+|------|----------------------|-------------------|
+| 0 | **Wipe** all Elements + Relationships on Model (single bulk op; revertible) | — (graph preserved; **never wipe**) |
+| 1 | Build **ModelSummary** (token budget) + MCP snapshot for reconcile | Same |
+| 2 | Metamodel guidance (Stereotypes/Packages for bound Metamodel) | Same |
+| 3 | Filesystem tree (paths only) | Stdin blob (diff, commit log, prose); size-capped |
+| 4 | Map project kind → target paths | **Scout plan** — paths, issue keys, MCP probe intents |
+| 5 | Read files → extract element candidates | Gather evidence (local `--repo` + Yggdrasil MCP + connector MCPs) → extract |
+| 6 | Cleanup, dedupe, constrain to metamodel | Cleanup + **delta reconcile** (`to_add` / `to_update` / `to_delete`) |
+| 7 | ChangeSet (add-heavy; `source=ratatosk`) | ChangeSet (delta; `unchanged` never sent) |
 
-2. **Munin** (ontology specialist) reads the pre-classified buckets and produces the ChangeSet — a structured plan of precise graph operations. Pre-bucketed input means higher confidence and fewer items requiring human review.
+1. **Ratatosk** (field agent — element NER + provenance, small/fast/cheap LLM) runs the pipeline above. **Elements only** — Ratatosk never plans relationships. Elements are never written outside a ChangeSet.
+2. **Munin** (ontology specialist) reads element candidates and plans the ChangeSet — including **relationships**, diagram placement, and metamodel validation. Pre-bucketed input means higher confidence and fewer items requiring human review.
+
+#### Bootstrap wipe rule
+
+Re-bootstrap is **not** update. Running `bootstrap` on a populated Model **bulk-wipes** all Elements and Relationships (Model + metamodel binding preserved), then rescans from the repo. There is no `unchanged` bucket from the prior graph — the wipe removes it. Revert via ChangeSet rollback or time-travel (`Act 8`).
+
+#### ModelSummary
+
+Ratatosk does **not** inject the full graph into LLM prompts. Before extract, it builds a **ModelSummary** under a token budget (default **8000 tokens**, config: `model_summary_token_budget`):
+
+1. Serialize levels top-down: L0 totals → L1 package/stereotype rollups → L2 element names → L3+ detail if budget remains.
+2. Stop when the next level would exceed remaining budget.
+3. Append guidance: use MCP read tools (`list_elements`, `get_element`, `search`, `traverse`, `list_packages`) for deeper detail.
+
+A full snapshot remains in code for reconcile (`by_slug`); only the summary text enters the prompt.
+
+#### Prompt Stack (Ratatosk)
+
+| Layer | Content |
+|-------|---------|
+| System | Role (field NER), pipeline handoff to Munin, precision-over-recall, no direct graph writes |
+| User (metamodel) | `_metamodel_guidance()` — Stereotypes, Packages, allowed element kinds from bound Metamodel |
+| User (context) | ModelSummary + materialized input (file excerpt or scout evidence) + optional `--instructions` |
+| Tools | Local file reads + Yggdrasil MCP read subset + connector MCPs per config allowlist |
+
+Scout bounds (defaults, config-overridable): **10** rounds, **1000** file reads, **50** MCP calls per run.
+
+Acceptance tests may drive the same pipeline in-process; certification uses subprocess `ratatosk bootstrap` + HTTP MCP against a running Yggdrasil server.
 
 High-confidence operations apply directly to the Model; below-threshold operations queue for human review in `Act 7`.
 
@@ -373,23 +413,23 @@ Priya's `mcp_config.json` (from `AUTH-TOKEN-1`):
 
 #### Query tools (read-only)
 
-| Tool | Signature (key params) | Returns |
-|---|---|---|
-| `list_models` | _(none)_ | All registered Models with id, name, metamodel, mode (auto/manual) |
-| `list_elements` | `model?, stereotype?, package?, filter?, as_of?, cursor?` | Paginated element list — mirrors the GUI element list view |
-| `search` | `query, stereotype?, package?, filter?, as_of?` | Full-text + filter search; returns matching elements with properties |
-| `get_element` | `id_or_name` | Element: properties, relationships, provenance, confidence |
-| `list_relationships` | `model?, stereotype?, from_id?, to_id?, cursor?` | Paginated relationship list |
-| `get_relationship` | `id` | Relationship: from/to, stereotype, properties, provenance |
-| `traverse` | `from, direction?, depth?, stereotype?, as_of?` | Subgraph of elements and relationships |
-| `list_stereotypes` | `model?` | All stereotypes defined in the metamodel (populates filter dropdowns) |
-| `list_packages` | `model?` | All packages in the metamodel |
-| `list_diagrams` | `model?, package?` | All C4 diagrams — id, type (Context/Container/Component/Code), package |
-| `get_diagram` | `id` | Diagram with element + relationship membership |
-| `list_changesets` | `status?, source?` | Queue of pending/applied ChangeSets |
-| `get_changeset` | `id` | ChangeSet with full operations list and Munin reasoning |
-| `list_ratatosk_runs` | `model?, status?, limit?` | Paginated run list — id, trigger, status, timestamp, changeset_id |
-| `get_ratatosk_run` | `run_id` | Run status, extraction log, Munin blackboard |
+| Tool | Signature (key params) | Returns | Ratatosk scout |
+|---|---|---|---|
+| `list_models` | _(none)_ | All registered Models with id, name, metamodel, mode (auto/manual) | — |
+| `list_elements` | `model?, stereotype?, package?, filter?, as_of?, cursor?` | Paginated element list — mirrors the GUI element list view | **read** |
+| `search` | `query, stereotype?, package?, filter?, as_of?` | Full-text + filter search; returns matching elements with properties | **read** |
+| `get_element` | `id_or_name` | Element: properties, relationships, provenance, confidence | **read** |
+| `list_relationships` | `model?, stereotype?, from_id?, to_id?, cursor?` | Paginated relationship list | reconcile only |
+| `get_relationship` | `id` | Relationship: from/to, stereotype, properties, provenance | — |
+| `traverse` | `from, direction?, depth?, stereotype?, as_of?` | Subgraph of elements and relationships | **read** |
+| `list_stereotypes` | `model?` | All stereotypes defined in the metamodel (populates filter dropdowns) | **read** |
+| `list_packages` | `model?` | All packages in the metamodel | **read** (spec — implement in MCP) |
+| `list_diagrams` | `model?, package?` | All C4 diagrams — id, type (Context/Container/Component/Code), package | — |
+| `get_diagram` | `id` | Diagram with element + relationship membership | — |
+| `list_changesets` | `status?, source?` | Queue of pending/applied ChangeSets | — |
+| `get_changeset` | `id` | ChangeSet with full operations list and Munin reasoning | — |
+| `list_ratatosk_runs` | `model?, status?, limit?` | Paginated run list — id, trigger, status, timestamp, changeset_id | — |
+| `get_ratatosk_run` | `run_id` | Run status, extraction log, Munin blackboard | — |
 
 #### Write tools (all routed through Munin pipeline; respects Model's Auto/Manual mode)
 
@@ -449,7 +489,7 @@ Priya's `mcp_config.json` (from `AUTH-TOKEN-1`):
 
 **Context:** Marcus's team merges a PR that adds a new downstream call. The Model must reflect that before the next architecture question is asked.
 
-**Pattern:** Ratatosk runs as a pipeline step, fed the diff instead of a full scan (Phase 3: Maintain).
+**Pattern:** Ratatosk runs as a pipeline step. Stdin is a **trigger** for a bounded scout loop — not the sole evidence source. Update is **incremental only** — it never wipes the graph.
 
 `.github/workflows/yggdrasil.yml` (or equivalent GitLab CI step):
 
@@ -458,10 +498,28 @@ Priya's `mcp_config.json` (from `AUTH-TOKEN-1`):
   run: |
     git log -p ${{ github.event.before }}..${{ github.sha }} \
       | ratatosk update --model Yggdrasil --token=$YGGDRASIL_TOKEN \
+          --repo $GITHUB_WORKSPACE \
           --instructions "Focus on interface changes — any API contracts added, removed, or modified?"
 ```
 
-Ratatosk first fetches the current model state via MCP, then analyzes the diff with the instructions as a focus, produces delta buckets (`to_add` / `to_update` / `to_delete`), and hands them to Munin. Munin plans a ChangeSet of precise graph operations. Same pipeline as the bootstrap (`Act 1`), just incremental — `unchanged` elements are never touched.
+Commit-message-only trigger (scout reads referenced paths + linked issues):
+
+```bash
+echo "feat(llm.planner): add planning to the agent #MIM-056" \
+  | ratatosk update --model Yggdrasil --token=$YGGDRASIL_TOKEN \
+      --repo ./repo
+# Scout plan: read src/llm/planner/**, fetch MIM-056 via Atlassian MCP, probe existing planner elements via Yggdrasil MCP
+```
+
+Same stdin path for ad-hoc prose (README, notes):
+
+```bash
+cat README.md | ratatosk update --model Yggdrasil --token=$YGGDRASIL_TOKEN \
+  --repo ./repo \
+  --instructions "Extract containers and components mentioned in this overview"
+```
+
+Ratatosk builds a **ModelSummary**, classifies the stdin trigger (`diff` / `commit_log` / `prose`), runs a **bounded scout loop** (plan evidence → gather from `--repo` + Yggdrasil MCP + connector MCPs → extract → delta reconcile), and hands buckets to Munin. When scout/diff evidence shows a mapped element was removed, Ratatosk **auto-proposes `to_delete`** (confidence threshold + ChangeSet review still apply). Noise-only diffs must not delete existing elements. **`unchanged`** elements are never sent to Munin.
 
 ---
 
@@ -592,7 +650,7 @@ Diagrams per package; [Open in Graph Editor] launches Cytoscape layout editor.
 - **Web UI:** Django + HTMX + Bootstrap + Cytoscape.js
 - **API:** DRF REST (engine); all writes (human, Ratatosk, MCP) go through the Munin/ChangeSet pipeline
 - **MCP:** FastMCP thin layer over REST; raw tools: `search`, `get_element`, `traverse`, `update_elements_batch`, `update_relationships_batch`; higher-level tool: `ask_munin`
-- **Ratatosk:** CLI only in MVP (`ratatosk bootstrap`, `ratatosk update`); field agent — model-aware NER + reconciliation (small/fast/cheap LLM); internal loop: (1) fetch current model state via MCP, (2) run guided analysis (code/diff + optional `--instructions`), (3) classify findings into delta buckets (`to_add` / `to_update` / `to_delete` / `unchanged`), (4) hand buckets to Munin; `unchanged` elements are never sent to Munin — no noise; GUI shows run history, never triggers runs; also invocable via `ask_ratatosk` MCP tool
+- **Ratatosk:** CLI only in MVP (`ratatosk bootstrap`, `ratatosk update`); field agent — element NER + provenance (small/fast/cheap LLM). **`bootstrap`:** bulk-wipes Elements + Relationships on target Model, then full filesystem scan; add-heavy buckets. **`update`:** stdin-triggered bounded scout (local `--repo` + Yggdrasil MCP + connector MCPs); incremental delta reconcile; **never wipes**; auto-proposes `to_delete` when removal evidence is strong. **ModelSummary** (default 8000 token budget) in prompts; full graph via MCP drill-down only. Config merge: CLI → env → repo `ratatosk.yaml` → `~/.ratatosk/config.yaml`. Relationships planned by **Munin**, not Ratatosk. GUI shows run history, never triggers runs; also invocable via `ask_ratatosk` MCP tool
 - **Munin — ontology specialist and agentic planner:**
   - Reads candidates from any source (Ratatosk, human form, MCP) and produces a ChangeSet: a structured plan of precise graph operations (add/update/delete/link)
   - Operates via an agentic loop with access to the same tools as MCP (via `tools_handler.py` exposing all `*_service.py`)

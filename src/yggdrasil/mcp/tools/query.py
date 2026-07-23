@@ -19,7 +19,7 @@ import logging
 from django.db.models import Q
 
 from yggdrasil.changeset.models import ChangeSet
-from yggdrasil.graph.models import Element, Stereotype, YggdrasilModel
+from yggdrasil.graph.models import Element, Relationship, Stereotype, YggdrasilModel
 from yggdrasil.mcp.server import get_current_user_id
 from yggdrasil.ratatosk.models import RataskRun
 
@@ -257,6 +257,76 @@ def list_stereotypes(model: str) -> dict:
     ]
     result = {"items": items}
     logger.info("list_stereotypes | model=%s count=%s user=%s", model, len(items), user_id)
+    return result
+
+
+def list_relationships(
+    model: str,
+    stereotype: str | None = None,
+    from_id: int | None = None,
+    to_id: int | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict:
+    """
+    Return a paginated list of relationships in the specified model.
+
+    :param model: Model slug. Example: "yggdrasil"
+    :param stereotype: Filter by edge stereotype slug. Example: "depends_on"
+    :param from_id: Filter by source element PK. Example: 1
+    :param to_id: Filter by target element PK. Example: 2
+    :param limit: Page size (max 200). Example: 50
+    :param offset: Pagination offset. Example: 0
+    :return: {"items": [...], "total": N, "limit": N, "offset": N}
+    :raises ValueError: If model slug not found.
+    """
+    user_id = get_current_user_id()
+    logger.info(
+        "list_relationships | model=%s user=%s stereotype=%s from_id=%s to_id=%s",
+        model,
+        user_id,
+        stereotype,
+        from_id,
+        to_id,
+    )
+    ymodel = _resolve_model(model)
+    page_limit = min(max(limit, 1), _MAX_LIMIT)
+    page_offset = max(offset, 0)
+    qs = Relationship.objects.filter(model=ymodel).select_related("source", "target", "stereotype")
+    if stereotype:
+        qs = qs.filter(
+            Q(stereotype__slug__iexact=stereotype) | Q(stereotype__name__iexact=stereotype)
+        )
+    if from_id is not None:
+        qs = qs.filter(source_id=from_id)
+    if to_id is not None:
+        qs = qs.filter(target_id=to_id)
+    total = qs.count()
+    items = [
+        {
+            "id": rel.pk,
+            "source_id": rel.source_id,
+            "target_id": rel.target_id,
+            "source_name": rel.source.name,
+            "target_name": rel.target.name,
+            "stereotype": rel.stereotype.name if rel.stereotype_id else "",
+            "stereotype_slug": rel.stereotype.slug if rel.stereotype_id else "",
+        }
+        for rel in qs.order_by("id")[page_offset : page_offset + page_limit]
+    ]
+    result = {
+        "items": items,
+        "total": total,
+        "limit": page_limit,
+        "offset": page_offset,
+    }
+    logger.info(
+        "list_relationships | model=%s user=%s count=%s total=%s",
+        model,
+        user_id,
+        len(items),
+        total,
+    )
     return result
 
 

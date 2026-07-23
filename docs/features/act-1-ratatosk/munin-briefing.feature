@@ -24,6 +24,7 @@ Feature: MUNIN-BRIEFING-1 Post-Run Briefing
     And the user should see "I analysed"
     And the user should see "elements"
     And the user should see "relationships"
+    And the user should see "Munin planned relationships"
 
   Scenario: MUNIN-BRIEFING-1-03 Confidence distribution shows auto-applied, queued, and skipped counts
     When I GET "/mockups/munin/briefing/"

@@ -11,7 +11,8 @@ import os
 os.environ.setdefault("SECRET_KEY", "test-only-insecure-key")
 os.environ.setdefault("DATABASE_URL", "sqlite://:memory:")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("LLM_PROVIDER", "ollama")
+# Discovery / Munin tests use scripted LLM — never call a real provider in CI.
+os.environ.setdefault("LLM_PROVIDER", "scripted")
 os.environ.setdefault("ANTHROPIC_API_KEY", "")
 os.environ.setdefault("OPENAI_API_KEY", "")
 os.environ.setdefault("OLLAMA_BASE_URL", "http://localhost:11434")

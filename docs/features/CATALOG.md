@@ -524,6 +524,56 @@ Owned by Metamodel `c4` (Django admin / `ensure_c4_metamodel()`), not by each Mo
 | `Then the model's metamodel is "{slug}"` | Asserts immutable Model→Metamodel binding |
 | `Then the model's metamodel contains packages from:` | Packages live on Metamodel |
 
+### Discovery / ChangeSet invariant assertions
+
+| Phrase / step | Notes |
+|---------------|-------|
+| `Then the exit code is 0` / `is not 0` | CLI subprocess exit |
+| `And the output contains "{phrase}"` | Stable CLI log phrases (`token`, `MCP`, `nothing to scan`, `no architecture changes detected`, `building ModelSummary`, `wiping N elements`) |
+| `And the output does not contain "{phrase}"` | Negative CLI assertions (`unchanged:`, `wiping` on update) |
+| `And a ChangeSet with source "ratatosk" exists` | Handoff went through Munin pipeline |
+| `And every new Element is referenced by an operation on that ChangeSet` | DISC-06 / CICD-13 — no orphan Elements |
+| `And there are no orphan Elements without a ChangeSetItem` | Same invariant |
+| `And the run blackboard contains step "{name}"` | Blackboard steps: `tree`, `project_map`, `extract`, `cleanup`, `handoff`, `scout_plan`, `metamodel_guidance` |
+| `And the run blackboard contains key "{key}"` | Scout keys: `evidence_plan`, `tool_calls`, `model_summary_chars`, `sources` |
+| `And the run blackboard has input_mode "stdin"` / `stdin kind "prose"` | Act 6 prose path |
+| `When Marcus pipes the stdin fixture "{name}" into ratatosk update with repo "./repo"` | Update with local file reads (@wip) |
+| `When Marcus pipes commit message stdin into ratatosk update with repo "./repo":` | Commit-log scout trigger (@wip) |
+| `And an MCP tool call to "{tool}" was recorded on the blackboard` | Scout MCP drill-down (@wip) |
+| `And the delta buckets contain bucket "{bucket}" with count at least {n}` | Update to_delete policy (@wip) |
+| `And the Yggdrasil model "Yggdrasil" still has {n} elements` | Update never wipes (@wip) |
+| `Given Ratatosk has produced bootstrap buckets:` | Bootstrap add-heavy handoff (@wip) |
+| `Then Munin produces ChangeSet with at least {n:d} planned operations` | Munin plans relationships (@wip) |
+| `And the output contains wipe no-op for empty graph` | CLI-08: `wiping 0 elements and 0 relationships` |
+| `Then bootstrap candidates include all manifest elements:` | DISC-01 / LLM-03 table: name, stereotype, package (@wip TFK-07) |
+| `Given the environment variable "{name}" is set to "{value}"` | Bootstrap env (CFG-*, CLI-09) (@wip TFK-07) |
+| `When Priya runs ratatosk bootstrap against fixture "{name}" via subprocess` | DISC-21 / LLM-* production CLI path (@wip TFK-07) |
+| `Then MCP tool "{tool}" was called during bootstrap` | DISC-21 MCP handoff chain (@wip TFK-07) |
+| `Given Ollama is reachable at "{url}"` | LLM-01 (@wip TFK-07) |
+| `Given Ollama model "{model}" is not available` | LLM-02 (@wip TFK-07) |
+| `Then the discovery LLM was invoked at least {n:d} times` | DISC-05 / LLM-01 |
+| `When Ratatosk loads configuration for bootstrap` | CFG-06..09 (@wip TFK-07) |
+| `Then the effective config key "{key}" is {value}` | CFG-* (@wip TFK-07) |
+| `When Priya runs ratatosk bootstrap with flag "{flag}"` | CFG-02 (@wip TFK-07) |
+| `Given a repo config file "ratatosk.yaml" with model_summary_token_budget {n:d}` | CFG-02 (@wip TFK-07) |
+
+**Ratatosk scout blackboard keys:** `evidence_plan`, `tool_calls`, `model_summary_chars`, `sources`, `scout_plan`.
+
+**Config merge (CLI → env → repo `ratatosk.yaml` → `~/.ratatosk/config.yaml`):** see `ratatosk-config.feature`.
+
+### Bootstrap MVP-W1 scenario IDs
+
+```
+CLI-01, CLI-06, CLI-07, CLI-08, CLI-09
+DISC-01, DISC-02, DISC-04, DISC-05, DISC-06, DISC-07, DISC-11, DISC-13, DISC-15, DISC-16, DISC-21
+LLM-01, LLM-02, LLM-03, LLM-04  (@ollama @wip)
+CFG-02, CFG-06, CFG-07, CFG-08, CFG-09
+```
+
+Tag **`@ollama`** on LLM scenarios for optional CI. Default AT uses ScriptedDiscoveryLLM until BPE implements OllamaClient.
+
+Feature files: `act-1-ratatosk/ratatosk-bootstrap.feature`, `ratatosk-discovery.feature`, `ratatosk-config.feature`, `ratatosk-model-summary.feature`, `ratatosk-scout.feature`, `act-6-cicd/ratatosk-update.feature`.
+
 ---
 
 ## Known Gaps → TFK-07

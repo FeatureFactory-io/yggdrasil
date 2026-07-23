@@ -115,6 +115,36 @@ Default password: `test-pass-only-1234`.
 
 ---
 
+## Repo fixtures — `tests/fixtures/repos/`
+
+Filesystem trees for Ratatosk CLI/discovery AT and optional `@ollama` E2E.
+
+### `repos/sample_webapp/`
+
+| File | Purpose |
+|------|---------|
+| `expected_elements.yaml` | Manifest for DISC-01 / LLM-03 (4 C4 elements) |
+| `ratatosk.yaml` | Repo config stub for CFG-02 |
+| `README.md` | Architecture narrative + path map |
+| `src/order_service/app.py` | Order Service container |
+| `src/payment_api/app.py` | Payment API container |
+| `src/order_domain/service.py` | Order Domain component |
+| `src/billing_worker/worker.py` | Billing Worker component |
+
+**Scope:** AT + subprocess CLI bootstrap. **Dependency:** C4 metamodel seeded, empty Yggdrasil model. **Not required:** `docker compose up` in CI.
+
+See [`repos/README.md`](repos/README.md).
+
+### `repos/sample_stdin/`
+
+Stdin blobs for `ratatosk update` (Act 6).
+
+### `repos/empty_repo/`
+
+Empty tree after ignores (DISC-12).
+
+---
+
 ## Pytest usage
 
 Root [`conftest.py`](../../conftest.py) exposes `client` and `logged_in_user` fixtures.

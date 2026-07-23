@@ -12,32 +12,26 @@ dependencies = [
     "django-environ>=0.11",
     "djangorestframework>=3.15",
     "django-extensions>=3.2",
-
     # Database driver
     "psycopg[binary]>=3.1",
-
     # Async tasks
     "celery[redis]>=5.4",
     "redis>=5.2",
-
     # MCP facade
     "fastmcp>=2.0",
-
     # LLM clients
     "anthropic>=0.32",
     "openai>=1.40",
     "httpx>=0.27",
-
     # Observability
     "structlog>=24.4",
-
     # HTMX & templates
     "django-htmx>=1.19",
     "whitenoise>=6.7",
-
     # Utilities
     "python-slugify>=8.0",
     "pydantic>=2.8",
+    "mcp>=1.28.1",
 ]
 
 [project.optional-dependencies]

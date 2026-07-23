@@ -94,7 +94,7 @@ class LLMClient(Protocol):
 
 Concrete implementations: `AnthropicClient` (default), `OpenAIClient`, `OllamaClient`. Selected via `LLM_PROVIDER` env var. Ratatosk and Munin each specify their preferred model tier via config; the abstraction routes the call.
 
-**External integrations:** none in MVP. Ratatosk calls Yggdrasil REST API to fetch current model state before running analysis.
+**External integrations:** none in MVP. Ratatosk CLI uses MCP tools over the server for snapshot/query/propose (`list_elements`, `list_relationships`, `propose_changeset`); it does not boot Django in-process.
 
 ---
 
@@ -795,12 +795,12 @@ def apply_changeset(changeset_id: str, *, applied_by: str) -> ChangeSet:
 
 | # | Question | Answer | Impact |
 |---|----------|--------|--------|
-| Q1 | Is the agent conversational, batch/pipeline, or both? | **Both** — Munin: conversational (GUI Munin chat panel) + plan handoff; Ratatosk: compiled pipeline (CLI/CI trigger → NER → ChangeSet proposal) | Two assembly profiles required — Conversational Planner (Munin) + Field/Batch Specialist (Ratatosk) |
+| Q1 | Is the agent conversational, batch/pipeline, or both? | **Both** — Munin: conversational (GUI Munin chat panel) + plan handoff; Ratatosk: compiled pipeline + **bounded scout loop** on `update` (CLI/CI → NER → ChangeSet proposal) | Two assembly profiles — Conversational Planner (Munin) + Field/Batch Specialist (Ratatosk) |
 | Q2 | Must work survive process crash / 429 mid-flight? | **Yes** — LLM calls on both agents can take 30–120 s; Celery workers may restart; blackboard (`RataskRun.blackboard`) already specified for crash resume | Requires Plan & Steps + Worker + durable Blackboard (Tier B) |
 | Q3 | Does the agent need tools against domain services? | **Yes** — Munin reads graph/changeset services; Ratatosk reads graph services and proposes to changeset service | Requires Tool Surface |
-| Q4 | Multi-turn reasoning with evolving intent inside one task? | **Yes (Munin only)** — Munin's chat loop requires multi-turn reasoning across graph context; Ratatosk is single-pass per step | Requires Agent Blackboard for Munin |
+| Q4 | Multi-turn reasoning with evolving intent inside one task? | **Yes** — Munin: full ReAct chat loop; Ratatosk: **bounded scout loop** on update (stdin trigger → plan evidence → local/MCP gather → extract; max 10 rounds / 1000 file reads / 50 MCP calls) | Agent Blackboard required for both; bounded loop for Ratatosk |
 | Q5 | Should the agent improve from user feedback / outcomes? | **Yes** — `LEARNED (MuninRule)` already specified: append-only rules prepended to Munin's BASE prompt after human review | Requires Learning module |
-| Q6 | Is there a large body of knowledge only partly relevant per task? | **Partial** — the architecture graph can grow large; per-task retrieval of relevant Elements/Relationships is handled via Tool Surface (graph service calls); dedicated embedding index not in MVP | Knowledge Index: Optional/Skip MVP — service-as-retrieval is sufficient initially |
+| Q6 | Is there a large body of knowledge only partly relevant per task? | **Yes** — graph can grow large; Ratatosk injects a **token-budget ModelSummary** (default 8000 tokens, depth-expanded) into prompts and uses Tool Surface (`list_elements`, `get_element`, `search`, `traverse`, `list_packages`) for drill-down; never unbounded graph-in-prompt | Knowledge Index: Skip MVP — ModelSummary + Tool Surface sufficient |
 | Q7 | Do users need live tokens / plan progress? | **Yes** — GUI shows Munin chat panel (streaming desirable); Ratatosk run status is polled (`get_ratatosk_run`); SAO §6 confirms polling today | Chat Streaming: polling fallback now; SSE recommended |
 | Q8 | Should domain events proactively message the user? | **No (MVP)** — no ambient messaging planned; Ratatosk run is triggered explicitly by user/CI, not by domain event | Event Ingress: Skip for MVP |
 | Q9 | Multiple personas or model tiers? | **Yes** — Munin (larger LLM, planning + narrative); Ratatosk (small/fast LLM, NER field passes) | Agent Factory / Identities required; per-step model tier routing |
@@ -815,10 +815,10 @@ def apply_changeset(changeset_id: str, *, applied_by: str) -> ChangeSet:
 | LLM Port | **Required** | Both agents make LLM calls; `LLMClient` protocol already specified (§2) — rename to `BaseLLM` ABC in `llm/` |
 | Prompt Stack | **Required** | Both agents need layered system prompts: Foundation (safety, HITL rules, plan mandate) + Identity (Munin planner / Ratatosk NER) + Dynamic (current graph context, prior blackboard) |
 | Tool Surface | **Required** | Both agents call domain services via registered tool callables; same functions exposed as MCP tools (shared registry via `convert_to_llm_schema`) |
-| Agent Loop | **Required (Munin) / Skip (Ratatosk)** | Munin: bounded ReAct loop in chat panel. Ratatosk: compiled step execution, no open-ended chat loop |
+| Agent Loop | **Required (both)** | Munin: bounded ReAct in chat panel. Ratatosk: **bounded scout loop** on update (10 rounds / 1000 file reads / 50 MCP calls; config-overridable) |
 | Plan & Steps | **Required (both)** | Munin: creates graph operation plan after chat; Ratatosk: NER run is an ordered step sequence. Both need durable resume |
 | Worker | **Required (both)** | Celery executes both agents' plans; dual-layer 429 handling (in-call backoff + `waiting_retry`); `on_commit` enqueue |
-| Agent Blackboard | **Required (Munin) / Optional (Ratatosk)** | Munin: multi-turn intent tracking; `RataskRun.blackboard` JSONB column already specified. Ratatosk: single-pass — blackboard useful only if NER reasoning spans multiple steps |
+| Agent Blackboard | **Required (both)** | Munin: multi-turn intent. Ratatosk: scout plan, tool calls, ModelSummary depth, provenance (`evidence_plan`, `tool_calls`, `model_summary_depth`, `sources`) on `RataskRun.blackboard` |
 | Learning | **Required (Munin)** | `MuninRule` (LEARNED) model already specified: append-only rules injected into Munin's foundation prompt layer |
 | Knowledge Index | **Skip (MVP)** | Graph retrieval is service-based (Tool Surface); embedding index deferred to post-MVP |
 | Chat Streaming | **Recommended** | Munin chat panel in GUI; polling today, SSE target; `status_callback` on LLM retries feeds typing indicator without full SSE infrastructure |
@@ -854,18 +854,24 @@ User message (Munin chat panel)
 
 #### Ratatosk — Field / Batch Specialist
 
-**Modules:** LLM Port, Prompt Stack, Tool Surface, Plan & Steps, Worker, Agent Factory; Agent Blackboard (optional, for multi-step NER within one run).
+**Modules:** LLM Port, Prompt Stack, Tool Surface, Plan & Steps, Worker, Agent Factory, Agent Blackboard.
 
 **Flow:**
 ```
-Trigger (CLI `ratatosk update` or CI pipeline)
-  → Plan persisted (NER steps: extract → reconcile → diff → propose)
-  → Worker executes steps sequentially
-  → Data steps: graph read tools (no LLM)
-  → Assessment steps: NER confidence scoring (small LLM)
-  → Planning step: ChangeSet proposal synthesis (medium LLM)
-  → RataskRun status updated → ChangeSet proposed to Munin pipeline
+Trigger (CLI `ratatosk bootstrap` | `ratatosk update` | CI pipeline)
+  → [bootstrap only] bulk wipe Elements + Relationships on Model (single ChangeSet op; revertible)
+  → ModelSummary (token-budget depth expansion) + MCP snapshot for reconcile
+  → Metamodel guidance text (_metamodel_guidance)
+  → [bootstrap] filesystem tree scan → map paths → read files → extract
+  → [update] stdin trigger → scout plan → local tools + Yggdrasil/connector MCP gather → extract
+  → Extract element candidates only (Ratatosk NER — no relationship invention)
+  → [update only] delta reconcile (to_add / to_update / to_delete / unchanged)
+  → propose ChangeSet → Munin (relationships, metamodel validation, apply policy)
 ```
+
+**Scout bounds (defaults):** 10 rounds, 1000 file reads, 50 MCP calls per run.
+
+**CLI config:** merged from flags → env → repo `ratatosk.yaml` → `~/.ratatosk/config.yaml`; tool allowlists for local, `mcp.yggdrasil`, connector MCPs (e.g. Atlassian).
 
 ---
 
@@ -885,6 +891,20 @@ Trigger (CLI `ratatosk update` or CI pipeline)
 - **Max board size:** 1 000 chars (architectural reasoning is more verbose than typical; capped via `truncate_blackboard`)
 - **Retain on parse failure:** Yes — bad LLM output never wipes prior intent
 - **Authority rule:** fresh graph observations (tool results) override stale blackboard hypothesis; Munin must reconcile and rewrite each turn
+
+**Ratatosk scout blackboard** (same `RataskRun.blackboard` JSONB column):
+
+| Key | Role |
+|-----|------|
+| `evidence_plan` | Scout plan: paths to read, issue keys, MCP probe intents |
+| `tool_calls` | Local and MCP tool invocations with outcomes |
+| `model_summary_depth` | Deepest ModelSummary level included (L0–L3+) |
+| `model_summary_tokens` | Tokens consumed by ModelSummary in prompt |
+| `sources` | Provenance on candidates (`commit:`, `file:`, `jira:`, `mcp:`) |
+| `fetched_model` | Element/relationship counts from MCP snapshot |
+| `metamodel` | Metamodel slug + guidance size metadata |
+
+- **Durability tier:** B — same column as Munin phases; keys coexist per run mode
 
 ---
 
@@ -1052,7 +1072,12 @@ All tools expose the read surface and write surface of the graph, changeset, and
 | `get_ratatosk_run` | `ratatosk_service.get_run()` | No | No | By `run_id`; includes step-level status and ChangeSet proposal ID |
 | `trigger_ratatosk_run` | `ratatosk_service.trigger_run()` | **Yes** | No | Starts NER analysis run; returns `run_id` immediately (async via Celery) |
 | `get_diagram` | `diagram_service.get()` | No | No | Cytoscape-compatible JSON for a diagram; for AI visualisation context |
-| `list_packages` | `graph_service.list_packages()` | No | No | Package hierarchy for a model |
+| `list_packages` | `graph_service.list_packages()` | No | No | Package hierarchy for a model; **Ratatosk scout read** (spec — implement in MCP query tools) |
+| `search` | `element_service.search()` | No | No | Name/substring search; **Ratatosk scout read** |
+| `traverse` | `graph_service.traverse()` | No | No | Neighbourhood walk from element; **Ratatosk scout read** |
+| `wipe_model_graph` | `graph_service.wipe_model()` | **Yes** | No | **Bootstrap only:** bulk delete all Elements + Relationships on a Model; single auditable op before rescan; revertible via ChangeSet rollback / time-travel |
+
+**Ratatosk CLI tool policy:** the standalone CLI may call a **subset** of read tools above plus connector MCPs (e.g. Atlassian `get_issue`) per config allowlist (`~/.ratatosk/config.yaml`, repo `ratatosk.yaml`). Local tools: `read_file`, `list_dir`, `git_diff_paths`. Ratatosk proposes element ops only; Munin plans relationships.
 
 **Write-tool policy:** `Audit log + explicit confirmation param for destructive mutations`
 - `propose_changeset`: write but non-destructive (creates pending review item); no confirmation param required

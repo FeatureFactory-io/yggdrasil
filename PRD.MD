@@ -445,9 +445,31 @@ Scans GitLab/GitHub/Jira (the sources of structured data). We can discover both 
 
 ## Maintain: CI/CD pipeline agent
 
-Works well when the landscape is already mapped - reads whats going on inside the incoming changes, reconciles against the metamodel used in the Project (example: OpenUP and its static and behavioral representations), decides what needs to be updated (example: Component View, Screen Flow View), plans what exactly has to be updated (example: add "Apply humbling" button to screen X, add modsToolbar to the Component View).
+Works when the landscape is already mapped. **`ratatosk update`** receives a stdin trigger (git diff, commit log, prose) and runs a **bounded scout loop**: plan what evidence is needed, read changed files from `--repo`, call Yggdrasil MCP for model drill-down, optionally fetch linked issues via connector MCP (e.g. Atlassian `#MIM-056`), extract element candidates, delta-reconcile against the existing graph, and hand off to Munin. Update **never wipes** the model; it auto-proposes `to_delete` when removal evidence is strong.
 
-# The flow
+Example: commit message `feat(llm.planner): add planning to the agent #MIM-056` triggers scout to read `src/llm/planner/**`, fetch MIM-056, and extract a Component candidate — not a single LLM pass over the commit line alone.
+
+## Ratatosk CLI commands
+
+| Command | Graph policy | Input | Output |
+|---------|--------------|-------|--------|
+| **`ratatosk bootstrap <repo>`** | **Bulk wipe** all Elements + Relationships on the target Model (preserves Model + metamodel binding), then full filesystem scan | Repo path | Fresh element candidates via ChangeSet; Munin may plan relationships |
+| **`ratatosk update`** | **Incremental** — never wipe | Stdin blob triggers scout; optional `--repo` for file reads | Delta buckets → ChangeSet |
+
+Re-bootstrap is **not** update: running `bootstrap` again on a populated model **replaces** graph content (wipe + rescan), not merge.
+
+## Ratatosk agent boundaries
+
+- **Ratatosk (field NER):** element candidates, provenance, confidence; operates under metamodel guidance; never writes graph directly.
+- **Munin (ontology planner):** relationships, edge stereotypes, diagram placement, metamodel validation, ChangeSet operations.
+
+## Ratatosk model awareness
+
+Ratatosk does **not** inject the full graph into LLM prompts. It builds a **ModelSummary** under a token budget (default 8000 tokens): depth-expanded levels (totals → package rollups → element names → optional detail) until budget exhausted, then uses Yggdrasil MCP read tools (`list_elements`, `get_element`, `search`, `traverse`, `list_packages`) for drill-down. Full snapshot remains in code for reconcile.
+
+Configuration: merged from CLI flags → env → repo `ratatosk.yaml` → `~/.ratatosk/config.yaml`; tool allowlists for local files and MCP connectors.
+
+## Bootstrap: CMDB scan
 
 The flow is not a linear project — it's a loop. The one-time cost is the **48h bootstrap**; everything after it is a self-sustaining cycle that keeps the model true and turns it into action. This is what "bootstrapped in 48 hours, kept current forever after" looks like as a lifecycle.
 
@@ -468,7 +490,7 @@ flowchart TD
 
 **Phase 1 — Establish convention.** Pick or design the metamodel. Everything is described as an Element (Vertex; think "Application") or Relation (Edge; think "depends on") + Package (roots: think "Business View") + Diagram (special data on how to present Elements, Packages and their Relations). Enterprise-grade from day one, even for a greenfield org.
 
-**Phase 2 — Bootstrap baseline (48h).** Ratatosk's three bootstrap modes (CMDB, unstructured knowledge, code & issue trackers) recognize Entities, link them, put them into Packages, and represent them via Diagrams. This is the heroic one-time event: from zero to a populated, navigable model in hours, not months.
+**Phase 2 — Bootstrap baseline (48h).** Ratatosk's three bootstrap modes (CMDB, unstructured knowledge, code & issue trackers) recognize Entities, put them into Packages, and represent them via Diagrams. **Bootstrap bulk-wipes** existing Elements and Relationships on the target Model (single auditable ChangeSet op; revertible), then rescans from sources — re-bootstrap is a clean slate, not delta merge. Munin plans relationships after element candidates land. This is the heroic one-time event: from zero to a populated, navigable model in hours, not months.
 
 **Phase 3 — Maintain (forever).** Ratatosk's CI/CD mode runs on events and schedule to keep the baseline true. No human maintenance tax — this is the phase that never ends and never rots.
 
@@ -482,13 +504,13 @@ flowchart TD
 2. View browser: I shall be able to view any kind of content with advanced filters on multpiple levels, with some properties hidden/available like "I want to see all Tech Stacks I need to maintain Capability "Fullfill Orders in time". At the same view I want to see all Applications dependent upon that stack and their owners."
 3. API: if so I choose I shall be able to not use GUI at all, or build my own. GUI is a standalone app I don't really need in order to interact with the app - I can use Jupyter notebook or custom React app of whatever the hell I want.
 4. MCP: ...including MCP. I may choose to interact with Yggdrasil with the Claude Desktop or Cursor or whatever I want.
-5. Ratatosk: can be run on schedule or wired to any kind of events or called via webhook or added into GitLab/GitHub pipeline (as CLI client?..) to maintain the baseline.
+5. Ratatosk: **`bootstrap`** (bulk wipe + full rescan) and **`update`** (stdin-triggered bounded scout; incremental only). Run on schedule, webhook, or in GitLab/GitHub pipeline. Element candidates only; Munin plans relationships.
 6. Permission matrix: Users/Groups on X and Stereotypes on Y: I can set allow to CRUDL for any kind of Element and Relation (think "users from Enterprise Architecture Group have full CRUDL on all elements in the repository; and Engineers Group have RL on all Entities in the repository")
 7. PBAC: I can allow exclusive access/disallow access to the Groups/users based on certain schema elements of the Elements/Relationships (think "if confidential == yes only Executives group see it" or "if proprietary == yes Contractors group shall not see it.)
 8. Temporal model (time-travel & diff): every change is versioned, so I can view the landscape as of any past date and diff two points in time ("what changed between the Jun and Aug releases?"). This is what powers trends, roadmap confidence, DORA-over-time, and Monte Carlo — none of which work on a snapshot alone.
 9. Provenance, confidence & freshness: every Element and Relation carries where it came from (which source / Ratatosk run), when it was last verified, and a confidence score — so both humans and the Organizational AI know how much to trust each fact and what is going stale.
 10. Change review & curation: Ratatosk's writes flow through a staging queue — high-confidence changes auto-apply, ambiguous ones wait for human approval — with a full audit trail of who/what changed the model and when. This is Yggdrasil's analog to Mimir's PIPs.
-11. Connector framework: pluggable connectors for the sources Ratatosk reads and enriches from — CMDB, GitLab/GitHub, Jira, Confluence/Slack, monitoring, and finance/cost systems — so a new data source can be wired in without custom code. This is what makes the recurring "as X data links in" promise real.
+11. Connector framework: pluggable connectors for sources Ratatosk reads during bootstrap and update scout — CMDB, GitLab/GitHub, Jira/Atlassian MCP, Confluence/Slack, monitoring, finance — configured via `ratatosk.yaml` / `~/.ratatosk/config.yaml` tool allowlists (`local`, `mcp.yggdrasil`, `mcp.atlassian`); secrets via `env:VAR` only.
 12. Metamodel editor & integrity engine: I can define and evolve the metamodel (Element / Relation / Stereotype / Package / Diagram types and their rules), and Yggdrasil continuously validates the graph against it — flagging orphans, missing links, wrong stereotypes, and governance/reference-architecture deviations.
 13. Alerts & subscriptions: I can subscribe to conditions and get notified when they trip — "a Point of Contact's health drops", "a vendor contract is 90 days from expiry", "a new orphan appears". This is the mechanism that routes human attention (the Hugin principle) from inside Yggdrasil.
 
@@ -505,4 +527,3 @@ We aim to enter through **a focused wedge for software architects: a live, query
 5. Discover ownership and dependencies.
 6. Detect architecture drift from changes through the Ratatosk CLI client, which can be wired into any delivery pipeline, webhook, event, or schedule.
 7. Expose the live model through MCP queries for architects, agents, and ADEs.
-

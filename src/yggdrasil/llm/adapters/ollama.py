@@ -2,7 +2,7 @@
 OllamaClient: LLM adapter for local Ollama models (SAO.md §17.3).
 
 Requires Ollama running locally (``make up-desktop``).
-Default model: ``qwen2.5-coder:7b`` (configurable via LLM_OLLAMA_MODEL env).
+Default model: ``qwen3:14b`` (configurable via LLM_OLLAMA_MODEL env).
 
 Not used in unit/integration tests — use ScriptedLLM for those.
 """
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("yggdrasil.llm.ollama")
 
-_DEFAULT_MODEL = "qwen2.5-coder:7b"
+_DEFAULT_MODEL = "qwen3:14b"
 _DEFAULT_BASE_URL = "http://localhost:11434"
 
 
@@ -28,7 +28,7 @@ class OllamaClient:
 
     :Example:
 
-    >>> client = OllamaClient(model="qwen2.5-coder:7b")
+    >>> client = OllamaClient(model="qwen3:14b")
     >>> resp = client.complete([LLMMessage(role="user", content="hello")])
     >>> resp.content
     'Hello! How can I help?'
@@ -40,11 +40,16 @@ class OllamaClient:
         base_url: str = "",
     ) -> None:
         """
-        :param model: Ollama model tag. Defaults to LLM_OLLAMA_MODEL env or qwen2.5-coder:7b.
-        :param base_url: Ollama server URL. Defaults to LLM_OLLAMA_URL env or localhost:11434.
+        :param model: Ollama model tag. Defaults to LLM_OLLAMA_MODEL env or qwen3:14b.
+        :param base_url: Ollama server URL. Defaults to OLLAMA_BASE_URL env or localhost:11434.
         """
         self.model_id = model or os.getenv("LLM_OLLAMA_MODEL", _DEFAULT_MODEL)
-        self._base_url = base_url or os.getenv("LLM_OLLAMA_URL", _DEFAULT_BASE_URL)
+        self._base_url = (
+            base_url
+            or os.getenv("OLLAMA_BASE_URL")
+            or os.getenv("LLM_OLLAMA_URL")
+            or _DEFAULT_BASE_URL
+        )
         logger.info(
             "OllamaClient: initialised | model=%s base_url=%s",
             self.model_id,

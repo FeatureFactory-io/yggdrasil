@@ -1,0 +1,11 @@
+diff --git a/tests/test_health.py b/tests/test_health.py
+index aaa1111..bbb2222 100644
+--- a/tests/test_health.py
++++ b/tests/test_health.py
+@@ -1,3 +1,6 @@
+ def test_health():
+-    assert True
++    assert True
++
++def test_health_again():
++    assert 1 + 1 == 2

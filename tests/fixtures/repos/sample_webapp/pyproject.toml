@@ -1,0 +1,13 @@
+[project]
+name = "sample-webapp"
+version = "0.1.0"
+description = "Sample multi-service web app for Ratatosk discovery fixtures"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "sqlalchemy>=2.0",
+    "uvicorn>=0.32",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

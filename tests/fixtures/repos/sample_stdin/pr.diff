@@ -1,0 +1,17 @@
+diff --git a/src/payment_api/app.py b/src/payment_api/app.py
+index 1111111..2222222 100644
+--- a/src/payment_api/app.py
++++ b/src/payment_api/app.py
+@@ -10,3 +10,12 @@ def health() -> dict[str, str]:
+ def create_charge(amount: int) -> dict[str, int | str]:
+     """Create a payment charge."""
+     return {"id": "chg_1", "amount": amount}
++
++
++@app.post("/refunds")
++def create_refund(charge_id: str) -> dict[str, str]:
++    """New Refund API endpoint — architecture-relevant interface change."""
++    return {"id": "ref_1", "charge_id": charge_id}
++
++
++# Adds downstream call to Notification Service for refund receipts.

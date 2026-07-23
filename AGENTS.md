@@ -119,7 +119,3 @@ Human gates in `.cursor/plans/yggdrasil_inception_bootstrap_52e9f8ae.plan.md` ar
 2. **Never start new implementation** past an open gate — no DCI deploy, no BPE, no "finish the plan" batching.
 3. **Artifact on disk ≠ approval.** Draft journey/SAO files do not satisfy a gate.
 4. **If approval is unclear, ask.** Default: gate still open.
-
-**Active gates (Option A recovery):**
-- **Gate A:** `docs/features/user_journey.md` — pending user review
-- **Gate B:** `docs/architecture/SAO.md` — pending; blocked until Gate A passes

@@ -62,8 +62,19 @@ class StereotypeAdmin(admin.ModelAdmin):
 
     list_display: ClassVar[list[str]] = ["name", "metamodel", "slug", "is_edge"]
     list_filter: ClassVar[list[str]] = ["metamodel", "is_edge"]
-    search_fields: ClassVar[list[str]] = ["name", "slug"]
+    search_fields: ClassVar[list[str]] = ["name", "slug", "description"]
     prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+    fields: ClassVar[list[str]] = [
+        "metamodel",
+        "name",
+        "slug",
+        "description",
+        "is_edge",
+        "property_schema",
+        "allowed_edge_rules",
+        "color",
+        "icon",
+    ]
 
 
 @admin.register(Package)

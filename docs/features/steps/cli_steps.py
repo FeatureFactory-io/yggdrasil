@@ -414,6 +414,18 @@ def step_munin_produces_n_ops(context, count):
     assert cs.items.count() == count, f"Expected {count} ops, got {cs.items.count()}"
 
 
+@given("Ratatosk has produced bootstrap buckets:")
+def step_ratatosk_bootstrap_buckets_cli(context):
+    """@wip — bootstrap add-heavy bucket fixture."""
+    raise NotImplementedError("TFK-07: bootstrap wipe + add-heavy buckets")
+
+
+@then("Munin produces ChangeSet with at least {count:d} planned operations")
+def step_munin_at_least_n_ops_cli(context, count):
+    """@wip — Munin relationship planning from element candidates."""
+    raise NotImplementedError("TFK-07: Munin plans relationships from bootstrap candidates")
+
+
 @then('the ChangeSet summary contains "{text}"')
 def step_changeset_summary_contains(context, text):
     """Assert the ChangeSet's munin_reasoning contains the text."""
@@ -514,6 +526,8 @@ def _extract_instructions(command: str) -> str:
 
 def _extract_repo_path(command: str, context) -> str:
     """Extract the repository path argument after bootstrap."""
+    if getattr(context, "cli_repo_path", None):
+        return context.cli_repo_path
     match = re.search(r"bootstrap\s+(\S+)", command)
     if match:
         path = match.group(1)
@@ -521,3 +535,36 @@ def _extract_repo_path(command: str, context) -> str:
             return _ensure_temp_repo(context)
         return path
     return _ensure_temp_repo(context)
+
+
+# ─── @wip config / env stubs (TFK-07) ───────────────────────────────────────
+
+
+@given('the environment variable "{name}" is set to "{value}"')
+def step_env_var_set(context, name, value):
+    """@wip — bootstrap env for CLI-09 / CFG-*."""
+    raise NotImplementedError("TFK-07: environment variable step")
+
+
+@when('Priya runs ratatosk bootstrap with flag "{flag}"')
+def step_bootstrap_with_flag(context, flag):
+    """@wip — CFG-02 CLI flag override."""
+    raise NotImplementedError("TFK-07: bootstrap with flag")
+
+
+@when("Ratatosk loads configuration for bootstrap")
+def step_load_config_bootstrap(context):
+    """@wip — CFG-06..09 config loader."""
+    raise NotImplementedError("TFK-07: load config for bootstrap")
+
+
+@then('the effective config key "{key}" is {value}')
+def step_effective_config_key(context, key, value):
+    """@wip — CFG effective config assertion."""
+    raise NotImplementedError("TFK-07: effective config key")
+
+
+@given('a repo config file "ratatosk.yaml" with model_summary_token_budget {n:d}')
+def step_repo_config_budget(context, n):
+    """@wip — CFG-02 repo config fixture."""
+    raise NotImplementedError("TFK-07: repo ratatosk.yaml fixture")

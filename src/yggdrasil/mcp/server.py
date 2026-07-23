@@ -94,6 +94,7 @@ def _register_tools(mcp) -> None:
     Importing them here is sufficient for registration.
     """
     from yggdrasil.mcp.tools import changeset as changeset_tools
+    from yggdrasil.mcp.tools import propose as propose_tools
     from yggdrasil.mcp.tools import query as query_tools
     from yggdrasil.mcp.tools import write as write_tools
 
@@ -105,6 +106,7 @@ def _register_tools(mcp) -> None:
         query_tools.list_changesets,
         query_tools.get_changeset,
         query_tools.list_stereotypes,
+        query_tools.list_relationships,
         query_tools.list_ratatosk_runs,
     ]
     changeset_fns = [
@@ -112,6 +114,11 @@ def _register_tools(mcp) -> None:
         changeset_tools.reject_changeset,
         changeset_tools.do_other_changeset,
         changeset_tools.ask_munin,
+    ]
+    propose_fns = [
+        propose_tools.ensure_model,
+        propose_tools.propose_changeset,
+        propose_tools.record_ratatosk_run,
     ]
     write_fns = [
         write_tools.create_element,
@@ -121,7 +128,7 @@ def _register_tools(mcp) -> None:
         write_tools.update_relationships_batch,
         write_tools.set_model_mode,
     ]
-    for fn in [*query_fns, *changeset_fns, *write_fns]:
+    for fn in [*query_fns, *changeset_fns, *propose_fns, *write_fns]:
         mcp.tool(fn)
         logger.info("_register_tools | registered %s", fn.__name__)
 

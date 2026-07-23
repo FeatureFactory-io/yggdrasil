@@ -105,3 +105,13 @@ Feature: ACT-5-MCP-QUERY MCP Read Tools — Browse Graph from Any AI Client
       | model | Yggdrasil |
     Then the response contains 3 runs
     And run id=3 has status "complete" and changeset_id=1
+
+  @wip
+  Scenario: ACT-5-MCP-QUERY-11 list_packages returns metamodel package hierarchy
+    Given Priya has a valid read-write token
+    When Priya calls MCP tool "list_packages" with:
+      | param | value     |
+      | model | Yggdrasil |
+    Then the response contains package "Technology"
+    And the response contains package "Application"
+    And each entry includes parent package when nested

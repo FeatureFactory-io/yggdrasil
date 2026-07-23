@@ -1,0 +1,26 @@
+# Source of truth for ACT-1-DISC-01 and ACT-1-LLM-03 bootstrap assertions.
+minimum:
+  - name: Payment API
+    stereotype: container
+    package: technology
+    source_paths:
+      - README.md
+      - src/payment_api/app.py
+  - name: Order Service
+    stereotype: container
+    package: technology
+    source_paths:
+      - README.md
+      - src/order_service/app.py
+  - name: Order Domain
+    stereotype: component
+    package: application
+    source_paths:
+      - README.md
+      - src/order_domain/service.py
+  - name: Billing Worker
+    stereotype: component
+    package: application
+    source_paths:
+      - README.md
+      - src/billing_worker/worker.py

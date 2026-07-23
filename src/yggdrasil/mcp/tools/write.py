@@ -94,7 +94,7 @@ def create_element(
 def update_element(
     id: int,
     model: str | None = None,
-    **fields,
+    fields: dict | None = None,
 ) -> dict:
     """
     Propose updating specific fields of an existing element.
@@ -105,28 +105,29 @@ def update_element(
     :param id: Element PK. Example: 3
     :param model: Model slug for validation. Example: "yggdrasil"
     :param fields: Fields to update (name, owner, package, properties).
-        Example: owner="fulfillment-team"
+        Example: ``{"owner": "fulfillment-team"}``
     :return: {"changeset_id": N, "status": ..., "operation": {...}}
     :raises PermissionError: If current user token has read-only scope.
-    :raises ValueError: If element not found.
+    :raises ValueError: If element not found or fields empty.
     """
     _require_write_scope()
     user = _resolve_current_user()
+    updates = fields or {}
     logger.info(
         "update_element | id=%s model=%s fields=%s user=%s",
         id,
         model,
-        sorted(fields.keys()),
+        sorted(updates.keys()),
         getattr(user, "pk", None),
     )
-    if not fields:
+    if not updates:
         msg = "update_element requires at least one field to update"
         raise ValueError(msg)
     ymodel = _resolve_model(model) if model else None
     model_id = ymodel.pk if ymodel else _model_id_for_element(id)
     llm = ScriptedLLM(responses=[f"Proposed Update Element id={id}"])
     agent = MuninAgent(llm=llm, model_id=model_id, user_id=getattr(user, "pk", None))
-    field_parts = "|".join(f"{key}={value}" for key, value in fields.items())
+    field_parts = "|".join(f"{key}={value}" for key, value in updates.items())
     message = f"TOOL:update_element|id={id}|{field_parts}"
     resp = agent.chat(message, history=[])
     if resp.changeset_id is None:

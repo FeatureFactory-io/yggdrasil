@@ -29,23 +29,116 @@ from django.utils.text import slugify
 logger = logging.getLogger("yggdrasil.graph")
 
 # Canonical C4 catalog seeded onto Metamodel slug=c4 (admin / data migration).
-C4_ELEMENT_STEREOTYPES: tuple[str, ...] = (
-    "System",
-    "Container",
-    "Component",
-    "Person",
-    "External",
+# Each entry carries the guidance Ratatosk injects into the LLM — not just names.
+C4_ELEMENT_STEREOTYPE_SPECS: tuple[dict, ...] = (
+    {
+        "name": "System",
+        "description": (
+            "A software system that delivers value to users. "
+            "Use for the system-under-study or a major peer system at Context level."
+        ),
+        "property_schema": {
+            "type": "object",
+            "properties": {
+                "owner": {"type": "string"},
+                "criticality": {"type": "string", "enum": ["low", "medium", "high"]},
+            },
+        },
+        "allowed_edge_rules": ["uses", "calls", "depends_on"],
+    },
+    {
+        "name": "Container",
+        "description": (
+            "A deployable/runnable unit: application, API service, database, "
+            "message bus, or similar. Prefer Container for services and datastores."
+        ),
+        "property_schema": {
+            "type": "object",
+            "properties": {
+                "technology": {"type": "string"},
+                "version": {"type": "string"},
+                "owner": {"type": "string"},
+            },
+        },
+        "allowed_edge_rules": ["calls", "depends_on", "uses"],
+    },
+    {
+        "name": "Component",
+        "description": (
+            "An internal building block inside a Container: module, domain package, "
+            "or library. Do not use for standalone deployables."
+        ),
+        "property_schema": {
+            "type": "object",
+            "properties": {
+                "language": {"type": "string"},
+                "owner": {"type": "string"},
+            },
+        },
+        "allowed_edge_rules": ["depends_on", "uses", "calls"],
+    },
+    {
+        "name": "Person",
+        "description": "A human actor or role that interacts with a System.",
+        "property_schema": {
+            "type": "object",
+            "properties": {"role": {"type": "string"}},
+        },
+        "allowed_edge_rules": ["uses"],
+    },
+    {
+        "name": "External",
+        "description": (
+            "An external system or SaaS outside the organisation's control "
+            "(payment gateway, IdP, third-party API)."
+        ),
+        "property_schema": {
+            "type": "object",
+            "properties": {"vendor": {"type": "string"}},
+        },
+        "allowed_edge_rules": ["calls", "uses"],
+    },
 )
-C4_EDGE_STEREOTYPES: tuple[str, ...] = (
-    "calls",
-    "depends_on",
-    "uses",
+C4_EDGE_STEREOTYPE_SPECS: tuple[dict, ...] = (
+    {
+        "name": "calls",
+        "description": "Synchronous or request/response invocation from source to target.",
+        "property_schema": {
+            "type": "object",
+            "properties": {"protocol": {"type": "string"}},
+        },
+    },
+    {
+        "name": "depends_on",
+        "description": "Structural or runtime dependency (library, datastore, queue).",
+        "property_schema": {
+            "type": "object",
+            "properties": {"strength": {"type": "string", "enum": ["weak", "strong"]}},
+        },
+    },
+    {
+        "name": "uses",
+        "description": "Person or System uses another System/Container as a capability.",
+        "property_schema": {"type": "object", "properties": {}},
+    },
 )
-C4_PACKAGES: tuple[str, ...] = (
-    "Context",
-    "Technology",
-    "Application",
-    "Code",
+C4_PACKAGE_SPECS: tuple[dict, ...] = (
+    {
+        "name": "Context",
+        "description": "System context view: people, systems, and external actors.",
+    },
+    {
+        "name": "Technology",
+        "description": "Containers and infrastructure that realise the system.",
+    },
+    {
+        "name": "Application",
+        "description": "Application/domain components inside containers.",
+    },
+    {
+        "name": "Code",
+        "description": "Code-level elements when modelled (classes, modules).",
+    },
 )
 
 
@@ -169,6 +262,10 @@ class Stereotype(models.Model):
     )
     name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=100)
+    description = models.TextField(
+        blank=True,
+        help_text="Guidance for humans and Ratatosk LLM: when to use this stereotype.",
+    )
     is_edge = models.BooleanField(default=False)
     property_schema = models.JSONField(default=dict)
     allowed_edge_rules = models.JSONField(default=list)
@@ -384,7 +481,8 @@ def ensure_c4_metamodel() -> Metamodel:
     """
     Ensure Metamodel ``c4`` exists with canonical Stereotypes and Packages.
 
-    Idempotent. Used by data migrations, fixtures, and admin bootstrap paths.
+    Idempotent. Refreshes description / property_schema / allowed_edge_rules
+    so Ratatosk LLM guidance stays complete even on older rows.
 
     :return: The C4 Metamodel instance.
     """
@@ -392,32 +490,71 @@ def ensure_c4_metamodel() -> Metamodel:
         slug=Metamodel.SLUG_C4,
         defaults={
             "name": "C4",
-            "description": "C4 architecture metamodel (Context, Container, Component, Code).",
+            "description": (
+                "C4 architecture metamodel. Classify software landscape into "
+                "Person, System, Container, Component, External; relate them with "
+                "calls, depends_on, uses; place them in Context, Technology, "
+                "Application, or Code packages."
+            ),
         },
     )
     if created:
         logger.info("ensure_c4_metamodel | created Metamodel slug=c4")
-    for name in C4_ELEMENT_STEREOTYPES:
-        Stereotype.objects.get_or_create(
-            metamodel=mm,
-            slug=slugify(name),
-            defaults={"name": name, "is_edge": False},
-        )
-    for name in C4_EDGE_STEREOTYPES:
-        Stereotype.objects.get_or_create(
-            metamodel=mm,
-            slug=slugify(name),
-            defaults={"name": name, "is_edge": True},
-        )
-    for name in C4_PACKAGES:
-        Package.objects.get_or_create(
-            metamodel=mm,
-            slug=slugify(name),
-            defaults={"name": name},
-        )
+    for spec in C4_ELEMENT_STEREOTYPE_SPECS:
+        _upsert_stereotype(mm, spec, is_edge=False)
+    for spec in C4_EDGE_STEREOTYPE_SPECS:
+        _upsert_stereotype(mm, spec, is_edge=True)
+    for spec in C4_PACKAGE_SPECS:
+        _upsert_package(mm, spec)
     logger.info(
         "ensure_c4_metamodel | stereotypes=%s packages=%s",
         mm.stereotypes.count(),
         mm.packages.count(),
     )
     return mm
+
+
+def _upsert_stereotype(mm: Metamodel, spec: dict, *, is_edge: bool) -> Stereotype:
+    """Create or refresh a Stereotype from a C4 seed spec."""
+    slug = slugify(spec["name"])
+    st, _ = Stereotype.objects.get_or_create(
+        metamodel=mm,
+        slug=slug,
+        defaults={
+            "name": spec["name"],
+            "description": spec.get("description") or "",
+            "is_edge": is_edge,
+            "property_schema": spec.get("property_schema") or {},
+            "allowed_edge_rules": spec.get("allowed_edge_rules") or [],
+        },
+    )
+    # Refresh guidance fields so older bare rows become usable for the LLM.
+    st.name = spec["name"]
+    st.description = spec.get("description") or ""
+    st.is_edge = is_edge
+    st.property_schema = spec.get("property_schema") or {}
+    st.allowed_edge_rules = spec.get("allowed_edge_rules") or []
+    st.save(
+        update_fields=[
+            "name",
+            "description",
+            "is_edge",
+            "property_schema",
+            "allowed_edge_rules",
+        ]
+    )
+    return st
+
+
+def _upsert_package(mm: Metamodel, spec: dict) -> Package:
+    """Create or refresh a Package from a C4 seed spec."""
+    slug = slugify(spec["name"])
+    pkg, _ = Package.objects.get_or_create(
+        metamodel=mm,
+        slug=slug,
+        defaults={"name": spec["name"], "description": spec.get("description") or ""},
+    )
+    pkg.name = spec["name"]
+    pkg.description = spec.get("description") or ""
+    pkg.save(update_fields=["name", "description"])
+    return pkg

@@ -68,6 +68,7 @@ class ChangeSetService:
         run_id: str = "",
         review_mode: str = ChangeSet.REVIEW_MANUAL,
         user: User | None = None,
+        allow_empty: bool = False,
     ) -> ChangeSet:
         """
         Create a new pending ChangeSet with the given operations.
@@ -81,8 +82,9 @@ class ChangeSetService:
         :param run_id: Ratatosk run identifier if source=ratatosk. Example: "run-003"
         :param review_mode: "auto" or "manual". Example: "manual"
         :param user: Requesting user (for audit). May be None for CI/system.
+        :param allow_empty: When True, permit zero operations (Ratatosk no-op runs).
         :return: Created ChangeSet with status="pending".
-        :raises ValueError: If operations is empty or source is invalid.
+        :raises ValueError: If operations is empty (unless allow_empty) or source is invalid.
 
         :Example:
 
@@ -91,7 +93,7 @@ class ChangeSetService:
         >>> cs.status
         'pending'
         """
-        if not operations:
+        if not operations and not allow_empty:
             msg = "operations must not be empty"
             raise ValueError(msg)
         valid_sources = {c[0] for c in ChangeSet.SOURCE_CHOICES}

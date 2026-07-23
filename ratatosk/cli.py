@@ -119,6 +119,12 @@ def bootstrap(
         flags={"server": server, "metamodel": metamodel},
         repo_path=path,
     )
+    logger.info(
+        "bootstrap | config llm_provider=%s resolved_model=%s server=%s",
+        config.llm_provider,
+        config.resolved_model,
+        config.yggdrasil_server_url,
+    )
     logger.info("bootstrap | model=%s metamodel=%s path=%s", model_name, metamodel, path)
     if not os.path.exists(path):
         click.echo(f"Error: Repository path does not exist: {path}", err=True)
@@ -199,6 +205,11 @@ def update(
         sys.exit(1)
     logger.info("update | model=%s metamodel=%s bytes=%s", model_name, metamodel, len(stdin_text))
     config = load_bootstrap_config(flags={"server": server, "metamodel": metamodel})
+    logger.info(
+        "update | config llm_provider=%s resolved_model=%s",
+        config.llm_provider,
+        config.resolved_model,
+    )
     client = RatatoskMcpClient(server=server, token=token)
     llm = _build_llm(config)
     try:

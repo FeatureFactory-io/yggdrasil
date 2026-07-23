@@ -39,7 +39,8 @@ def test_initialize_mcp_registers_all_tools():
     assert "record_ratatosk_run" in names
     assert "create_element" in names
     assert "update_element" in names
-    assert len(names) == 22
+    assert "list_packages" in names
+    assert len(names) == 23
 
 
 @pytest.mark.django_db

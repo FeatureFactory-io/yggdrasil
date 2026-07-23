@@ -94,6 +94,14 @@ class LLMClient(Protocol):
 
 Concrete implementations: `AnthropicClient` (default), `OpenAIClient`, `OllamaClient`. Selected via `LLM_PROVIDER` env var. Ratatosk and Munin each specify their preferred model tier via config; the abstraction routes the call.
 
+**Thinking models:** Providers increasingly return reasoning separately from the answer (Qwen3 `message.thinking`, Claude extended thinking, OpenAI reasoning). Adapters normalize at the boundary:
+
+- `LLMResponse.content` — machine-consumable answer only (JSON for Ratatosk map/extract steps)
+- `LLMResponse.thinking` — optional reasoning trace for blackboard/audit (DEBUG logs only)
+- `yggdrasil.llm.structured` — shared JSON extraction (strips `` / fences before parse)
+
+Field-tier default `max_tokens` is **8000** (`RATATOSK_LLM_MAX_TOKENS`) so thinking headroom does not truncate JSON arrays.
+
 **External integrations:** none in MVP. Ratatosk CLI uses MCP tools over the server for snapshot/query/propose (`list_elements`, `list_relationships`, `propose_changeset`); it does not boot Django in-process.
 
 ---

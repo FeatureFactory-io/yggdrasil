@@ -33,16 +33,18 @@ class LLMMessage:
 class LLMResponse:
     """The structured response from a single LLM call.
 
-    :param content: Raw text returned by the model. Example: "payments-team"
+    :param content: Answer text for downstream parsing (thinking stripped).
     :param model: Model identifier string. Example: "qwen2.5-coder:7b"
     :param usage: Token counts dict. Example: {"input": 120, "output": 45}
     :param stop_reason: Why generation stopped. Example: "end_turn"
+    :param thinking: Optional reasoning trace when provider exposes it separately.
     """
 
     content: str
     model: str = ""
     usage: dict = field(default_factory=dict)
     stop_reason: str = "end_turn"
+    thinking: str = ""
 
 
 @runtime_checkable

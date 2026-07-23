@@ -2,7 +2,7 @@
 AnthropicClient: LLM adapter for Anthropic Claude API (SAO.md §17.3).
 
 Requires ANTHROPIC_API_KEY env var. Used in production (cloud) environments.
-Default model: claude-3-5-haiku-20241022 (fastest, cheapest for Munin planning).
+Default model: claude-haiku-4-5-20251001 (fastest, cheapest for Ratatosk field tier).
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from yggdrasil.llm.structured import normalize_llm_text
 
 logger = logging.getLogger("yggdrasil.llm.anthropic")
 
-_DEFAULT_MODEL = "claude-3-5-haiku-20241022"
+_DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 _DEFAULT_MAX_TOKENS = int(os.getenv("RATATOSK_LLM_MAX_TOKENS", "8000"))
 
 

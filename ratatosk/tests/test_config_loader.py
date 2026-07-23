@@ -123,7 +123,7 @@ def test_build_llm_returns_anthropic_client_when_configured(monkeypatch) -> None
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     config = BootstrapConfig(
         llm_provider="anthropic",
-        resolved_model="claude-3-5-haiku-20241022",
+        resolved_model="claude-haiku-4-5-20251001",
     )
     llm = build_llm_from_config(config)
     assert isinstance(llm, AnthropicClient)

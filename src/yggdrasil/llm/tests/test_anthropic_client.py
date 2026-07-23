@@ -12,14 +12,14 @@ from yggdrasil.llm.base import LLMError, LLMMessage
 
 @pytest.fixture
 def client() -> AnthropicClient:
-    return AnthropicClient(model="claude-3-5-haiku-20241022", api_key="sk-test")
+    return AnthropicClient(model="claude-haiku-4-5-20251001", api_key="sk-test")
 
 
 def test_anthropic_parse_response_text_only(client: AnthropicClient) -> None:
     """Text block populates content; thinking empty."""
     resp = client._parse_response(
         {
-            "model": "claude-3-5-haiku-20241022",
+            "model": "claude-haiku-4-5-20251001",
             "content": [{"type": "text", "text": "[]"}],
             "stop_reason": "end_turn",
             "usage": {"input_tokens": 12, "output_tokens": 3},
@@ -27,7 +27,7 @@ def test_anthropic_parse_response_text_only(client: AnthropicClient) -> None:
     )
     assert resp.content == "[]"
     assert resp.thinking == ""
-    assert resp.model == "claude-3-5-haiku-20241022"
+    assert resp.model == "claude-haiku-4-5-20251001"
     assert resp.usage == {"input": 12, "output": 3}
     assert resp.stop_reason == "end_turn"
 
@@ -36,7 +36,7 @@ def test_anthropic_parse_response_isolates_thinking_blocks(client: AnthropicClie
     """Thinking and text blocks map to separate LLMResponse fields."""
     resp = client._parse_response(
         {
-            "model": "claude-3-5-haiku-20241022",
+            "model": "claude-haiku-4-5-20251001",
             "content": [
                 {"type": "thinking", "thinking": "Scan README for containers."},
                 {"type": "text", "text": '[{"name": "Payment API"}]'},
@@ -50,10 +50,11 @@ def test_anthropic_parse_response_isolates_thinking_blocks(client: AnthropicClie
     assert resp.usage["input"] == 20
 
 
-def test_anthropic_init_missing_key_raises_llm_error() -> None:
+def test_anthropic_init_missing_key_raises_llm_error(monkeypatch) -> None:
     """Empty api_key raises LLMError before SDK call."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     with pytest.raises(LLMError, match="ANTHROPIC_API_KEY"):
-        AnthropicClient(model="claude-3-5-haiku-20241022", api_key="")
+        AnthropicClient(model="claude-haiku-4-5-20251001", api_key="")
 
 
 def test_anthropic_build_payload_includes_system_and_messages(client: AnthropicClient) -> None:
@@ -64,7 +65,7 @@ def test_anthropic_build_payload_includes_system_and_messages(client: AnthropicC
         max_tokens=8000,
         temperature=0.2,
     )
-    assert payload["model"] == "claude-3-5-haiku-20241022"
+    assert payload["model"] == "claude-haiku-4-5-20251001"
     assert payload["system"] == "sys"
     assert payload["max_tokens"] == 8000
     assert payload["messages"] == [{"role": "user", "content": "hello"}]
@@ -97,5 +98,5 @@ def test_anthropic_complete_sdk_error_raises_llm_error(client: AnthropicClient) 
             request=MagicMock(),
             body=None,
         )
-        with pytest.raises(LLMError, match="claude-3-5-haiku"):
+        with pytest.raises(LLMError, match="claude-haiku"):
             client.complete([LLMMessage(role="user", content="hi")])

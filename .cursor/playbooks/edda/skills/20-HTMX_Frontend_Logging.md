@@ -25,7 +25,7 @@ Create `static/js/logger.js`:
 ```javascript
 /**
  * Frontend Logger - logs to console and sends to backend for gui.log
- * 
+ *
  * Usage:
  *   Logger.info('Button clicked', { button_id: 'save-btn', entity_id: 123 });
  *   Logger.error('Form validation failed', { form: 'playbook-create', errors: [...] });
@@ -44,18 +44,18 @@ const Logger = {
             url: window.location.pathname,
             user_agent: navigator.userAgent,
         };
-        
+
         // Console output (always)
         const consoleMethod = console[level] || console.log;
         consoleMethod(
             `[${level.toUpperCase()}] ${timestamp} ${message}`,
             context
         );
-        
+
         // Send to backend for gui.log (async, non-blocking)
         this._sendToBackend(logEntry);
     },
-    
+
     /**
      * Send log entry to Django backend
      */
@@ -72,7 +72,7 @@ const Logger = {
             console.error('Failed to send log to backend:', err);
         });
     },
-    
+
     /**
      * Get CSRF token from DOM
      */
@@ -88,22 +88,22 @@ const Logger = {
         }
         return token;
     },
-    
+
     /**
      * Public logging methods
      */
     debug(message, context) {
         this._log('debug', message, context);
     },
-    
+
     info(message, context) {
         this._log('info', message, context);
     },
-    
+
     warn(message, context) {
         this._log('warn', message, context);
     },
-    
+
     error(message, context) {
         this._log('error', message, context);
     },
@@ -127,7 +127,7 @@ Add HTMX event listeners to `static/js/logger.js` or separate file:
 document.body.addEventListener('htmx:beforeRequest', (event) => {
     const target = event.detail.target;
     const targetId = target.id || target.getAttribute('data-testid') || target.tagName;
-    
+
     Logger.info('HTMX request started', {
         event: 'htmx:beforeRequest',
         target: targetId,
@@ -143,7 +143,7 @@ document.body.addEventListener('htmx:afterRequest', (event) => {
     const targetId = target.id || target.getAttribute('data-testid') || target.tagName;
     const successful = event.detail.successful;
     const level = successful ? 'info' : 'error';
-    
+
     Logger[level]('HTMX request completed', {
         event: 'htmx:afterRequest',
         target: targetId,
@@ -159,7 +159,7 @@ document.body.addEventListener('htmx:afterRequest', (event) => {
 document.body.addEventListener('htmx:responseError', (event) => {
     const target = event.detail.target;
     const targetId = target.id || target.getAttribute('data-testid') || target.tagName;
-    
+
     Logger.error('HTMX response error', {
         event: 'htmx:responseError',
         target: targetId,
@@ -174,7 +174,7 @@ document.body.addEventListener('htmx:responseError', (event) => {
 document.body.addEventListener('htmx:afterSwap', (event) => {
     const target = event.detail.target;
     const targetId = target.id || target.getAttribute('data-testid') || target.tagName;
-    
+
     Logger.debug('HTMX content swapped', {
         event: 'htmx:afterSwap',
         target: targetId,
@@ -186,7 +186,7 @@ document.body.addEventListener('htmx:afterSwap', (event) => {
 document.body.addEventListener('htmx:validation:failed', (event) => {
     const target = event.detail.target;
     const targetId = target.id || target.getAttribute('data-testid') || target.tagName;
-    
+
     Logger.warn('HTMX validation failed', {
         event: 'htmx:validation:failed',
         target: targetId,
@@ -209,10 +209,10 @@ Log specific user actions:
 document.addEventListener('click', (event) => {
     const button = event.target.closest('button, a.btn');
     if (button) {
-        const action = button.getAttribute('data-action') || 
+        const action = button.getAttribute('data-action') ||
                       button.textContent.trim() ||
                       'unknown';
-        
+
         Logger.info('Button clicked', {
             action: action,
             button_id: button.id,
@@ -225,7 +225,7 @@ document.addEventListener('click', (event) => {
 // Log form submissions
 document.addEventListener('submit', (event) => {
     const form = event.target;
-    
+
     Logger.info('Form submitted', {
         form_id: form.id,
         form_action: form.action,
@@ -292,7 +292,7 @@ gui_logger = logging.getLogger('gui')
 def log_gui_event(request):
     """
     Receive frontend log events and write to gui.log
-    
+
     Expected JSON payload:
     {
         "level": "INFO",
@@ -310,10 +310,10 @@ def log_gui_event(request):
         context = data.get('context', {})
         url = data.get('url', '')
         user_agent = data.get('user_agent', '')
-        
+
         # Get user info
         user_id = request.user.id if request.user.is_authenticated else 'anonymous'
-        
+
         # Format log message
         log_message = (
             f"[GUI] {message} | "
@@ -322,7 +322,7 @@ def log_gui_event(request):
             f"context={json.dumps(context)} | "
             f"user_agent={user_agent[:50]}"  # Truncate user agent
         )
-        
+
         # Log at appropriate level
         if level == 'DEBUG':
             gui_logger.debug(log_message)
@@ -334,13 +334,13 @@ def log_gui_event(request):
             gui_logger.error(log_message)
         else:
             gui_logger.info(log_message)
-            
+
         return JsonResponse({'status': 'logged'})
-        
+
     except json.JSONDecodeError as e:
         logging.error(f"Failed to parse GUI log JSON: {e}")
         return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
-        
+
     except Exception as e:
         logging.error(f"Failed to log GUI event: {e}", exc_info=True)
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
@@ -367,16 +367,16 @@ Add to `templates/base.html`:
 <html lang="en">
 <head>
     <!-- ... other head content ... -->
-    
+
     <!-- Logger (load early) -->
     <script src="{% static 'js/logger.js' %}"></script>
 </head>
 <body>
     <!-- ... body content ... -->
-    
+
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    
+
     <!-- Initialize logging after HTMX loads -->
     <script>
         // Log page load
@@ -396,7 +396,7 @@ Add environment-aware logging:
 ```javascript
 const Logger = {
     // ... existing methods ...
-    
+
     /**
      * Check if we should send logs to backend
      */
@@ -407,18 +407,18 @@ const Logger = {
         }
         return true;
     },
-    
+
     /**
      * Check if running in production
      */
     _isProduction() {
-        return window.location.hostname !== 'localhost' && 
+        return window.location.hostname !== 'localhost' &&
                window.location.hostname !== '127.0.0.1';
     },
-    
+
     _log(level, message, context = {}) {
         // ... existing console logging ...
-        
+
         // Only send to backend if appropriate
         if (this._shouldSendToBackend()) {
             this._sendToBackend(logEntry);
@@ -444,7 +444,7 @@ document.getElementById('save-playbook-btn').addEventListener('click', () => {
 ### Example 2: Log HTMX Form Submission
 
 ```html
-<form hx-post="/playbooks/create/" 
+<form hx-post="/playbooks/create/"
       hx-target="#playbook-list"
       hx-swap="beforeend"
       data-testid="playbook-create-form">
@@ -470,7 +470,7 @@ function validatePlaybookName(name) {
         });
         return false;
     }
-    
+
     Logger.debug('Playbook name validated', {
         name: name,
         length: name.length,
@@ -484,16 +484,16 @@ function validatePlaybookName(name) {
 ```javascript
 async function fetchPlaybooks() {
     Logger.info('Fetching playbooks', { endpoint: '/api/playbooks/' });
-    
+
     try {
         const response = await fetch('/api/playbooks/');
         const data = await response.json();
-        
+
         Logger.info('Playbooks fetched successfully', {
             count: data.length,
             endpoint: '/api/playbooks/',
         });
-        
+
         return data;
     } catch (error) {
         Logger.error('Failed to fetch playbooks', {
@@ -526,11 +526,11 @@ def test_button_click_logs(page: Page):
     # Set up console listener
     console_messages = []
     page.on('console', lambda msg: console_messages.append(msg.text))
-    
+
     # Navigate and click button
     page.goto('/playbooks/')
     page.click('[data-testid="create-playbook-btn"]')
-    
+
     # Verify log message
     assert any('Button clicked' in msg for msg in console_messages)
 
@@ -538,12 +538,12 @@ def test_htmx_request_logs(page: Page):
     """Verify HTMX requests are logged."""
     console_messages = []
     page.on('console', lambda msg: console_messages.append(msg.text))
-    
+
     # Trigger HTMX request
     page.goto('/playbooks/')
     page.fill('[name="search"]', 'test')
     page.wait_for_selector('[hx-trigger="input"]')
-    
+
     # Verify HTMX log messages
     assert any('HTMX request started' in msg for msg in console_messages)
     assert any('HTMX request completed' in msg for msg in console_messages)
@@ -558,16 +558,16 @@ For high-frequency events (e.g., scroll, mousemove), throttle logging:
 ```javascript
 const Logger = {
     // ... existing methods ...
-    
+
     /**
      * Throttled logging for high-frequency events
      */
     _throttledLogs: new Map(),
-    
+
     throttle(key, message, context, delay = 1000) {
         const now = Date.now();
         const lastLog = this._throttledLogs.get(key);
-        
+
         if (!lastLog || now - lastLog > delay) {
             this.info(message, context);
             this._throttledLogs.set(key, now);
@@ -592,21 +592,21 @@ const Logger = {
     _logQueue: [],
     _batchSize: 10,
     _flushInterval: 5000, // 5 seconds
-    
+
     _sendToBackend(logEntry) {
         this._logQueue.push(logEntry);
-        
+
         if (this._logQueue.length >= this._batchSize) {
             this._flushLogs();
         }
     },
-    
+
     _flushLogs() {
         if (this._logQueue.length === 0) return;
-        
+
         const batch = [...this._logQueue];
         this._logQueue = [];
-        
+
         fetch('/api/log/gui/batch/', {
             method: 'POST',
             headers: {
@@ -630,4 +630,3 @@ window.addEventListener('beforeunload', () => Logger._flushLogs());
 - HTMX Events Documentation: https://htmx.org/events/
 - MDN Console API: https://developer.mozilla.org/en-US/docs/Web/API/Console
 - Django Logging: https://docs.djangoproject.com/en/stable/topics/logging/
-

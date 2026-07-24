@@ -14,7 +14,7 @@ Example:
 class SomeObject:
     def main_method(self, id):
         # Inner/helper method for a single, focused operation
-        def _short_method(arg): 
+        def _short_method(arg):
             return op(arg)
 
         target = self._get_target(_short_method(id))

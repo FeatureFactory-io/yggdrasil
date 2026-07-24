@@ -3,8 +3,6 @@
 **Artifact ID**: 27
 **Type**: Document
 **Required**: True
-**Produced By Activity ID**: 68
-**Consumers**: 4
 
 ## Description
 

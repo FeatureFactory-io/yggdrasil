@@ -116,8 +116,19 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+- **Diagrams Element By Element** (`do-diagrams-element-by-element`)
+- **Look Via Human Eye** (`do-look-via-human-eye`)
+- **View Drawio Diagrams** (`do-view-drawio-diagrams`)
+
+## Artifacts Produced
+
+- **IA Guidelines** (Document) - Required
+- **IA Guidelines Template** (Template) - Required
+
+## Artifacts Consumed
+
+None
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

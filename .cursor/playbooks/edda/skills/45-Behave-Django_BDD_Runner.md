@@ -14,7 +14,7 @@
 
 ## Overview
 
-Patterns for running BDD acceptance and E2E tests using behave-django with Playwright browser automation. Covers behave configuration, environment lifecycle, step definitions, LiveServerTestCase integration, and context passing.
+Patterns for running BDD acceptance and E2E tests using behave-django. AT uses Django test client under `docs/features/`. E2E uses Playwright + LiveServer under `tests/e2e/`. Same Gherkin phrases; separate step libraries and `environment.py` files.
 
 ## Reference Implementation
 
@@ -25,11 +25,13 @@ Patterns for running BDD acceptance and E2E tests using behave-django with Playw
 paths = docs/features
 format = pretty
 logging_level = INFO
-tags = ~@e2e
+tags = ~@wip
 stdout_capture = false
 stderr_capture = false
 log_capture = false
 ```
+
+Makefile: `make test-at` → `docs/features/`; `make test-e2e` → `tests/e2e/` (overrides path).
 
 ### Pattern 2: environment.py Lifecycle (Acceptance Tests)
 
@@ -58,4 +60,9 @@ def after_all(context):
 
 ### Pattern 3: environment.py Lifecycle (E2E Tests with Playwright)
 
-Uses Playwright browser, LiveServerTestCase, base_url targeting, and screenshot-on-step.
+```python
+# tests/e2e/environment.py
+# Playwright browser, LiveServerTestCase, base_url targeting, screenshot-on-step.
+```
+
+AT is not LiveServer. LiveServer belongs to E2E only.

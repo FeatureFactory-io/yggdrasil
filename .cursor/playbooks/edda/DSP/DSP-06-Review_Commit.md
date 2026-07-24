@@ -100,8 +100,18 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+- **CLAUDE.md Template** (Template) - Required
+- **Copilot Instructions Template** (Template) - Optional
+- **Windsurf/Cursor Rules Template** (Template) - Optional
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

@@ -9,7 +9,7 @@
 
 # Skill: Lessons Learned Writing
 
-**Capability Domain**: LESSONS_LEARNED  
+**Capability Domain**: LESSONS_LEARNED
 **Technology Stack**: Markdown + GitHub CLI
 
 ## Overview
@@ -147,7 +147,7 @@ rework_events: {metrics['rework_events']}
 {chr(10).join(f'- **{e["type"]}** on {e["scenario"]}: {e.get("resolution", "see issue")}' for e in drift_events) or 'No drift events.'}
 
 ## Footprint Accuracy
-Accuracy: {metrics['footprint_accuracy']:.0%}  
+Accuracy: {metrics['footprint_accuracy']:.0%}
 {f'Footprint violations in: {metrics["footprint_violations"]}' if metrics['footprint_violations'] else 'All files within declared footprint.'}
 
 ## SAO & Method Health

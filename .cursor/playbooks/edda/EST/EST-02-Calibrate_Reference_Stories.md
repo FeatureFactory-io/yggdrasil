@@ -137,8 +137,16 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+- **Estimation Reference Table** (Document) - Required
+
+## Artifacts Consumed
+
+None
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

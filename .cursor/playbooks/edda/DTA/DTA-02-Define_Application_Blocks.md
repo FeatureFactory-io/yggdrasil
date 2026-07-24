@@ -102,11 +102,11 @@ Skill Coverage for Application Blocks:
   APP_STRUCTURE    | [Django App Architecture Skill] ✅
                    | Reference: Repository pattern, service layers, dependency rules
                    | Example: Mimir methodology/ app structure
-  
-  DOMAIN_MODELING  | [DDD Bounded Contexts Skill] ✅  
+
+  DOMAIN_MODELING  | [DDD Bounded Contexts Skill] ✅
                    | Reference: Entity modeling, aggregate boundaries
                    | Example: Playbook → Workflow → Activity hierarchy
-  
+
   DEPENDENCY_INJECTION | ❌ No Skill - will create custom patterns
                        | Estimated impact: +1 iteration for pattern definition
 ```
@@ -234,8 +234,16 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+- **Skeletons First** (`do-skeletons-first`)
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+None
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

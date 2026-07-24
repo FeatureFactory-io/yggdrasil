@@ -169,8 +169,21 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+- **User Journey** (Document) - Required
+- **Screen Flow / Dialogue Map** (Diagram) - Required
+- **Feature Files** (Document) - Required
+- **HTML Mockups** (Code) - Optional
+- **Estimation Reference Table** (Document) - Required
+- **Estimation Template (Excel)** (Document) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

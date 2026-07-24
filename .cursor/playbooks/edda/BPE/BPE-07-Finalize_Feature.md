@@ -198,8 +198,17 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+- **Add Todos For Incomplete Items** (`do-add-todos-for-incomplete-items`)
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+- **Screen Flow / Dialogue Map** (Diagram) - Optional
+- **Implementation Plan Template** (Template) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

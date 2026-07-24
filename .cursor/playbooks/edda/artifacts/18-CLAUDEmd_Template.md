@@ -3,8 +3,6 @@
 **Artifact ID**: 18
 **Type**: Template
 **Required**: True
-**Produced By Activity ID**: 64
-**Consumers**: 1
 
 ## Description
 
@@ -185,4 +183,3 @@ Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 - `{AdditionalBPEDetails}` — Condensed BPE workflow steps
 - `{TestCommands}` — pytest commands for the project
 - `{SetupCommands}` — venv, install, migrate, runserver commands
-

@@ -1,10 +1,8 @@
 # System Architecture Overview Template
 
 **Artifact ID**: 21
-**Type**: Template
-**Required**: True
-**Produced By Activity ID**: 59
-**Consumers**: 12
+**Type**: Document
+**Required**: False
 
 ## Description
 
@@ -116,7 +114,7 @@ Reference: Playbook artifact AI Agent Reference Architecture — scenario index 
 | SC-ID | Name | When (summary) | Selected? | Rationale |
 |-------|------|----------------|-----------|-----------|
 | SC-01 | Conversational planner | User chat → tools → optional background plan/worker | | |
-| SC-02 | Field extractor / bootstrap | Batch input → LLM JSON → domain writes; no chat loop | | |
+| SC-02 | Field extractor / batch ingest | D0 pre-filter → D1 LLM canonicalize → propose writes; no chat loop | | |
 | SC-03 | Compiled pipeline | Trigger → known step graph; selective LLM steps | | |
 | SC-04 | Event-driven nudge | Domain event → proactive message/plan without user opening chat | | |
 | SC-05 | Governed mutations | Mutations/deletes need human approval before execute | | |
@@ -164,10 +162,21 @@ Reference: Playbook artifact AI Agent Reference Architecture — scenario index 
 |--------|----------|-----------|
 | PRF-SC02-01 | SC-02 thinking JSON | |
 | PRF-SC02-02 | SC-02 parse fail loud | |
+| PRF-SC02-03 | SC-02 D0 pre-filter | |
+| PRF-SC02-04 | SC-02 D1 parse fail loud | |
 | PRF-SC01-01 | SC-01 plan handoff | |
 | PRF-SC01-02 | SC-01 429 retry | |
 | PRF-SC01-03 | SC-01 blackboard retain | |
 | PRF-SC05-01 | SC-05 HITL | |
+| PRF-SC05-02 | SC-02+05 full rescan invariants | |
+
+### SC-02 × SC-05 full rescan (if batch ingest replaces snapshot)
+
+Complete when **both** SC-02 and SC-05 are selected:
+
+- [ ] Rescan delete ops meet auto-apply confidence threshold (or rescan disables partial auto-apply)
+- [ ] ChangeSet apply ordering: deletes → updates → adds when rescan flag is set
+- [ ] PRF-SC05-02 mapped to integration test file
 
 ## 18. MCP Architecture
 <!-- Decision from DTA-20 — omit this section if no MCP interface -->

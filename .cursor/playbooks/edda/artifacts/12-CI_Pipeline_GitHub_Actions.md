@@ -3,8 +3,6 @@
 **Artifact ID**: 12
 **Type**: Code
 **Required**: True
-**Produced By Activity ID**: 84
-**Consumers**: 2
 
 ## Description
 
@@ -85,4 +83,3 @@ jobs:
 
       - name: Output image tag
         run: echo "Image tag: $(git rev-parse --short HEAD)"
-

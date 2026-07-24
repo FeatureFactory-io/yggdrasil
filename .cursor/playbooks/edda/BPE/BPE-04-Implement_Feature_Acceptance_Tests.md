@@ -15,22 +15,22 @@ APPEND TO GUIDANCE:
 
 ---
 
-## TAF Integration: Behave-Based Acceptance Tests
+## TFK Integration: Behave-Based Acceptance Tests
 
-Feature acceptance tests are now executed via **behave-django** runner against .feature files, not just Django test client.
+Feature acceptance tests are executed via **behave-django** against `.feature` files in `docs/features/` (spec + AT runner — single source of truth). There is no separate `tests/acceptance/` tree and no promote/copy step.
 
 ### Updated Process
 
 1. **Locate spec**: Find the feature's BDD scenarios in `docs/features/act-*/`.
 2. **Verify steps exist**: Check that all steps used in the spec have implementations in `docs/features/steps/`. If any are missing, invoke TFK-07.
-3. **Remove `@wip` when ready**: Tag unimplemented scenarios `@wip` during ESM; remove the tag when implementation is complete so CI runs them.
+3. **Remove `@wip` when ready**: Tag unimplemented scenarios `@wip` during ESM; remove the tag when implementation is complete so CI runs them (`behave.ini` uses `tags = ~@wip`).
 4. **Prepare fixtures**: Check the Fixture Library Catalog for needed test data. If presets are missing, invoke TFK-07.
 5. **Run acceptance tests**: `make test-at` (runs `docs/features/` via `behave.ini`).
-6. **The dual approach remains**: Django test client tests (existing BPE-04 approach) are still valuable for fast feedback. Behave AT runs the same scenarios through the BDD layer. Both must pass.
+6. **The dual approach remains**: Django test client unit/integration tests remain valuable for fast feedback. Behave AT runs the same scenarios through the BDD layer. Both must pass.
 
 ### Key Principle
 
-Acceptance tests are the real thing minus the GUI. No mocking. The `.feature` file in `docs/features/` IS the executable requirements document.
+Acceptance tests are the real thing minus the GUI (Django test client — not Playwright). No mocking. The `.feature` file in `docs/features/` IS the grounding executable requirements document for AT.
 
 ## Skills (additional)
 
@@ -38,9 +38,9 @@ Acceptance tests are the real thing minus the GUI. No mocking. The `.feature` fi
 
 ## Inputs (additional)
 
-- **Step Library Catalog** (Document, Required) — produced by TAF-03.
-- **Fixture Library Catalog** (Document, Required) — produced by TAF-04.
-- **Behave Configuration** (Code, Required) — produced by TAF-02.
+- **Step Library Catalog** (Document, Required) — produced by TFK-03.
+- **Fixture Library Catalog** (Document, Required) — produced by TFK-04.
+- **Behave Configuration** (Code, Required) — produced by TFK-02 (Artifact #51).
 
 ## Agent
 
@@ -152,8 +152,22 @@ Acceptance tests are the real thing minus the GUI. No mocking. The `.feature` fi
 
 ## Rules
 
-See `../rules/` for full rule content.
+- **Not Mock In Integration Tests** (`do-not-mock-in-integration-tests`)
+- **Runner** (`do-runner`)
+- **Test First** (`do-test-first`)
+- **Test Fixture Data Management** (`do-test-fixture-data-management`)
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+- **Screen Flow / Dialogue Map** (Diagram) - Required
+- **Feature Files** (Document) - Required
+- **HTML Mockups** (Code) - Optional
+- **Implementation Plan Template** (Template) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

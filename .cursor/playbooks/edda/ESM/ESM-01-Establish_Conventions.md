@@ -78,10 +78,10 @@ Establish the foundational conventions and standards that will be used throughou
 
 ### Benefits
 
-✅ **Bidirectional Traceability**: Navigate from code → design or design → code  
-✅ **Quick Discovery**: `grep -r "FOB-PLAYBOOKS-LIST+FIND-1" .` finds all related artifacts  
-✅ **Consistency Validation**: Verify all screens have complete documentation  
-✅ **Onboarding**: New developers can trace any screen to design intent  
+✅ **Bidirectional Traceability**: Navigate from code → design or design → code
+✅ **Quick Discovery**: `grep -r "FOB-PLAYBOOKS-LIST+FIND-1" .` finds all related artifacts
+✅ **Consistency Validation**: Verify all screens have complete documentation
+✅ **Onboarding**: New developers can trace any screen to design intent
 ✅ **Gap Detection**: Missing Screen IDs indicate incomplete UX work
 
 ---
@@ -129,8 +129,18 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+- **User Journey Template** (Template) - Optional
+- **IA Guidelines Template** (Template) - Optional
+- **Feature File Template (Gherkin)** (Template) - Optional
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

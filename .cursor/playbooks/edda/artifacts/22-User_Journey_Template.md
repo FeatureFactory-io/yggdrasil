@@ -3,8 +3,6 @@
 **Artifact ID**: 22
 **Type**: Template
 **Required**: True
-**Produced By Activity ID**: 36
-**Consumers**: 2
 
 ## Description
 
@@ -12,10 +10,10 @@
 
 ## Personas
 
-**{PersonaName}** - {PersonaRole}  
+**{PersonaName}** - {PersonaRole}
 {PersonaDescription}
 
-**{PersonaName2}** - {PersonaRole2}  
+**{PersonaName2}** - {PersonaRole2}
 {PersonaDescription2}
 
 ---
@@ -233,4 +231,3 @@ LIST+FIND → CREATE → VIEW
 - `{ActTitle}` - Title of the act
 - `{FieldName}` - Form field name
 - `{ValidationRule}` - Validation rule description
-

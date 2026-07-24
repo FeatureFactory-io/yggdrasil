@@ -117,8 +117,18 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+- **Helm Chart Template** (Template) - Required
+- **CI Pipeline (GitHub Actions)** (Code) - Required
+- **CD Pipeline (GitHub Actions)** (Code) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

@@ -4,6 +4,7 @@
 **Order**: 3
 **Phase**: Elaboration
 **Dependencies**: Predecessor: Activity 188 (Bootstrap Test Harness)
+Successor: Activity 190 (Build Fixture Library)
 
 ## Description
 
@@ -15,7 +16,9 @@ Build Step Library
 
 ## Objective
 
-Create a reusable library of Gherkin step definitions that ESM can compose scenarios from. The library grows over time — initial seed covers generic patterns, project-specific steps are added via TAF-07 as needed.
+Create a reusable library of Gherkin step definitions that ESM can compose scenarios from **when the library already exists**. The library grows over time — initial seed covers generic patterns, project-specific steps are added via TFK-07 as needed.
+
+**Same phrases, different engines:** AT steps in `docs/features/steps/` use the Django test client. E2E counterparts in `tests/e2e/steps/` use Playwright. Gherkin vocabulary is shared via the Step Library Catalog; implementations are not merged into one module.
 
 ---
 
@@ -24,17 +27,17 @@ Create a reusable library of Gherkin step definitions that ESM can compose scena
 ### 1. Organize Steps by Domain
 
 ```
-docs/features/steps/
-├── navigation_steps.py      # Page navigation, URL verification
-├── form_steps.py            # Form filling, submission, validation
-├── table_steps.py           # Table rendering, sorting, filtering
-├── auth_steps.py            # Login, logout, permissions
-├── assertion_steps.py       # Generic assertions (visible, contains, count)
-├── dialog_steps.py          # Modal/dialog interactions
-├── common_steps.py          # Wait, screenshot, context helpers
+docs/features/steps/          # AT — Django test client
+├── navigation_steps.py
+├── form_steps.py
+├── table_steps.py
+├── auth_steps.py
+├── assertion_steps.py
+├── dialog_steps.py
+├── common_steps.py
 └── __init__.py
 
-tests/e2e/steps/             # E2E counterparts (Playwright-backed)
+tests/e2e/steps/              # E2E — Playwright-backed counterparts
 ```
 
 ### 2. Generic Step Patterns
@@ -87,8 +90,17 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+- **Step Library Catalog** (Document) - Required
+
+## Artifacts Consumed
+
+- **SAO.md § Test Strategy** (Document) - Required
+- **Behave Configuration** (Code) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

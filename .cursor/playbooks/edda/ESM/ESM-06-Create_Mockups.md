@@ -175,8 +175,21 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+- **Diagrams Element By Element** (`do-diagrams-element-by-element`)
+- **Look Via Human Eye** (`do-look-via-human-eye`)
+- **View Drawio Diagrams** (`do-view-drawio-diagrams`)
+
+## Artifacts Produced
+
+- **HTML Mockups** (Code) - Required
+- **HTML Mockups Template** (Template) - Optional
+
+## Artifacts Consumed
+
+- **User Journey** (Document) - Required
+- **IA Guidelines** (Document) - Required
+- **Screen Flow / Dialogue Map** (Diagram) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

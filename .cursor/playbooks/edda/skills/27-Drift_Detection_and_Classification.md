@@ -9,7 +9,7 @@
 
 # Skill: Drift Detection and Classification
 
-**Capability Domain**: DRIFT_DETECTION  
+**Capability Domain**: DRIFT_DETECTION
 **Technology Stack**: GitHub CLI + YAML
 
 ## Overview

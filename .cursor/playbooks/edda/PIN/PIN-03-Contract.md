@@ -12,7 +12,7 @@ Contract
 ## Guidance
 
 ## Purpose
-For each BDD scenario in scope: run BPE-01 planning, create code skeletons (public + private helpers), build the context map and do-not-do list, verify checkpoint commands. After all scenarios: derive the file-level conflict map and write the execution manifest YAML.
+For each BDD scenario in scope: run BPE-01 planning, create code skeletons (public + private helpers), build the context map and do-not-do list, verify checkpoint commands (behavior and log-story when applicable). After all scenarios: derive the file-level conflict map and write the execution manifest YAML.
 
 ## Prerequisites
 - Orient summary from PIN-02
@@ -36,8 +36,6 @@ Read the BDD feature spec for this scenario. Note the exact `.feature` file path
 
 Record: `feature_file_path: docs/features/act-{N}/{filename}.feature`
 
-Manifest paths point at `docs/features/` — the same files CI runs via `make test-at`.
-
 Read `docs/architecture/SAO.md`. Note governing sections.
 
 ### Step 3: Identify System Dependencies
@@ -60,7 +58,7 @@ If any are found: record them as `system_dependencies` for this scenario.
 | C — Skip this iteration | Infrastructure is substantial and out of scope | Remove scenario from `scenarios_in_scope[]`; add to `scenarios_deferred[]` in orient summary. Ask user before doing this. |
 
 ### Step 4: Run BPE-01
-Follow BPE/BPE-01 completely. Output must include all four:
+Follow BPE/BPE-01 completely. Output must include:
 
 **a) Context Map** — 3–5 `file:line_range` references with one-line note each.
 
@@ -72,7 +70,11 @@ Follow BPE/BPE-01 completely. Output must include all four:
 
 **c) Applicable SAO.md Sections** — list by heading name.
 
-**d) Checkpoint Command** — single pytest command that proves the scenario done.
+**d) Checkpoint Command** — pytest command that proves behavior done.
+
+**e) Log Story Script** — from BPE-01 Section E (Where / Beat / Trigger / Must include).
+
+**f) Log-story tests + command** — when Section E is non-empty: `log_tests[]` names/paths and `checkpoint.log_story_command`.
 
 **Important:** When running BPE-01 inside PIN-03, **skip BPE-01 Step 9 (Submit for Approval) and BPE-01 Step 10 (GitHub/Issue Management)**. The implementation plan is captured in the manifest; GitHub/GitLab issues are created in PIN-04. Running those steps here would produce duplicates.
 
@@ -99,9 +101,11 @@ class FeatureService:
         raise NotImplementedError()
 ```
 
-### Step 6: Verify Checkpoint Command
+### Step 6: Verify Checkpoint Commands
 ```bash
-{checkpoint_command} 2>&1 | tail -5
+{checkpoint.command} 2>&1 | tail -5
+# When log_tests present:
+{checkpoint.log_story_command} 2>&1 | tail -5
 ```
 Acceptable: `NotImplementedError` or `collected 0 items`.
 Not acceptable: `ImportError`, `SyntaxError`.
@@ -165,14 +169,43 @@ scenarios:
       - docs/features/act-{N}/{filename}.feature
     system_dependencies:
       - notification_service   # or empty list [] if none; append [STUBBED] if stubbed
+    log_story_script:
+      - {beat: entry, where: "LoginView.post", trigger: method_called, must_include: ["email="]}
+      - {beat: branch, where: "LoginView.post", trigger: bad_credentials, must_include: ["authentication failed"]}
+    log_tests:
+      - {name: test_login_log_story_reject, path: src/yggdrasil/auth/tests/test_login_view.py}
     checkpoint:
-      command: "pytest ..."
+      command: "pytest ...::test_login_post_failure_rerenders_with_error -x"
       expected_exit_code: 0
+      log_story_command: "pytest ...::test_login_log_story_reject -x"  # required when log_tests non-empty
     dependencies: []
     context_map: [...]
     do_not_do: [...]
     sao_sections: [...]
 ```
+
+Rules:
+- If `log_tests` is non-empty, `checkpoint.log_story_command` is **required**
+- Omit `log_story_script` / `log_tests` / `log_story_command` only when BPE-01 Section E is empty (document why)
+- PIN-04 consumers may embed both commands in the issue SCENARIO block
+
+
+## Rules
+
+Before running BPE-01 inside this activity and writing the manifest, **read** each Rule below in this playbook (by slug), then **apply** it. Do not rely on memory of the rule text.
+
+Required:
+- `do-plan-before-doing`
+- `do-skeletons-first`
+- `do-test-first`
+- `do-informative-logging`
+- `do-assert-log-story`
+- `do-follow-commit-convention`
+- `do-small-increments`
+- `pytest`
+
+Activity-specific (not a substitute for the rules above):
+- When BPE-01 Section E (Log Story Script) is non-empty, the manifest must include `log_story_script[]`, `log_tests[]`, and `checkpoint.log_story_command`.
 
 ## Success Criteria
 - Skeleton committed for every scenario
@@ -182,7 +215,7 @@ scenarios:
 - Stub files named to match their dependency identifier so MIN-04's codebase check succeeds
 - Execution manifest YAML written to `docs/plans/iterations/`
 - Conflict map derived from actual skeleton commits
-- All checkpoint commands verified (NotImplementedError or 0 items)
+- All checkpoint commands verified (NotImplementedError or 0 items), including `log_story_command` when declared
 
 ## Agent
 
@@ -194,8 +227,16 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+None
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

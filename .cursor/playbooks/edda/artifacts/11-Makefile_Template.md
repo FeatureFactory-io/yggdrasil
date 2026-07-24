@@ -3,8 +3,6 @@
 **Artifact ID**: 11
 **Type**: Code
 **Required**: True
-**Produced By Activity ID**: 93
-**Consumers**: 9
 
 ## Description
 
@@ -252,4 +250,3 @@ clean: ## Remove build artifacts, caches, logs
 clean-all: clean ## Remove everything including venv
 	@rm -rf $(VENV)
 	@echo "✅ Cleaned all (including venv)"
-

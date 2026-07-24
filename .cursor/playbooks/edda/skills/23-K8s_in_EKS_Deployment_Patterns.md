@@ -310,4 +310,3 @@ kubectl port-forward -n local svc/{project} 8080:80
 4. **Namespace isolation** — Blue and green should never share resources
 5. **Secret management** — Never commit secrets; use external secret managers in production
 6. **Helm `--wait`** — Always use in CI/CD to fail fast if deployment doesn't become ready
-

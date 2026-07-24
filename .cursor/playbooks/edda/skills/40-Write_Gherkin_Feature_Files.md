@@ -9,7 +9,7 @@
 
 # Skill: Write Gherkin Feature Files
 
-**Capability Domain**: BDD_AUTHORING  
+**Capability Domain**: BDD_AUTHORING
 **Technology Stack**: Gherkin + Playwright + pytest-bdd
 
 ## Overview
@@ -69,10 +69,10 @@ Key differences:
 
 ### Counts and Quantities Must Be Concrete
 
-**Anti-pattern:** `Given she has multiple playbooks`  
+**Anti-pattern:** `Given she has multiple playbooks`
 **Good pattern:** `Given Maria has 3 playbooks in her FOB:`  (followed by a data table)
 
-**Anti-pattern:** `Then she sees all playbooks`  
+**Anti-pattern:** `Then she sees all playbooks`
 **Good pattern:** `Then the header shows "Playbooks (3)"` and `And she sees all 3 playbooks in the table`
 
 ### Use Data Tables for Multi-Row Setup

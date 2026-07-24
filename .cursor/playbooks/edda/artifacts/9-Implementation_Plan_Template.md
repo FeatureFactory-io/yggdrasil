@@ -3,23 +3,21 @@
 **Artifact ID**: 9
 **Type**: Template
 **Required**: True
-**Produced By Activity ID**: 96
-**Consumers**: 8
 
 ## Description
 
 # {FeatureName} - Implementation Plan
 
-**Feature**: {FeatureScreenID} {FeatureTitle}  
-**Feature File**: `{FeatureFilePath}`  
-**GitHub Issues**: {IssueNumbers} ({ScenarioIDs})  
+**Feature**: {FeatureScreenID} {FeatureTitle}
+**Feature File**: `{FeatureFilePath}`
+**GitHub Issues**: {IssueNumbers} ({ScenarioIDs})
 **Branch**: `feature/{feature-slug}`
 
 ---
 
 ## Context Map
 
-*3–5 file:line_range references for cold-start orientation. Read these first before touching any code.*
+*3-5 file:line_range references for cold-start orientation. Read these first before touching any code.*
 
 | File | Lines | Why |
 |---|---|---|
@@ -43,11 +41,43 @@
 - {SectionHeading2} (e.g., "4.1 MCP Tool Contracts")
 - {SectionHeading3}
 
+## Log Story Script (Mandatory Section E)
+
+*Each row is a beat the implementor must emit at INFO and prove with pytest caplog. Never defer logging to a final slice.*
+
+```
+## Log Story Script
+| Where | Beat | Trigger | Must include |
+|-------|------|---------|--------------|
+| `{Class.method}` | entry | method called | {key=} |
+| `{Class.method}` | branch | {reject_condition} | {reason=} |
+| `{Class.method}` | exit | success/fail | status= / id= |
+```
+
+Beats: `entry | config | validation | processing | branch | exit | error`.
+
+### Tests to Create — log story rows (Mandatory Section D addendum)
+
+| Test | Level | Proves |
+|------|-------|--------|
+| `test_{feature}_log_story_happy` | view/integration | Log Story Script happy-path beats via caplog |
+| `test_{feature}_log_story_reject` | view/integration | Log Story Script reject-path beats via caplog |
+
+### Dual checkpoint (when used under PIN)
+
+```yaml
+checkpoint:
+  command: "pytest ...::{behavior_test} -x"
+  log_story_command: "pytest ...::{log_story_test} -x"
+```
+
+DoD: both commands pass.
+
 ---
 
 ## Current State Assessment
 
-### ✅ What Exists (Reusable)
+### What Exists (Reusable)
 
 1. **{ComponentName1}** - `{FilePath1}`
    - {ExistingFunctionality1}
@@ -63,7 +93,7 @@
    - {ExistingFunctionality5}
    - **Decision**: {ReuseDecision3}
 
-### ❌ What's Missing
+### What's Missing
 
 1. **{MissingComponent1}** - {ScenarioID1}
 2. **{MissingComponent2}** - {ScenarioID2}
@@ -71,7 +101,7 @@
 4. **{MissingComponent4}** - {ScenarioID4}
 5. **{MissingComponent5}** - {ScenarioID5}
 
-### ⚠️ Issues to Fix
+### Issues to Fix
 
 1. **{Issue1}**: {IssueDescription1}
 2. **{Issue2}**: {IssueDescription2}
@@ -82,15 +112,15 @@
 ## Clarification Questions
 
 ### Q1: {QuestionTopic1}
-**Question**: {QuestionText1}  
+**Question**: {QuestionText1}
 **Answer**: {AnswerText1}
 
 ### Q2: {QuestionTopic2}
-**Question**: {QuestionText2}  
+**Question**: {QuestionText2}
 **Answer**: {AnswerText2}
 
 ### Q3: {QuestionTopic3}
-**Question**: {QuestionText3}  
+**Question**: {QuestionText3}
 **Answer**: {AnswerText3}
 
 ---
@@ -105,15 +135,14 @@
   ```
 
 - [ ] **0.2** Read workflow files
-  - Read `.windsurf/workflows/BPE/BPE-02-Implement_Backend.md`
-  - Read `.windsurf/workflows/BPE/BPE-03-Implement_Frontend.md`
-  - Read relevant Skills from `.windsurf/workflows/BPE/skills/`
+  - Read BPE-02 / BPE-03 activity guidance
+  - Read skill *Pytest Log Story Assertions* when Section E is populated
 
 ---
 
 ### Phase 1: {Phase1Title} ({ScenarioID1}, {ScenarioID2})
 
-**Scenario**: {ScenarioDescription}  
+**Scenario**: {ScenarioDescription}
 **GitHub Issue**: {IssueNumber}
 
 #### Backend Changes
@@ -174,15 +203,20 @@
   - **File**: `tests/integration/test_{view}_views.py`
   - **Tests**: {ViewTestList}
 
+- [ ] **1.12** Log story tests (caplog)
+  - **File**: same as view/integration test module
+  - **Tests**: `test_{feature}_log_story_happy`, `test_{feature}_log_story_reject`
+  - **Helper**: `tests/support/log_story.py` → `assert_log_story`
+
 #### Commit
 
-- [ ] **1.12** Commit Phase 1
+- [ ] **1.13** Commit Phase 1 (behavior + log story green)
   ```bash
   git add .
   git commit -m "feat({scope}): {commit-message}
-  
+
   {commit-body}
-  
+
   Implements: {ScenarioID1}, {ScenarioID2}
   Closes: {IssueNumber}"
   ```
@@ -191,7 +225,7 @@
 
 ### Phase 2: {Phase2Title} ({ScenarioID3}, {ScenarioID4})
 
-**Scenario**: {ScenarioDescription}  
+**Scenario**: {ScenarioDescription}
 **GitHub Issue**: {IssueNumber}
 
 #### Backend Changes
@@ -235,7 +269,7 @@
 
 ### Phase 3: {Phase3Title} ({ScenarioID5})
 
-**Scenario**: {ScenarioDescription}  
+**Scenario**: {ScenarioDescription}
 **GitHub Issue**: {IssueNumber}
 
 #### Backend Changes
@@ -334,6 +368,8 @@
 - [ ] Unit tests: 100% pass rate
 - [ ] Integration tests: 100% pass rate
 - [ ] E2E tests: 100% pass rate
+- [ ] Log Story Script rows proven by caplog (`*_log_story_*` or `log_story_command`)
+- [ ] No deferred logging slice
 - [ ] Code coverage: {CoverageTarget}% minimum
 - [ ] Linter: 0 errors, 0 warnings
 - [ ] All `data-testid` attributes added for Playwright

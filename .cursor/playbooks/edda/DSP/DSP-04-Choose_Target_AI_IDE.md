@@ -48,7 +48,7 @@ Document the selected target(s) for DSP-05:
 Target AI IDE Selection:
   Primary:   Windsurf
   Secondary: Claude Code
-  
+
   Output files to generate:
     1. .windsurf/rules/ (multiple .md files)
     2. CLAUDE.md (single file)
@@ -92,8 +92,16 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+None
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

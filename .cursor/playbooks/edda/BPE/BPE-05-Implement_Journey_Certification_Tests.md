@@ -15,28 +15,31 @@ APPEND TO GUIDANCE:
 
 ---
 
-## TAF Integration: E2E Infrastructure
+## TFK Integration: E2E Infrastructure
 
-Journey certification tests that require browser-based Playwright execution now use TAF's E2E infrastructure.
+Journey certification tests that require browser-based Playwright execution use TFK's E2E infrastructure under `tests/e2e/`.
 
 ### E2E vs AT (clarification)
 
-- **AT (BPE-04)**: Proves one particular feature works. Runs via behave without browser. Fast. Every CI run.
-- **E2E (BPE-05)**: Proves the ability to fulfill a goal using system means. Replays "day in life" interaction. Sequential. Screenshots. Staging only.
+- **AT (BPE-04)**: Proves one particular feature works. `docs/features/` via Django test client (`behave --simple`). Fast. Every CI run.
+- **E2E (BPE-05)**: Proves the ability to fulfill a goal using system means. `tests/e2e/` via Playwright + LiveServer. Sequential. Screenshots. Staging / release certification.
 
-### Using TAF E2E Infrastructure
+Same Gherkin phrases (catalog); separate step implementations and `environment.py`.
+
+### Using TFK E2E Infrastructure
 
 1. **Locate journey intent**: Read `docs/features/user_journey.md` for the multi-screen goal.
-2. **Write E2E `.feature`**: Add journey scenarios to `tests/e2e/` with `@e2e` tag.
+2. **Write E2E `.feature`**: Add journey scenarios to `tests/e2e/` (optionally tag `@e2e`).
 3. **Write as multi-phase .feature**: One long sequential `.feature` file with multiple scenarios.
 4. **Environment targeting**: Use `--base-url` to point at any environment.
 5. **Screenshots**: `tests/e2e/environment.py` automatically captures screenshots after every step.
 6. **Data preparation**: E2E tests use `--db-uri` to load initial data via loaddump.
+7. **Run**: `make test-e2e` → `manage.py behave tests/e2e/`.
 
 ## Inputs (additional)
 
-- **E2E Test Configuration** (Code, Required) — produced by TAF-06.
-- **Fixture Library Catalog** (Document, Required) — produced by TAF-04.
+- **E2E Test Configuration** (Code, Required) — produced by TFK-06.
+- **Fixture Library Catalog** (Document, Required) — produced by TFK-04.
 
 ## Agent
 
@@ -148,8 +151,21 @@ Journey certification tests that require browser-based Playwright execution now 
 
 ## Rules
 
-See `../rules/` for full rule content.
+- **Not Mock In Integration Tests** (`do-not-mock-in-integration-tests`)
+- **Runner** (`do-runner`)
+- **Test First** (`do-test-first`)
+- **Test Fixture Data Management** (`do-test-fixture-data-management`)
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+- **Screen Flow / Dialogue Map** (Diagram) - Required
+- **Feature Files** (Document) - Required
+- **Implementation Plan Template** (Template) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

@@ -177,8 +177,18 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+- **Check Before Deleting** (`do-check-before-deleting`)
+- **Check Previous Commits** (`do-check-previous-commits`)
+- **Update Tests After Bugfixing** (`do-update-tests-after-bugfixing`)
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+- **Implementation Plan Template** (Template) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

@@ -1,11 +1,9 @@
-# Test Architecture Document
+# SAO.md § Test Strategy
 
 **Artifact ID**: 48
 **Type**: Document
 **Required**: True
-**Produced By Activity ID**: 187
-**Consumers**: 5
 
 ## Description
 
-{"type": "Document", "is_required": true, "description": "Documents the Test Trophy model, runner mapping (pytest/behave/Playwright), coverage targets and quality gates, zero-bug policy, zero-length feedback workflow, and terminology glossary. Authoritative reference for all test-related decisions. Produced by TAF-01, consumed by TAF-02 through TAF-06 and by BPE-01 Plan Feature."}
+{"type": "Document", "is_required": true, "description": "SAO.md § Test Strategy — the authoritative Test Trophy, runner mapping (pytest / behave-django AT / Playwright E2E), coverage targets, quality gates, zero-bug policy, and zero-length feedback workflow. Seeded as broad strokes by DTA-06 / DTA-18; fleshed out by TFK-01 before BPE. Not a separate peer document under docs/architecture/. Consumed by TFK-02 through TFK-06 and by BPE-01 Plan Feature."}

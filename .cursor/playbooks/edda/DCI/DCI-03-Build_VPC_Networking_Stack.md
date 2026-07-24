@@ -133,8 +133,16 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+- **CDK Stack Templates** (Code) - Required
+
+## Artifacts Consumed
+
+- **Infra Repo Scaffold** (Template) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

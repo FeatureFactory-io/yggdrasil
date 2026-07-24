@@ -70,11 +70,11 @@ Every interactive element MUST have proper accessibility:
 
 <!-- Form inputs - MUST have associated labels -->
 <label for="playbook-name">Playbook Name *</label>
-<input 
-  id="playbook-name" 
+<input
+  id="playbook-name"
   data-testid="playbook-name-input"
   aria-describedby="name-error"
-  required 
+  required
 />
 <div id="name-error" data-testid="playbook-name-error" role="alert">
   {nameError}
@@ -92,21 +92,21 @@ Make component states testable via data attributes:
 
 ```html
 <!-- Loading states -->
-<div 
-  data-testid="playbook-list" 
+<div
+  data-testid="playbook-list"
   data-state="loading"
   data-count="0">
 </div>
 
 <!-- Form validation states -->
-<input 
+<input
   data-testid="playbook-name-input"
   data-valid="false"
   aria-invalid="true"
 />
 
 <!-- Button states -->
-<button 
+<button
   data-testid="save-playbook-button"
   data-state="submitting"
   disabled>
@@ -121,18 +121,18 @@ Ensure predictable structure for list items:
 ```html
 <!-- List container -->
 <div data-testid="playbook-list" role="list">
-  <div 
+  <div
     data-testid="playbook-card"
     data-playbook-id="1"
     data-playbook-status="draft"
     role="article"
     aria-label="Playbook: React Development">
-    
+
     <h3 data-testid="playbook-card-title">React Development</h3>
     <p data-testid="playbook-card-status">Draft</p>
-    
+
     <div data-testid="playbook-card-actions">
-      <button 
+      <button
         data-testid="edit-playbook-button"
         aria-label="Edit React Development">
         Edit
@@ -147,17 +147,17 @@ Ensure predictable structure for list items:
 Structure forms for reliable testing:
 
 ```html
-<form 
-  role="form" 
+<form
+  role="form"
   aria-label="Playbook creation form"
   data-testid="playbook-form">
-  
+
   <fieldset data-testid="playbook-basic-fields">
     <legend>Basic Information</legend>
-    
+
     <div data-testid="playbook-name-field">
       <label for="playbook-name">Name *</label>
-      <input 
+      <input
         id="playbook-name"
         data-testid="playbook-name-input"
         required
@@ -168,14 +168,14 @@ Structure forms for reliable testing:
       </div>
     </div>
   </fieldset>
-  
+
   <div data-testid="playbook-form-actions">
-    <button 
+    <button
       type="button"
       data-testid="cancel-playbook-button">
       Cancel
     </button>
-    <button 
+    <button
       type="submit"
       data-testid="save-playbook-button">
       Save
@@ -260,4 +260,3 @@ Examples:
 - [ ] All cards have role="article"
 - [ ] All interactive elements are keyboard accessible
 - [ ] All state changes are visible via data attributes
-

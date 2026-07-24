@@ -255,8 +255,26 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+- **CLAUDE.md Template** (Template) - Required
+- **Copilot Instructions Template** (Template) - Optional
+- **Definition of Done Checklist Template** (Template) - Required
+- **Windsurf/Cursor Rules Template** (Template) - Optional
+
+## Artifacts Consumed
+
+- **User Journey Template** (Template) - Required
+- **IA Guidelines Template** (Template) - Required
+- **Feature File Template (Gherkin)** (Template) - Required
+- **System Architecture Overview Template** (Document) - Required
+- **Infra Repo Scaffold** (Template) - Required
+- **Helm Chart Template** (Template) - Required
+- **Makefile Template** (Code) - Required
+- **Implementation Plan Template** (Template) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

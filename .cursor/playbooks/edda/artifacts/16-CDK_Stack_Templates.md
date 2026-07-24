@@ -3,8 +3,6 @@
 **Artifact ID**: 16
 **Type**: Code
 **Required**: True
-**Produced By Activity ID**: 76
-**Consumers**: 4
 
 ## Description
 
@@ -218,4 +216,3 @@ def create_app():
 
 if __name__ == "__main__":
     create_app()
-

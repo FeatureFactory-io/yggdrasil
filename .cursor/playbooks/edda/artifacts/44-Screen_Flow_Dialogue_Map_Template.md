@@ -3,8 +3,6 @@
 **Artifact ID**: 44
 **Type**: Template
 **Required**: False
-**Produced By Activity ID**: 38
-**Consumers**: 0
 
 ## Description
 

@@ -145,8 +145,18 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+- **INFRA Verification Checklist (EB Reference)** (Document) - Required
+
+## Artifacts Consumed
+
+- **Infra Repo Scaffold** (Template) - Required
+- **CDK Stack Templates** (Code) - Required
+- **Infra GH Actions Workflow** (Code) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

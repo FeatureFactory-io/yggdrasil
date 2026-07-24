@@ -3,8 +3,6 @@
 **Artifact ID**: 19
 **Type**: Template
 **Required**: False
-**Produced By Activity ID**: 64
-**Consumers**: 1
 
 ## Description
 
@@ -143,4 +141,3 @@ Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 - `{TestCommands}` — Test execution commands
 - `{AdditionalBPEDetails}` — Condensed BPE workflow steps
 - `{SetupCommands}` — Setup, install, run commands
-

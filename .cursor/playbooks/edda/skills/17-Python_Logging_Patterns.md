@@ -31,11 +31,11 @@ def setup_logging():
     # Create logs directory
     log_dir = Path('logs')
     log_dir.mkdir(exist_ok=True)
-    
+
     # Configure root logger
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    
+
     # File handler with rotation
     file_handler = logging.handlers.RotatingFileHandler(
         'logs/app.log',
@@ -43,7 +43,7 @@ def setup_logging():
         backupCount=5
     )
     file_handler.setLevel(logging.INFO)
-    
+
     # Detailed format for file logs
     file_formatter = logging.Formatter(
         '[%(asctime)s] [%(levelname)s] [%(name)s:%(funcName)s:%(lineno)d] '
@@ -51,7 +51,7 @@ def setup_logging():
         datefmt='%Y-%m-%d %H:%M:%S'
     )
     file_handler.setFormatter(file_formatter)
-    
+
     # Console handler (simpler format)
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.WARNING)
@@ -59,11 +59,11 @@ def setup_logging():
         '[%(levelname)s] %(name)s: %(message)s'
     )
     console_handler.setFormatter(console_formatter)
-    
+
     # Add handlers
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
-    
+
     return logger
 ```
 
@@ -78,12 +78,12 @@ logger = logging.getLogger(__name__)
 
 class PlaybookService:
     """Business logic for playbook management."""
-    
+
     @staticmethod
     def create_playbook(name: str, description: str, category: str, author):
         """
         Create a new playbook.
-        
+
         :param name: Playbook name as str. Example: "React Development"
         :param description: Description as str. Example: "Modern React patterns"
         :param category: Category as str. Example: "development"
@@ -96,14 +96,14 @@ class PlaybookService:
             f"Creating playbook: name={name!r}, category={category!r}, "
             f"author={author.username} (id={author.id})"
         )
-        
+
         # Validation with logging
         if not name or not name.strip():
             logger.warning(
                 f"Playbook creation failed: empty name provided by user {author.username}"
             )
             raise ValidationError("Playbook name cannot be empty")
-        
+
         # Check for duplicates
         if Playbook.objects.filter(name=name, author=author).exists():
             logger.warning(
@@ -111,7 +111,7 @@ class PlaybookService:
                 f"for user {author.username}"
             )
             raise ValidationError(f"Playbook '{name}' already exists")
-        
+
         # Create playbook
         try:
             playbook = Playbook.objects.create(
@@ -122,16 +122,16 @@ class PlaybookService:
                 version=Decimal('0.1'),
                 status='draft'
             )
-            
+
             # Success logging with result
             logger.info(
                 f"Playbook created successfully: id={playbook.id}, "
                 f"name={playbook.name!r}, version={playbook.version}, "
                 f"author={author.username}"
             )
-            
+
             return playbook
-            
+
         except Exception as e:
             # Error logging with full context
             logger.error(
@@ -161,7 +161,7 @@ def playbook_create(request):
         f"Playbook create view accessed by user {request.user.username} "
         f"(id={request.user.id}), method={request.method}"
     )
-    
+
     if request.method == 'POST':
         # Log form submission
         logger.info(
@@ -169,7 +169,7 @@ def playbook_create(request):
             f"Data: name={request.POST.get('name')!r}, "
             f"category={request.POST.get('category')!r}"
         )
-        
+
         service = PlaybookService()
         try:
             playbook = service.create_playbook(
@@ -178,20 +178,20 @@ def playbook_create(request):
                 category=request.POST['category'],
                 author=request.user
             )
-            
+
             logger.info(
                 f"Playbook created via web UI: id={playbook.id}, "
                 f"redirecting to detail page"
             )
             messages.success(request, f'Playbook "{playbook.name}" created')
             return redirect('playbook_detail', playbook_id=playbook.id)
-            
+
         except ValidationError as e:
             logger.warning(
                 f"Playbook creation validation error for user {request.user.username}: {e}"
             )
             messages.error(request, str(e))
-    
+
     return render(request, 'playbooks/create.html')
 ```
 
@@ -203,9 +203,9 @@ def process_workflow(workflow_id: int, user):
     logger.info(
         f"Processing workflow: id={workflow_id}, user={user.username}"
     )
-    
+
     workflow = Workflow.objects.get(id=workflow_id)
-    
+
     # Log decision points
     if workflow.status == 'draft':
         logger.info(
@@ -224,19 +224,19 @@ def process_workflow(workflow_id: int, user):
             f"Workflow {workflow_id} has unexpected status: {workflow.status}"
         )
         can_modify = False
-    
+
     # Log data transformations
     activities = workflow.activities.all()
     logger.debug(
         f"Loaded {activities.count()} activities for workflow {workflow_id}"
     )
-    
+
     # Log results
     logger.info(
         f"Workflow processing complete: id={workflow_id}, "
         f"can_modify={can_modify}, activity_count={activities.count()}"
     )
-    
+
     return can_modify, activities
 ```
 
@@ -248,7 +248,7 @@ def import_workflow_data(file_path: str, user):
     logger.info(
         f"Starting workflow import: file={file_path}, user={user.username}"
     )
-    
+
     try:
         # Validate file exists
         if not Path(file_path).exists():
@@ -257,29 +257,29 @@ def import_workflow_data(file_path: str, user):
                 f"Path: {file_path}, user: {user.username}"
             )
             raise FileNotFoundError(f"File not found: {file_path}")
-        
+
         # Parse file
         logger.debug(f"Parsing workflow file: {file_path}")
         with open(file_path, 'r') as f:
             data = json.load(f)
-        
+
         logger.info(
             f"Workflow file parsed successfully: "
             f"{len(data.get('activities', []))} activities found"
         )
-        
+
         # Import activities
         for idx, activity_data in enumerate(data.get('activities', [])):
             logger.debug(
                 f"Importing activity {idx+1}: name={activity_data.get('name')!r}"
             )
             # ... import logic ...
-        
+
         logger.info(
             f"Workflow import completed successfully: "
             f"file={file_path}, activities_imported={len(data.get('activities', []))}"
         )
-        
+
     except json.JSONDecodeError as e:
         logger.error(
             f"Workflow import failed: invalid JSON. "
@@ -406,7 +406,7 @@ class WorkflowService:
     def update_workflow(workflow_id: int, updates: dict, user):
         """
         Update workflow with comprehensive logging.
-        
+
         :param workflow_id: Workflow ID. Example: 42
         :param updates: Field updates. Example: {"name": "New Name"}
         :param user: User making changes. Example: User(id=1)
@@ -418,7 +418,7 @@ class WorkflowService:
             f"fields={list(updates.keys())}, "
             f"user={user.username} (id={user.id})"
         )
-        
+
         try:
             # Fetch workflow
             workflow = Workflow.objects.get(id=workflow_id)
@@ -427,7 +427,7 @@ class WorkflowService:
                 f"current_name={workflow.name!r}, "
                 f"status={workflow.status}"
             )
-            
+
             # Validate permissions
             if workflow.playbook.author != user:
                 logger.warning(
@@ -435,7 +435,7 @@ class WorkflowService:
                     f"not authorized for workflow {workflow_id}"
                 )
                 raise PermissionError("Not authorized")
-            
+
             # Apply updates
             for field, value in updates.items():
                 old_value = getattr(workflow, field)
@@ -444,18 +444,18 @@ class WorkflowService:
                     f"Workflow {workflow_id} field updated: "
                     f"{field}: {old_value!r} -> {value!r}"
                 )
-            
+
             workflow.save()
-            
+
             # Success logging
             logger.info(
                 f"Workflow updated successfully: id={workflow_id}, "
                 f"updated_fields={list(updates.keys())}, "
                 f"user={user.username}"
             )
-            
+
             return workflow
-            
+
         except Workflow.DoesNotExist:
             logger.error(
                 f"Workflow update failed: workflow not found. "
@@ -471,4 +471,3 @@ class WorkflowService:
             )
             raise
 ```
-

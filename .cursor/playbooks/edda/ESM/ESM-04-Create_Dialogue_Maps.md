@@ -83,8 +83,21 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+- **Diagrams Element By Element** (`do-diagrams-element-by-element`)
+- **Look Via Human Eye** (`do-look-via-human-eye`)
+- **View Drawio Diagrams** (`do-view-drawio-diagrams`)
+- **Write Scenarios** (`do-write-scenarios`)
+
+## Artifacts Produced
+
+- **Screen Flow / Dialogue Map** (Diagram) - Required
+- **Screen Flow / Dialogue Map Template** (Template) - Optional
+
+## Artifacts Consumed
+
+- **User Journey** (Document) - Required
+- **IA Guidelines** (Document) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

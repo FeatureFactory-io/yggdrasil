@@ -3,8 +3,6 @@
 **Artifact ID**: 52
 **Type**: Code
 **Required**: True
-**Produced By Activity ID**: 192
-**Consumers**: 3
 
 ## Description
 

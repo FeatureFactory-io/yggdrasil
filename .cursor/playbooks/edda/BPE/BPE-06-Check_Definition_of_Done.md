@@ -19,8 +19,6 @@ Validate that feature/story implementation complies with all project rules and s
 ### Test-First Development
 - [ ] Every function/method has corresponding test(s)
 - [ ] Feature files in `docs/features/` exist and comply with scenarios
-- [ ] All non-`@wip` scenarios in `docs/features/` pass `make test-at`
-- [ ] Journey E2E scenarios (if in scope) in `tests/e2e/` pass `make test-e2e` when required
 - [ ] Tests use pytest framework
 - [ ] Mocking is minimal
 
@@ -42,10 +40,15 @@ Validate that feature/story implementation complies with all project rules and s
 - [ ] No imports inside functions/methods
 - [ ] Dependencies are properly declared
 
-### Informative Logging
-- [ ] Logging statements exist in methods and properties
+### Log Story Verification
+- [ ] Implementation plan / issue contains a **Log Story Script** (Where / Beat / Trigger / Must include)
+- [ ] Every script row is proven by a passing `*_log_story_*` caplog test (or `checkpoint.log_story_command` from the iteration manifest)
+- [ ] Happy **and** reject paths covered when the scenario has both
 - [ ] Log levels are appropriate (DEBUG, INFO, WARNING, ERROR)
-- [ ] Error conditions have logging statements
+- [ ] No secrets/tokens/passwords appear at INFO in asserted lines
+- [ ] No deferred logging slice remains in the plan
+
+Grep of `logs/app.log` is an **audit aid**, not the DoD gate. Caplog (or `log_story_command`) is the gate.
 
 ## Testing and Quality Assurance Checklist
 
@@ -111,6 +114,28 @@ Validate that feature/story implementation complies with all project rules and s
 - [ ] Remove temporary files like debug_*.py
 - [ ] Scan file structure for stray misplaced files
 - [ ] Remove *.log files from repository
+
+
+## Rules
+
+Before validating DoD, **read** each Rule below in this playbook (by slug), then **apply** it as the acceptance criterion for the matching checklist items. Do not rely on memory of the rule text.
+
+Required:
+- `do-test-first`
+- `do-continuous-testing`
+- `do-write-concise-methods`
+- `do-import-on-module-level`
+- `do-informative-logging`
+- `do-assert-log-story`
+- `do-not-mock-in-integration-tests`
+- `do-follow-commit-convention`
+- `do-semantic-versioning-on-ui-elements`
+- `do-write-scenarios`
+- `do-add-todos-for-incomplete-items`
+- `pytest`
+
+Activity-specific (not a substitute for the rules above):
+- Observability DoD is **Log Story Verification** (caplog / `log_story_command`), not “logging statements exist”.
 
 ## Actions
 All checkboxes must be completed before considering the story "Done". Any deviations must be presented to user. If user says "collect for cleanup but defer" - create a Backlog item in GitHub as Issue with "deferred" tag. Otherwise resolve deviations as directed by user, commit following Angular convention, and send Pull Request.
@@ -236,8 +261,20 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+- **Fix Tests** (`do-fix-tests`)
+- **Informative Logging** (`do-informative-logging`)
+- **Update Tests After Bugfixing** (`do-update-tests-after-bugfixing`)
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+- **Feature Files** (Document) - Required
+- **Definition of Done Checklist Template** (Template) - Required
+- **Implementation Plan Template** (Template) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

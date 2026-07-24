@@ -195,8 +195,16 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+- **Skeletons First** (`do-skeletons-first`)
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+None
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

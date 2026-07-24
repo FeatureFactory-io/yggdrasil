@@ -113,7 +113,7 @@ Workflow files: `.cursor/playbooks/edda/{WORKFLOW}/`
 
 | Rule | `alwaysApply` | What it enforces |
 |---|---|---|
-| `add-logging.mdc` | true | Always add `app.log`, rotating file handler, INFO-level structured logging |
+| `do-informative-logging.mdc` | true | Always add `app.log`, rotating file handler, INFO-level structured logging |
 | `do-write-concise-methods.mdc` | true | Public methods ≤ 20–30 lines; delegate to private helpers |
 | `do-follow-commit-convention.mdc` | true | Angular commit convention (`type(scope): subject`) |
 | `do-docstring-format.mdc` | false | Sphinx `:param:`/`:return:`/`:raises:` with example values |

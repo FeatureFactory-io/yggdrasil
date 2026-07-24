@@ -122,7 +122,7 @@ class MethodologyService:
         :param repository: data access layer. Example: DjangoORMRepository()
         """
         self.repository = repository
-    
+
     def add_workflow_to_methodology(self, methodology_id: str, workflow_name: str) -> Workflow:
         """
         Add a new workflow to an existing methodology.
@@ -300,4 +300,3 @@ def function_name(param1: Type1, param2: Type2) -> ReturnType:
 - **IDE**: Configure IDE to show docstring warnings
 - **Tests**: Test docstrings should follow same format
 - **Pre-commit**: Consider docstring linter
-

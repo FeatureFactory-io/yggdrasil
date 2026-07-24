@@ -14,22 +14,26 @@
 
 ## Overview
 
-Patterns for organizing, versioning, and composing reusable Gherkin step definitions. The step library is the shared vocabulary between ESM (which writes .feature files) and TAF (which implements the steps).
+Patterns for organizing, versioning, and composing reusable Gherkin step definitions. The step library is the shared vocabulary between ESM (which writes .feature files) and TFK (which implements the steps).
+
+**AT steps** live under `docs/features/steps/` (Django test client). **E2E counterparts** live under `tests/e2e/steps/` (Playwright). Catalog phrases are shared; Python implementations are not merged.
 
 ## Reference Implementation
 
 ### Pattern 1: Step Library Organization
 
 ```
-docs/features/steps/
-├── navigation_steps.py      # Given/When/Then for page navigation
-├── form_steps.py            # Form interactions (fill, select, submit)
-├── table_steps.py           # Table verification (rows, columns, sorting)
-├── auth_steps.py            # Authentication (login, logout, roles)
-├── assertion_steps.py       # Generic assertions (visible, contains, count)
-├── dialog_steps.py          # Modal/dialog interactions
-├── common_steps.py          # Utility (wait, screenshot, context)
-└── CATALOG.md               # Step Library Catalog (docs/features/CATALOG.md)
+docs/features/steps/          # AT — Django test client
+├── navigation_steps.py
+├── form_steps.py
+├── table_steps.py
+├── auth_steps.py
+├── assertion_steps.py
+├── dialog_steps.py
+├── common_steps.py
+└── (catalog: docs/features/CATALOG.md)
+
+tests/e2e/steps/              # E2E — Playwright-backed counterparts
 ```
 
 ### Pattern 2: Step Naming Convention
@@ -47,4 +51,4 @@ Given the FeatureFactory playbook exists
 
 ### Pattern 3: Step Composition in .feature Files
 
-ESM writes scenarios by composing steps from the library like building blocks.
+ESM writes scenarios by composing steps from the library like building blocks **when the catalog already exists**. Write `.feature` files to `docs/features/act-*/`. On greenfield first-pass ESM (before TFK), write clear unconstrained Gherkin; TFK later binds phrases to implementations (see ESM-05 guidance).

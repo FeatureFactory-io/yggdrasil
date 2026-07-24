@@ -170,8 +170,16 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+- **Infra Repo Scaffold** (Template) - Required
+
+## Artifacts Consumed
+
+- **INFRA Requirements (EB Reference)** (Document) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

@@ -247,8 +247,32 @@ Read these before starting this activity. They are produced earlier in the playb
 
 ## Rules
 
-See `../rules/` for full rule content.
+- **Check Previous Commits** (`do-check-previous-commits`)
+- **Docstring Format** (`do-docstring-format`)
+- **Import On Module Level** (`do-import-on-module-level`)
+- **Informative Logging** (`do-informative-logging`)
+- **Not Go Into Debugging Loops** (`do-not-go-into-debugging-loops`)
+- **Semantic Versioning On Ui Elements** (`do-semantic-versioning-on-ui-elements`)
+- **Skeletons First** (`do-skeletons-first`)
+- **Test First** (`do-test-first`)
+- **Validate Api Contracts** (`do-validate-api-contracts`)
+- **Keep Docstrings Consistent** (`keep-docstrings-consistent`)
+- **Tooltips** (`tooltips`)
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+- **User Journey** (Document) - Required
+- **IA Guidelines** (Document) - Required
+- **Screen Flow / Dialogue Map** (Diagram) - Required
+- **Feature Files** (Document) - Required
+- **HTML Mockups** (Code) - Optional
+- **System Architecture Overview Template** (Document) - Required
+- **Implementation Plan Template** (Template) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

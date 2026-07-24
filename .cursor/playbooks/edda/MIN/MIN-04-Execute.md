@@ -51,7 +51,8 @@ Subagent task template:
 Assume dr-dobbs identity. Implement GitHub issue #{N}: {title}.
 Get the issue: gh issue view {N} --json number,title,body,labels
 Follow BPE-02 → BPE-05 to fill the skeleton.
-Run the checkpoint command from the issue SCENARIO block.
+Run the behavior checkpoint from the issue SCENARIO / manifest.
+If log_story_command (or log_tests) is present, run it too — both must PASS in the same commit.
 Do not list other issues — get this one only.
 ```
 
@@ -70,7 +71,7 @@ gh issue comment {N} --body "<!-- EXECUTION_START -->\nStarted: {timestamp}\n<!-
 ```
 
 **c) Fill the skeleton** following BPE-02 → BPE-05:
-- **BPE-02**: Implement backend (replace `raise NotImplementedError()` with logic)
+- **BPE-02**: Implement backend (replace `raise NotImplementedError()` with logic), including Log Story Script emission and caplog tests in the same slice
   - If the scenario introduced **new Django models**: run migrations immediately after the model is defined:
     ```bash
     python manage.py makemigrations
@@ -86,19 +87,26 @@ Do NOT:
 - Create files outside `codebase_footprint[]`
 - Add unplanned public methods
 - Quietly redesign the skeleton
+- Close on behavior-only green when `log_story_command` is declared
 
 **d) Run checkpoint:**
 ```bash
 {checkpoint.command}
+# When declared in the manifest / SCENARIO block:
+{checkpoint.log_story_command}
 pytest tests/ -x --ignore=tests/e2e 2>&1 | tail -5
 ```
 
 **e) Evaluate result:**
 
-Checkpoint PASS + regression PASS:
+Checkpoint PASS means **both** behavior and log_story commands pass when `log_story_command` is present, plus regression PASS:
 ```bash
 git add -A
-git commit -m "feat({scope}): {title}\n\nImplements {scenario_id} from ITER-{slug}\nCheckpoint: {command} — PASSED"
+git commit -m "feat({scope}): {title}
+
+Implements {scenario_id} from ITER-{slug}
+Checkpoint: {command} — PASSED
+Log story: {log_story_command} — PASSED"
 gh issue close {N} --comment "<!-- CHECKPOINT_PASS -->\nPassed: {timestamp}\n<!-- /CHECKPOINT_PASS -->"
 gh issue edit {N} --remove-label "status-in-progress" --add-label "status-done"
 ```
@@ -128,10 +136,29 @@ Iteration complete when:
 gh issue list --milestone {N} --state open  # returns empty
 ```
 
+
+## Rules
+
+Before filling skeletons and running checkpoints, **read** each Rule below in this playbook (by slug), then **apply** it. Do not rely on memory of the rule text.
+
+Required:
+- `do-skeletons-first`
+- `do-test-first`
+- `do-not-mock-in-integration-tests`
+- `do-informative-logging`
+- `do-assert-log-story`
+- `do-write-concise-methods`
+- `do-follow-commit-convention`
+- `do-small-increments`
+- `pytest`
+
+Activity-specific (not a substitute for the rules above):
+- When `checkpoint.log_story_command` is declared, Checkpoint PASS requires **both** behavior and log-story commands in the same commit.
+
 ## Success Criteria
 - System dependencies checked before any implementation begins
 - Migrations run immediately after any new model is defined
-- All issues implemented, checkpointed, committed, closed with `status-done`
+- All issues implemented, checkpointed (behavior + log_story when declared), committed, closed with `status-done`
 - Parallel groups dispatched concurrently where possible
 - Each issue fetched one at a time (`gh issue view`, never list-all)
 - Escalations surfaced immediately; no autonomous action while awaiting human
@@ -143,12 +170,21 @@ None
 
 ## Skill
 
-None
+**Title**: Pytest Log Story Assertions
 
 ## Rules
 
-See `../rules/` for full rule content.
+- **Assert Log Story** (`assert-log-story`)
+- **Informative Logging** (`do-informative-logging`)
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+None
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

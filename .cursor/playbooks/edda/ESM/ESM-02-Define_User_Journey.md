@@ -110,8 +110,19 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+- **Look Via Human Eye** (`do-look-via-human-eye`)
+- **View Drawio Diagrams** (`do-view-drawio-diagrams`)
+- **Write Scenarios** (`do-write-scenarios`)
+
+## Artifacts Produced
+
+- **User Journey** (Document) - Required
+- **User Journey Template** (Template) - Required
+
+## Artifacts Consumed
+
+None
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

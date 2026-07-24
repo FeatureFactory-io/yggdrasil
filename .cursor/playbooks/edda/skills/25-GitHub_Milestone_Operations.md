@@ -9,7 +9,7 @@
 
 # Skill: GitHub Milestone Operations
 
-**Capability Domain**: GITHUB_MILESTONE  
+**Capability Domain**: GITHUB_MILESTONE
 **Technology Stack**: GitHub CLI
 
 ## Overview

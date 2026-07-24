@@ -33,7 +33,7 @@ Portable, single-file blueprint: pick a scenario → tick capabilities → copy 
 | ID | Name | When (biz words) | CAP-IDs (required) | CAP-IDs (optional) |
 |----|------|------------------|--------------------|--------------------|
 | SC-01 | Conversational planner | User chats; agent calls tools; work beyond one tool call becomes a background job | 001,004,020,030,031,040,050,051,060,120,121 | 002,006,007,010,033,042,043,044,061,070,100 |
-| SC-02 | Field extractor / bootstrap | Batch input → LLM JSON → domain writes; no chat loop | 001,004,008,009,020,030,031,120,121,122 | 005,011,023,032,036 |
+| SC-02 | Field extractor / batch ingest | Scripted chain: D0 pre-filter → D1 LLM canonicalize → propose writes; no chat loop | 001,004,008,009,020,030,031,120,121,122 | 005,011,023,032,036 |
 | SC-03 | Compiled pipeline | Trigger fires known step graph; selective LLM on some steps | 001,004,020,050,051,053,060,061,062,120 | 054,066,100 |
 | SC-04 | Event-driven nudge | Domain event → agent message/plan without user opening chat | 001,040,110,120 | 050,060,100 |
 | SC-05 | Governed mutations | Agent proposes writes; human approves destructive ops | 001,030,031,033,036 | 040,050 |
@@ -76,15 +76,24 @@ Read the summary table above, then open the matching **SC-xx** section below for
 
 ---
 
-# SC-02 · Field extractor / bootstrap
+# SC-02 · Field extractor / batch ingest
 
-**Pick when:** Fixed or batch input (repo snapshot, document, API payload) goes to the LLM once (or a short scripted chain); output is **structured JSON** that drives domain writes; no ReAct chat loop.
+**Pick when:** Fixed or batch input (repo snapshot, document, API payload) is ingested through a **scripted step chain**; one or more LLM steps emit **structured JSON** that drives domain writes; no ReAct chat loop.
 
-**Example flow:** Ratatosk scans a repo → LLM returns JSON array of candidate elements → tools create graph nodes → CLI exits with op count (parse failure must fail loud).
+**Typical flow (dual-tier):**
+1. **Gather** — scan input into raw candidates (deterministic).
+2. **D0 pre-filter** — path/class/rules reject obvious noise; merge duplicates on stable natural key (deterministic, unit-testable).
+3. **D1 canonicalize** — planning-tier LLM batch: merge / reject / rename remaining candidates (parse failure must fail loud).
+4. **Cleanup** — deterministic post-LLM rules (externals, denylist, cardinality caps).
+5. **Propose writes** — create/update/delete ops via domain service (often through SC-05 ChangeSet).
 
-**Product examples:** Ratatosk bootstrap/discovery; map/extract pipelines; “ingest this spec into the model” batch jobs.
+**Example flow:** Field CLI scans a repo → D0 drops tests/fixtures → D1 LLM merges duplicates → service proposes ChangeSet → CLI exits with op counts.
 
-**Not this if:** User multi-turn chat steers the task (→ SC-01); steps are pre-defined in a template graph (→ SC-03).
+**Product examples:** Bootstrap/discovery agents; map/extract pipelines; “ingest this spec into the model” batch jobs.
+
+**Not this if:** User multi-turn chat steers the task (→ SC-01); steps are a fixed template graph with selective LLM nodes (→ SC-03).
+
+**Often combined with:** SC-05 when writes go through approval / confidence gates.
 
 **Starting template:** T-02 Field
 
@@ -134,6 +143,29 @@ Read the summary table above, then open the matching **SC-xx** section below for
 **Often combined with:** SC-01 or SC-02 (governance layer on top of planner or field agent).
 
 **Starting template:** T-00 custom (CAP-033, CAP-036 + base scenario CAPs)
+
+---
+
+# SC-02 × SC-05 · Full rescan invariants
+
+**Applies when:** A field-extract / batch-ingest agent (SC-02) performs a **full rescan** that replaces an existing snapshot and emits **delete** as well as **add/update** operations, and all writes pass through governed mutation (SC-05).
+
+**Invariant 1 — Confidence parity**
+- Delete operations on a rescan MUST use the same auto-apply confidence policy as adds/updates.
+- Either: all rescan ops auto-apply atomically, OR none auto-apply until human review completes.
+- **Anti-pattern — hybrid graph:** high-confidence adds applied while low-confidence deletes stay pending → old and new entities coexist.
+
+**Invariant 2 — Delete before create**
+- When the domain uses natural-key upserts (`get_or_create` on slug/code), apply **delete operations before add/create** operations for the same rescan batch.
+- **Anti-pattern — empty graph:** adds bind to existing rows via natural key, then deletes remove those rows → near-empty or inconsistent state.
+
+**Proof obligations:** PRF-SC02-03, PRF-SC02-04, PRF-SC05-02.
+
+**Implementation checklist (record in project SAO §17):**
+- [ ] Rescan delete ops meet auto-apply threshold (or rescan disables partial auto-apply).
+- [ ] ChangeSet apply ordering: deletes → updates → adds when rescan flag is set.
+- [ ] Integration test reproduces both anti-patterns and asserts fix.
+
 
 ---
 
@@ -2047,10 +2079,13 @@ Tick CAP-IDs in the capability table; copy matching specification blocks, wire i
 |---------|----------|----------------|----------|
 | PRF-SC02-01 | SC-02 | 008,009 — thinking-wrapped JSON → ops > 0 | yes |
 | PRF-SC02-02 | SC-02 | 009 — parse fail must not exit 0 with zero side effects | yes |
+| PRF-SC02-03 | SC-02 | D0 pre-filter reduces candidate set deterministically | no |
+| PRF-SC02-04 | SC-02 | D1 parse fail → non-zero exit, zero domain writes | yes |
 | PRF-SC01-01 | SC-01 | 040,044,050,060 — message → plan → complete | no |
 | PRF-SC01-02 | SC-01 | 061 — 429 retry; completed steps not re-run | yes |
 | PRF-SC01-03 | SC-01 | 072 — bad LLM output retains blackboard | yes |
 | PRF-SC05-01 | SC-05 | 033,036 — destructive tool blocked until approval | yes |
+| PRF-SC05-02 | SC-02+05 | Full rescan: no hybrid graph; delete-before-add on natural key | yes |
 
 **PRF-SC02-01 sketch:**
 
@@ -2061,6 +2096,27 @@ def test_sc02_thinking_json_extract(scripted_llm, field_agent):
     assert len(items) == 1
     assert items[0]["name"] == "Api"
 ```
+**PRF-SC02-03 sketch:**
+
+```python
+def test_sc02_d0_prefilter_drops_noise():
+    raw = [{"name": "Api", "path": "src/api.py"}, {"name": "test_foo", "path": "tests/test_foo.py"}]
+    kept = d0_prefilter(raw, exclude_globs=["tests/**"])
+    assert len(kept) == 1
+    assert kept[0]["name"] == "Api"
+```
+
+**PRF-SC05-02 sketch:**
+
+```python
+def test_rescan_delete_before_add_no_empty_graph(change_set_service, entity_model):
+    existing = entity_model.objects.create(slug="api", name="Api")
+    ops = rescan_operations(deletes=[existing.pk], adds=[{"slug": "api", "name": "Api v2"}])
+    change_set_service.apply(ops, rescan=True)
+    assert entity_model.objects.filter(slug="api").count() == 1
+    assert entity_model.objects.get(slug="api").name == "Api v2"
+```
+
 
 Record chosen tests in project SAO §17 as the agent DoD gate.
 

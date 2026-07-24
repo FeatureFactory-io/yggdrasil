@@ -1,5 +1,0 @@
----
-alwaysApply: false
----
-
-Do not import locally inside the method - import at the module level. It will make patching and mocking easier for you.

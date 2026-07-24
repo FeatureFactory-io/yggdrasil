@@ -3,8 +3,6 @@
 **Artifact ID**: 24
 **Type**: Template
 **Required**: True
-**Produced By Activity ID**: 39
-**Consumers**: 2
 
 ## Description
 
@@ -226,4 +224,3 @@ Feature: {ScreenID} {EntityName} {Operation}
 # {NewValue} - Updated value
 # {DependencyCount} - Number of dependent items
 # {DependencyEntity} - Type of dependent entity
-

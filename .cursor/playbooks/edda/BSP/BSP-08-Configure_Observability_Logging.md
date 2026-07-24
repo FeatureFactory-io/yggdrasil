@@ -179,7 +179,7 @@ EOF
    ```bash
    # Start Django server
    python manage.py runserver
-   
+
    # Trigger some operations (create, read, update)
    # Check logs/app.log for entries
    tail -f logs/app.log
@@ -199,7 +199,7 @@ EOF
    ```python
    # In Django shell
    from {app_name}.utils.token_tracker import log_token_consumption
-   
+
    log_token_consumption(
        scenario_id="TEST-01",
        user_id=1,
@@ -307,8 +307,17 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+- **Informative Logging** (`do-informative-logging`)
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+- **System Architecture Overview Template** (Document) - Required
+- **Makefile Template** (Code) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

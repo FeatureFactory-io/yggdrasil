@@ -3,8 +3,6 @@
 **Artifact ID**: 15
 **Type**: Template
 **Required**: True
-**Produced By Activity ID**: 75
-**Consumers**: 6
 
 ## Description
 
@@ -81,4 +79,3 @@ __pycache__/
 - All AWS resources tagged with `project={project}`, `environment=shared`, `managed-by=cdk`
 - CDK context for environment-specific values (account, region, domain)
 - Tests use CDK assertions (Template.from_stack)
-

@@ -64,8 +64,16 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+- **E2E Test Configuration** (Code) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

@@ -3,8 +3,6 @@
 **Artifact ID**: 17
 **Type**: Code
 **Required**: True
-**Produced By Activity ID**: 79
-**Consumers**: 1
 
 ## Description
 
@@ -225,4 +223,3 @@ jobs:
 
       - name: Traffic status
         run: make traffic-status
-

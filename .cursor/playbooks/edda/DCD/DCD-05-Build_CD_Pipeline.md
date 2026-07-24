@@ -17,8 +17,6 @@ APPEND TO GUIDANCE:
 
 ## TAF Integration: E2E Staging Gate in CD
 
-AT runner: `docs/features/` (`make test-at`). E2E runner: `tests/e2e/` (`make test-e2e`).
-
 Add an E2E test stage in the CD pipeline that runs after deploying to the idle/staging environment and before the release/swap:
 
 ```yaml
@@ -70,8 +68,17 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+- **CD Pipeline (GitHub Actions)** (Code) - Required
+
+## Artifacts Consumed
+
+- **CICD Requirements (Release-Gated EB Reference)** (Document) - Required
+- **Helm Chart Template** (Template) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

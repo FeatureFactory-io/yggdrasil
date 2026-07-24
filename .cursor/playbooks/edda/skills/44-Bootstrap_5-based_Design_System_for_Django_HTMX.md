@@ -1,15 +1,15 @@
 # Bootstrap 5-based Design System for Django & HTMX
 
 **Skill ID**: 44
-**Capability Domain**: N/A
-**Technology Stack**: N/A
+**Capability Domain**:
+**Technology Stack**:
 **Linked Activities**: 1
 
 ## Content
 
 # Skill: Bootstrap 5-based Design System for Django & HTMX
 
-**Capability Domain**: FRONTEND_FRAMEWORK  
+**Capability Domain**: FRONTEND_FRAMEWORK
 **Technology Stack**: Bootstrap 5.3+ · Django 5 · HTMX
 
 ## Overview

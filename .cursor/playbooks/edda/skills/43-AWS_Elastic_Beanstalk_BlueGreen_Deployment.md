@@ -1,8 +1,8 @@
 # AWS Elastic Beanstalk Blue/Green Deployment
 
 **Skill ID**: 43
-**Capability Domain**: N/A
-**Technology Stack**: N/A
+**Capability Domain**:
+**Technology Stack**:
 **Linked Activities**: 5
 
 ## Content

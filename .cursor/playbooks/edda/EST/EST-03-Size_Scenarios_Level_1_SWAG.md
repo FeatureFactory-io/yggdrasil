@@ -129,8 +129,17 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+- **Estimation Template (Excel)** (Document) - Required
+
+## Artifacts Consumed
+
+- **Feature Files** (Document) - Required
+- **Estimation Reference Table** (Document) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

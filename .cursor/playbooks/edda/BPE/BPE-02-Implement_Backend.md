@@ -27,31 +27,22 @@ The core principle: the developer who has no knowledge of the system can impleme
 - Do not skip type hints or documentation
 - Add comments inside the methods pointing attention to the logic flow, exception handling, logging etc.
 
-### 2. Write Tests Before Logic
+### 2. Write Behavior Tests Before Logic
 Write unit tests before writing method logic using your test framework. Use real dependencies in integration scenarios - no mocking.
 
-### 3. Implement Incrementally
-Work method-by-method. Each method/property should be: implemented → tested → committed separately.
+### 3. Implement Incrementally (behavior green)
+Work method-by-method. Each method/property should be: implemented → behavior-tested → then log-story tested (step 4) → committed.
 
-### 4. Add Comprehensive Logging
-Add comprehensive logging to the application with appropriate log rotation. Add extensive logging at INFO level so you can troubleshoot who was doing what with which data when errors occur.
+### 4. Log Story — Caplog in the Same Slice
+For each footprint method covered by the plan's **Log Story Script**:
 
-Every service call or controller action must log at INFO level.
-
-**On the INFO level, always include:**
-- Who triggered the action (user or agent)
-- What the action did (inputs, affected models)
-- Why the action occurred (based on intent, rule, or logic)
-- The exact location (class, method/function, line if possible)
-- Key input parameters or identifiers relevant to the operation
-- The specific operation or action being attempted
-- The error or unexpected condition encountered
-- Relevant context or state (e.g., user ID, transaction ID, environment)
-
-Design each log message so that if something fails, you can find the source and root cause without guessing or needing to reproduce the problem.
+1. Write `test_*_log_story_happy` and/or `test_*_log_story_reject` (red)
+2. Emit INFO logs that satisfy story beats (`entry → config → validation → processing → branch → exit → error`) per `do-informative-logging`
+3. Make log-story tests green using skill *Pytest Log Story Assertions* (`tests/support/log_story.py` → `assert_log_story`) once TFK-02 has bootstrapped the helper — per `do-assert-log-story`
+4. Never defer logging to a later “informative logging pass” slice
 
 ### 5. Commit After Each Step
-Write → run → test → evaluate → fix. Commit using Angular-style commit messages.
+Write → run → test (behavior + log story) → evaluate → fix. Commit using Angular-style commit messages. Behavior and log-story green in the same commit.
 
 ### 6. Backend Architecture
 - **Services Layer**: Business logic shared between different interfaces (API, Web UI, CLI, etc.)
@@ -64,7 +55,7 @@ Write → run → test → evaluate → fix. Commit using Angular-style commit m
 Register new routes/endpoints with descriptive names. Follow your framework's conventions for URL/route structure.
 
 ### 8. Testing Views/Controllers
-Use your framework's test client. Test responses, validate context/state, check templates/views used, test dynamic endpoints.
+Use your framework's test client. Test responses, validate context/state, check templates/views used, test dynamic endpoints. Include caplog assertions for Log Story Script rows on those views.
 
 ### 9. Scan Skills
 
@@ -72,38 +63,36 @@ Query Playbook Skills where `capability_domain` in:
 - `BACKEND_FRAMEWORK` — Backend implementation patterns for your tech stack
 - `TEST_FRAMEWORK` — Testing patterns and best practices
 - `LOGGING_PATTERN` — Logging implementation for your language
+- `LOG_STORY_TESTING` — Pytest Log Story Assertions / caplog helpers
 - `DOCSTRING_FORMAT` — Documentation format for your language
 
 Apply reference implementations and patterns from matched Skills.
 
-## Rules to Follow
+## Rules
 
-### I. Skeleton-First Development
-Create class and method stubs with full documentation before implementation. Follow your language's documentation conventions.
+Before implementing, **read** each Rule below in this playbook (by slug), then **apply** it to every change in this activity's footprint. Do not rely on memory of the rule text; do not paraphrase the rule body into this activity.
 
-### II. Test-First Development
-Write tests before implementing logic. Use appropriate test framework for unit and integration tests.
+Required:
+- `do-skeletons-first`
+- `do-test-first`
+- `do-not-mock-in-integration-tests`
+- `do-informative-logging`
+- `do-assert-log-story`
+- `do-import-on-module-level`
+- `do-write-concise-methods`
+- `do-docstring-format`
+- `do-follow-commit-convention`
+- `do-small-increments`
+- `pytest`
 
-### III. No Mocking in Integration Tests
-Do not use mocks in integration tests - they're supposed to use real objects, real connections, real or real-like data from fixtures. Think of them as acceptance tests without UI.
-
-### IV. Informative Logging
-Every service call or controller action must log at INFO level. Include method entry with context, data structure logging, conditional logic documentation, data validation and transformation results, error context with full parameter context.
-
-**Log Level Guidelines:**
-- DEBUG: Detailed flow control, type checking, internal state
-- INFO: Method entry/exit, configuration, major processing steps, results
-- WARNING: Concerning but recoverable conditions, substitutions, fallback usage, data quality issues
-- ERROR: Failures requiring attention, unrecoverable conditions
-
-### V. Dependency Management
-All imports/dependencies must be at module level. No imports inside functions/methods. Dependencies must be properly declared in your dependency management file.
+Activity-specific (not a substitute for the rules above):
+- Log-story tests (`*_log_story_*` / caplog) ship in the **same** red→green slice as behavior — no deferred logging pass.
 
 ## Success Criteria
 - All skeletons created with full documentation
-- Tests written before implementation
-- All tests passing (100% pass rate)
-- Comprehensive logging added
+- Behavior tests written before implementation and passing
+- Log Story Script rows proven by passing `*_log_story_*` caplog tests in the same commit as behavior
+- No deferred logging slice in the plan
 - Code committed with proper messages
 - Routes/endpoints properly registered
 - Services layer properly structured
@@ -225,10 +214,33 @@ Read these before starting this activity. They are produced earlier in the playb
 **Capability Domain**: BACKEND_FRAMEWORK
 **Technology Stack**: Django+Python+pytest
 
+**Title**: Pytest Log Story Assertions
+
 ## Rules
 
-See `../rules/` for full rule content.
+- **Assert Log Story** (`assert-log-story`)
+- **Check Previous Commits** (`do-check-previous-commits`)
+- **Docstring Format** (`do-docstring-format`)
+- **Fix Tests** (`do-fix-tests`)
+- **Import On Module Level** (`do-import-on-module-level`)
+- **Informative Logging** (`do-informative-logging`)
+- **Not Go Into Debugging Loops** (`do-not-go-into-debugging-loops`)
+- **Skeletons First** (`do-skeletons-first`)
+- **Test First** (`do-test-first`)
+- **Validate Api Contracts** (`do-validate-api-contracts`)
+- **Keep Docstrings Consistent** (`keep-docstrings-consistent`)
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+- **Feature Files** (Document) - Required
+- **System Architecture Overview Template** (Document) - Required
+- **Definition of Done Checklist Template** (Template) - Required
+- **Implementation Plan Template** (Template) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

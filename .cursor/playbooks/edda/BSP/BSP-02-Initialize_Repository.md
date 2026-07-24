@@ -156,8 +156,16 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+- **Makefile Template** (Code) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

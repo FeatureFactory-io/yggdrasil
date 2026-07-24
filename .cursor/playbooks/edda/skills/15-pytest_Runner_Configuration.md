@@ -29,7 +29,7 @@ python_classes = Test*
 python_functions = test_*
 testpaths = tests
 
-addopts = 
+addopts =
     -v
     --strict-markers
     --tb=short
@@ -216,4 +216,3 @@ pytest-xdist>=3.3.0         # Parallel execution
 pytest-timeout>=2.1.0       # Test timeouts
 pytest-mock>=3.11.0         # Mocking support
 ```
-

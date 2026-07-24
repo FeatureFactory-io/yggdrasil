@@ -3,8 +3,6 @@
 **Artifact ID**: 6
 **Type**: Diagram
 **Required**: True
-**Produced By Activity ID**: 38
-**Consumers**: 8
 
 ## Description
 

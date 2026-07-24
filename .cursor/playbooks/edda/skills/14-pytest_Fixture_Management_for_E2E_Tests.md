@@ -105,7 +105,7 @@ def playbook_factory(db, user_factory):
     def create_playbook(name='Test Playbook', author=None, **kwargs):
         if author is None:
             author = user_factory()
-        
+
         defaults = {
             'description': 'Test description',
             'category': 'test',
@@ -113,7 +113,7 @@ def playbook_factory(db, user_factory):
             'status': 'draft'
         }
         defaults.update(kwargs)
-        
+
         return Playbook.objects.create(
             name=name,
             author=author,
@@ -127,13 +127,13 @@ def workflow_factory(db, playbook_factory):
     def create_workflow(name='Test Workflow', playbook=None, **kwargs):
         if playbook is None:
             playbook = playbook_factory()
-        
+
         defaults = {
             'description': 'Test workflow',
             'order': 1
         }
         defaults.update(kwargs)
-        
+
         return Workflow.objects.create(
             name=name,
             playbook=playbook,
@@ -151,7 +151,7 @@ import pytest
 @pytest.mark.django_db
 class TestPlaybookCRUD:
     """Test playbook CRUD operations."""
-    
+
     def test_create_playbook(self, user_factory, playbook_factory):
         """Test creating a playbook."""
         user = user_factory(username='maria')
@@ -160,22 +160,22 @@ class TestPlaybookCRUD:
             author=user,
             category='development'
         )
-        
+
         assert playbook.id is not None
         assert playbook.name == 'React Development'
         assert playbook.author == user
-    
+
     def test_list_user_playbooks(self, user_factory, playbook_factory):
         """Test listing playbooks for a user."""
         user1 = user_factory(username='maria')
         user2 = user_factory(username='john')
-        
+
         playbook1 = playbook_factory(name='P1', author=user1)
         playbook2 = playbook_factory(name='P2', author=user1)
         playbook3 = playbook_factory(name='P3', author=user2)
-        
+
         user1_playbooks = Playbook.objects.filter(author=user1)
-        
+
         assert user1_playbooks.count() == 2
         assert playbook1 in user1_playbooks
         assert playbook2 in user1_playbooks
@@ -207,11 +207,11 @@ from methodology.models import Playbook, Workflow, Activity
 
 class Command(BaseCommand):
     help = 'Seed database with test data for E2E tests'
-    
+
     def handle(self, *args, **options):
         """Create test data."""
         self.stdout.write('Seeding test data...')
-        
+
         # Create test user
         user, created = User.objects.get_or_create(
             username='admin',
@@ -225,7 +225,7 @@ class Command(BaseCommand):
             user.set_password('admin123')
             user.save()
             self.stdout.write(f'Created user: {user.username}')
-        
+
         # Create test playbook
         playbook, created = Playbook.objects.get_or_create(
             name='FeatureFactory',
@@ -239,7 +239,7 @@ class Command(BaseCommand):
         )
         if created:
             self.stdout.write(f'Created playbook: {playbook.name}')
-        
+
         # Create test workflow
         workflow, created = Workflow.objects.get_or_create(
             name='Build Feature',
@@ -251,7 +251,7 @@ class Command(BaseCommand):
         )
         if created:
             self.stdout.write(f'Created workflow: {workflow.name}')
-        
+
         self.stdout.write(self.style.SUCCESS('Test data seeded successfully'))
 ```
 
@@ -365,4 +365,3 @@ def django_db_setup(django_db_setup, django_db_blocker):
 5. **Document fixture purpose**: Docstrings explaining what fixture provides
 6. **Keep fixtures DRY**: Compose fixtures from other fixtures
 7. **Isolate tests**: Each test gets fresh data via transaction rollback
-

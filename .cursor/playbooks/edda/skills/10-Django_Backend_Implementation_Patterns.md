@@ -34,7 +34,7 @@ def playbook_list(request):
     """List all playbooks for current user."""
     service = PlaybookService()
     playbooks = service.get_user_playbooks(request.user)
-    
+
     return render(request, 'playbooks/list.html', {
         'playbooks': playbooks,
         'page_title': 'My Playbooks'
@@ -56,7 +56,7 @@ def playbook_create(request):
             return redirect('playbook_detail', playbook_id=playbook.id)
         except ValidationError as e:
             messages.error(request, str(e))
-    
+
     return render(request, 'playbooks/create.html')
 ```
 
@@ -72,12 +72,12 @@ from ..models import Playbook
 
 class PlaybookService:
     """Business logic for playbook management."""
-    
+
     @staticmethod
     def create_playbook(name: str, description: str, category: str, author):
         """
         Create a new playbook.
-        
+
         :param name: Playbook name as str. Example: "React Development"
         :param description: Description as str. Example: "Modern React patterns"
         :param category: Category as str. Example: "development"
@@ -87,10 +87,10 @@ class PlaybookService:
         """
         if not name or not name.strip():
             raise ValidationError("Playbook name cannot be empty")
-        
+
         if Playbook.objects.filter(name=name, author=author).exists():
             raise ValidationError(f"Playbook '{name}' already exists")
-        
+
         playbook = Playbook.objects.create(
             name=name,
             description=description,
@@ -100,12 +100,12 @@ class PlaybookService:
             status='draft'
         )
         return playbook
-    
+
     @staticmethod
     def get_user_playbooks(user):
         """
         Get all playbooks for a user.
-        
+
         :param user: User instance. Example: User(id=1)
         :return: QuerySet of Playbooks. Example: <QuerySet [<Playbook: React Dev>]>
         """
@@ -122,15 +122,15 @@ from ..models import Playbook
 
 class PlaybookRepository:
     """Data access layer for Playbooks."""
-    
+
     def get_by_id(self, playbook_id: int):
         """Get playbook by ID."""
         return Playbook.objects.get(id=playbook_id)
-    
+
     def filter_by_user(self, user):
         """Get all playbooks for user."""
         return Playbook.objects.filter(author=user)
-    
+
     def create(self, **kwargs):
         """Create new playbook."""
         return Playbook.objects.create(**kwargs)
@@ -174,7 +174,7 @@ from methodology.models import Playbook
 
 class PlaybookViewsTest(TestCase):
     """Test playbook views with Django test client."""
-    
+
     def setUp(self):
         """Set up test fixtures."""
         self.client = Client()
@@ -183,15 +183,15 @@ class PlaybookViewsTest(TestCase):
             password='testpass123'
         )
         self.client.login(username='testuser', password='testpass123')
-    
+
     def test_playbook_list_returns_correct_template(self):
         """Test playbook list view returns correct template."""
         response = self.client.get('/playbooks/')
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'playbooks/list.html')
         self.assertIn('playbooks', response.context)
-    
+
     def test_playbook_create_success(self):
         """Test creating playbook via POST."""
         response = self.client.post('/playbooks/create/', {
@@ -199,10 +199,10 @@ class PlaybookViewsTest(TestCase):
             'description': 'Test description',
             'category': 'test'
         })
-        
+
         self.assertEqual(response.status_code, 302)  # Redirect
         self.assertTrue(Playbook.objects.filter(name='Test Playbook').exists())
-    
+
     def test_playbook_create_validation_error(self):
         """Test playbook create with invalid data."""
         response = self.client.post('/playbooks/create/', {
@@ -210,7 +210,7 @@ class PlaybookViewsTest(TestCase):
             'description': 'Test',
             'category': 'test'
         })
-        
+
         self.assertEqual(response.status_code, 200)  # Re-render form
         self.assertContains(response, 'error')
         self.assertFalse(Playbook.objects.filter(description='Test').exists())
@@ -231,36 +231,36 @@ from methodology.models import Playbook
 @pytest.mark.django_db
 class TestPlaybookService:
     """Test PlaybookService business logic."""
-    
+
     def test_create_playbook_success(self):
         """Test successful playbook creation."""
         user = User.objects.create_user(username='testuser')
         service = PlaybookService()
-        
+
         playbook = service.create_playbook(
             name='Test Playbook',
             description='Test description',
             category='test',
             author=user
         )
-        
+
         assert playbook.id is not None
         assert playbook.name == 'Test Playbook'
         assert playbook.status == 'draft'
         assert playbook.version == Decimal('0.1')
-    
+
     def test_create_playbook_duplicate_name_raises_error(self):
         """Test creating duplicate playbook raises ValidationError."""
         user = User.objects.create_user(username='testuser')
         service = PlaybookService()
-        
+
         service.create_playbook(
             name='Duplicate',
             description='First',
             category='test',
             author=user
         )
-        
+
         with pytest.raises(ValidationError, match="already exists"):
             service.create_playbook(
                 name='Duplicate',
@@ -401,4 +401,3 @@ tests/
 │   └── test_activity_views.py
 └── conftest.py
 ```
-

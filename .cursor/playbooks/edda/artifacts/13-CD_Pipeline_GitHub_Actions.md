@@ -3,8 +3,6 @@
 **Artifact ID**: 13
 **Type**: Code
 **Required**: True
-**Produced By Activity ID**: 85
-**Consumers**: 2
 
 ## Description
 
@@ -160,4 +158,3 @@ jobs:
 
       - name: Final status
         run: make pipeline-status
-

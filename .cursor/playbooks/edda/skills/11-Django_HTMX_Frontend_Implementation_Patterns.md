@@ -32,7 +32,7 @@ Full pages inherit from base template:
 <div class="container" data-testid="playbooks-page">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1>My Playbooks</h1>
-        <a href="{% url 'playbook_create' %}" 
+        <a href="{% url 'playbook_create' %}"
            class="btn btn-primary"
            data-testid="create-playbook-button"
            data-bs-toggle="tooltip"
@@ -40,7 +40,7 @@ Full pages inherit from base template:
             <i class="fa-solid fa-plus"></i> New Playbook
         </a>
     </div>
-    
+
     <div id="playbook-list" data-testid="playbook-list">
         {% include "playbooks/partials/_playbook_table.html" %}
     </div>
@@ -127,27 +127,27 @@ Partials are reusable HTML fragments in `templates/*/partials/`:
       hx-swap="innerHTML"
       data-testid="playbook-form">
     {% csrf_token %}
-    
+
     <div class="mb-3">
         <label for="name" class="form-label">Name *</label>
-        <input type="text" 
-               class="form-control" 
-               id="name" 
+        <input type="text"
+               class="form-control"
+               id="name"
                name="name"
                data-testid="playbook-name-input"
                required>
     </div>
-    
+
     <div class="mb-3">
         <label for="description" class="form-label">Description</label>
-        <textarea class="form-control" 
-                  id="description" 
+        <textarea class="form-control"
+                  id="description"
                   name="description"
                   data-testid="playbook-description-input"
                   rows="3"></textarea>
     </div>
-    
-    <button type="submit" 
+
+    <button type="submit"
             class="btn btn-primary"
             data-testid="save-playbook-button"
             data-bs-toggle="tooltip"
@@ -213,11 +213,11 @@ from django.shortcuts import render
 def workflow_diagram(request, workflow_id):
     """Render workflow as Graphviz diagram."""
     workflow = get_object_or_404(Workflow, id=workflow_id)
-    
+
     # Create graph
     dot = graphviz.Digraph(comment=workflow.name)
     dot.attr(rankdir='TB', bgcolor='transparent')
-    
+
     # Add nodes
     for activity in workflow.activities.all():
         dot.node(
@@ -227,15 +227,15 @@ def workflow_diagram(request, workflow_id):
             style='filled',
             fillcolor='lightblue'
         )
-    
+
     # Add edges (dependencies)
     for activity in workflow.activities.all():
         if activity.predecessor:
             dot.edge(str(activity.predecessor.id), str(activity.id))
-    
+
     # Render to SVG
     svg_content = dot.pipe(format='svg').decode('utf-8')
-    
+
     return render(request, 'workflows/diagram.html', {
         'workflow': workflow,
         'svg_content': svg_content
@@ -310,44 +310,44 @@ from methodology.models import Playbook
 
 class PlaybookTemplateTest(TestCase):
     """Test playbook templates without browser."""
-    
+
     def setUp(self):
         self.client = Client()
         self.user = User.objects.create_user(username='test', password='test')
         self.client.login(username='test', password='test')
-        
+
         self.playbook = Playbook.objects.create(
             name='Test Playbook',
             description='Test',
             category='test',
             author=self.user
         )
-    
+
     def test_playbook_list_contains_playbook_name(self):
         """Test list page contains playbook name."""
         response = self.client.get('/playbooks/')
-        
+
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Test Playbook')
         self.assertContains(response, 'data-testid="playbook-row"')
-    
+
     def test_playbook_detail_returns_correct_template(self):
         """Test detail page uses correct template."""
         response = self.client.get(f'/playbooks/{self.playbook.id}/')
-        
+
         self.assertTemplateUsed(response, 'playbooks/detail.html')
         self.assertEqual(response.context['playbook'], self.playbook)
-    
+
     def test_htmx_request_returns_partial(self):
         """Test HTMX request returns partial template."""
         response = self.client.get(
             f'/playbooks/{self.playbook.id}/',
             HTTP_HX_REQUEST='true'  # Simulate HTMX request
         )
-        
+
         self.assertTemplateUsed(response, 'playbooks/partials/_detail.html')
         self.assertNotContains(response, '<html>')  # No full page
-    
+
     def test_graph_contains_all_activities(self):
         """Test Graphviz graph includes all activities."""
         workflow = Workflow.objects.create(
@@ -356,10 +356,10 @@ class PlaybookTemplateTest(TestCase):
         )
         activity1 = Activity.objects.create(name='A1', workflow=workflow)
         activity2 = Activity.objects.create(name='A2', workflow=workflow)
-        
+
         response = self.client.get(f'/workflows/{workflow.id}/diagram/')
         svg_content = response.content.decode('utf-8')
-        
+
         self.assertIn('A1', svg_content)
         self.assertIn('A2', svg_content)
         self.assertIn('<svg', svg_content)
@@ -399,7 +399,7 @@ def playbook_list(request):
 # Correct - returning HTML
 def playbook_list(request):
     playbooks = Playbook.objects.all()
-    
+
     if request.headers.get('HX-Request'):
         # HTMX request - return partial
         return render(request, 'playbooks/partials/_list.html', {
@@ -515,4 +515,3 @@ templates/
 - Validate SVG graph content
 - No browser automation needed
 - Fast (<5s per test class)
-

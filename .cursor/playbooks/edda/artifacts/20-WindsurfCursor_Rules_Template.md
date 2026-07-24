@@ -3,8 +3,6 @@
 **Artifact ID**: 20
 **Type**: Template
 **Required**: False
-**Produced By Activity ID**: 64
-**Consumers**: 1
 
 ## Description
 
@@ -83,4 +81,3 @@ The following rules in `.windsurf/rules/` are automatically active. Do NOT dupli
 - `{SkillsTable}` — Auto-generated from `.windsurf/workflows/*/skills/`
 - `{ArtifactTemplateTable}` — Auto-generated from `.windsurf/workflows/*/artifacts/`
 - `{ExistingRulesList}` — Auto-generated list of `.windsurf/rules/*.md` files with descriptions
-

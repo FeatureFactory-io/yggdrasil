@@ -3,8 +3,6 @@
 **Artifact ID**: 23
 **Type**: Template
 **Required**: True
-**Produced By Activity ID**: 37
-**Consumers**: 2
 
 ## Description
 
@@ -208,7 +206,7 @@ We extend Bootstrap's native CSS variables with {ProjectName}-specific tokens. A
 ```html
 <div class="mb-3">
   <label for="{fieldId}" class="form-label">{FieldLabel} <span class="text-danger">*</span></label>
-  <input type="text" class="form-control" id="{fieldId}" name="{fieldName}" 
+  <input type="text" class="form-control" id="{fieldId}" name="{fieldName}"
          placeholder="{PlaceholderText}" required data-testid="{entity}-{field}-input">
   <div class="invalid-feedback">{ErrorMessage}</div>
 </div>
@@ -218,7 +216,7 @@ We extend Bootstrap's native CSS variables with {ProjectName}-specific tokens. A
 ```html
 <div class="mb-3">
   <label for="{fieldId}" class="form-label">{FieldLabel}</label>
-  <textarea class="form-control" id="{fieldId}" name="{fieldName}" rows="4" 
+  <textarea class="form-control" id="{fieldId}" name="{fieldName}" rows="4"
             placeholder="{PlaceholderText}" data-testid="{entity}-{field}-textarea"></textarea>
 </div>
 ```
@@ -376,4 +374,3 @@ We extend Bootstrap's native CSS variables with {ProjectName}-specific tokens. A
 - `{FieldLabel}` - Form field label
 - `{PlaceholderText}` - Input placeholder text
 - `{ErrorMessage}` - Validation error message
-

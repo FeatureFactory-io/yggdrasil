@@ -3,8 +3,6 @@
 **Artifact ID**: 25
 **Type**: Document
 **Required**: True
-**Produced By Activity ID**: 67
-**Consumers**: 4
 
 ## Description
 
@@ -319,4 +317,3 @@ Use these ranges for **Level 2 detailed estimates** (EST-06). Sum artifact estim
 - [ ] Measure "pattern reuse discount" empirically: track tokens for 1st vs 2nd CRUD entity of same type
 - [ ] Check if LOC proxy 0.10 K/LOC holds for non-Django stacks (React, FastAPI, etc.)
 - [ ] The "17×" overestimate figures from pre-calibration analysis need reconciliation with 0.10 K/LOC factor — likely a different baseline was used (raw session tokens vs LOC proxy)
-

@@ -203,8 +203,16 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+- **Validate Api Contracts** (`do-validate-api-contracts`)
+
+## Artifacts Produced
+
+None
+
+## Artifacts Consumed
+
+None
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

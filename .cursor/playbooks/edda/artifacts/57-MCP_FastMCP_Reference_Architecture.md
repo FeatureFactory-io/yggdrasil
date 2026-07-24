@@ -34,7 +34,7 @@ A modular catalog for MCP on Django. Modules are optional unless the mission req
 - **Services (or API) are truth** — tools adapt; they do not own business rules.
 - **Descriptors are the LLM UX** — weak docstrings produce wrong calls.
 - **Default-narrow, explicit-widen** — list tools filter + limit; never dump unbounded history into the model.
-- **Batch common “all matching X” intents** — one scoped mutation, not N× update round-trips.
+- **Batch common "all matching X" intents** — one scoped mutation, not N× update round-trips.
 - **MCP is its own process** — not a Django `urlpatterns` entry.
 - **Async boundary is explicit** — FastMCP is async; Django ORM is sync.
 - **Stdout is sacred on stdio** — logs go to file or stderr only.
@@ -300,7 +300,7 @@ List tools additionally fail the gate if they lack a documented default filter a
 
 # 4. Payload Discipline: Filters, Pagination, Batch Tools
 
-MCP tool results are **model context**, not a UI table. An unbounded `list_*` that returns years of history can be thousands of lines: token blow-up, truncated JSON, IDE/client timeouts that look like “hangs”, and agents that retry or loop on partial data. **Default-narrow, explicit-widen.**
+MCP tool results are **model context**, not a UI table. An unbounded `list_*` that returns years of history can be thousands of lines: token blow-up, truncated JSON, IDE/client timeouts that look like "hangs", and agents that retry or loop on partial data. **Default-narrow, explicit-widen.**
 
 ## 4.1 Why filters and limits are mandatory
 
@@ -308,16 +308,16 @@ MCP tool results are **model context**, not a UI table. An unbounded `list_*` th
 |--------------|--------------|
 | No filter, no limit | Entire table serialized into the tool result |
 | Huge payload | Context window fills; later reasoning degrades or the call times out |
-| Agent “fixes” it wrong | Calls the same list again, or pages manually with broken offsets |
+| Agent "fixes" it wrong | Calls the same list again, or pages manually with broken offsets |
 | N× follow-up updates | Each row update re-sends context; cost and latency explode |
 
 Therefore every list-style tool needs:
 
-1. **Common-case filters** that match how users actually speak (“today”, “active only”, “this week”).
+1. **Common-case filters** that match how users actually speak ("today", "active only", "this week").
 2. A **hard `limit`** (or page cursor) with a **safe default** and a **server-side max**.
-3. **`total_count`** (and ideally `filters_applied`) so the model knows to narrow the query or fetch another page — instead of assuming “this is everything.”
+3. **`total_count`** (and ideally `filters_applied`) so the model knows to narrow the query or fetch another page — instead of assuming "this is everything."
 
-Prefer a **summary tool** (`get_day_summary`, `get_today`) when the question is “how is today?” — do not dump full history by default.
+Prefer a **summary tool** (`get_day_summary`, `get_today`) when the question is "how is today?" — do not dump full history by default.
 
 ## 4.2 How — common-case filters and pagination
 
@@ -365,10 +365,10 @@ async def list_log_entries(
 
 | Pattern | Example tool shape | User phrase it serves |
 |---------|-------------------|------------------------|
-| Boolean default | `list_intents(..., active_only=True)` | “my intents” → not archived junk |
-| Date / due | `list_objectives(..., due_date="2026-02-06")` | “today’s tasks” |
-| Multi-dim + limit | `list_log_entries(date=…, limit=100)` | “what did I log this week?” |
-| Small backlog cap | `get_backlog_objectives(..., limit=10)` | “what’s in the backlog?” |
+| Boolean default | `list_intents(..., active_only=True)` | "my intents" → not archived junk |
+| Date / due | `list_objectives(..., due_date="2026-02-06")` | "today's tasks" |
+| Multi-dim + limit | `list_log_entries(date=…, limit=100)` | "what did I log this week?" |
+| Small backlog cap | `get_backlog_objectives(..., limit=10)` | "what's in the backlog?" |
 
 **Guidance:**
 
@@ -380,7 +380,7 @@ async def list_log_entries(
 
 ## 4.3 Why batch tools — filter then mutate once
 
-**User intent:** “Reschedule all today’s tasks to tomorrow.”
+**User intent:** "Reschedule all today's tasks to tomorrow."
 
 **Bad agent path** (common without batch tools):
 
@@ -399,10 +399,10 @@ async def list_log_entries(
 
 | Style | Signature idea | When |
 |-------|----------------|------|
-| **Filter-scoped** (preferred for NL) | `reschedule_objectives(from_due_date=…, to_due_date=…)` | User named a set (“all today”) |
+| **Filter-scoped** (preferred for NL) | `reschedule_objectives(from_due_date=…, to_due_date=…)` | User named a set ("all today") |
 | **Id-list** | `update_objectives(ids=[…], due_date=…)` | Model already listed and selected ids |
 
-Ship list tools with common-case filters (`list_objectives(due_date=…)`) and batch create (`create_log_entries(entries=[…])`) first; add the **mutation twin** when journeys say “all matching X”.
+Ship list tools with common-case filters (`list_objectives(due_date=…)`) and batch create (`create_log_entries(entries=[…])`) first; add the **mutation twin** when journeys say "all matching X".
 
 ### Good batch descriptor (illustrative)
 
@@ -441,14 +441,14 @@ async def reschedule_objectives(
 ## 4.4 Payload merge gate
 
 - List tool: documented common-case filter(s) + default `limit` + `total_count` in the return shape.
-- Batch tool: explicit scope (filter and/or ids); refuses unbounded “all rows”; returns a summary.
-- “All matching X” appears in a user journey → batch mutate is required, not optional polish.
+- Batch tool: explicit scope (filter and/or ids); refuses unbounded "all rows"; returns a summary.
+- "All matching X" appears in a user journey → batch mutate is required, not optional polish.
 
 ---
 
 # 5. Transport & Process Topology
 
-MCP is **not** mounted through Django’s URL router. Reference implementations run FastMCP as a **separate process**. A public path like `/mcp` is a **reverse-proxy** concern, not a `path("mcp/", …)` view.
+MCP is **not** mounted through Django's URL router. Reference implementations run FastMCP as a **separate process**. A public path like `/mcp` is a **reverse-proxy** concern, not a `path("mcp/", …)` view.
 
 **Topology (summary):** local IDE → stdio → MCP process → services (Case A) or API (Case B); remote clients → reverse proxy → MCP process over HTTP/SSE.
 
@@ -463,7 +463,7 @@ MCP is **not** mounted through Django’s URL router. Reference implementations 
 
 **Case A local:** one process loads Django + FastMCP (stdio).
 **Case B remote:** MCP process has no Django; only httpx → API.
-**Cloud “same host”:** still two processes (web + MCP); proxy joins them on one hostname.
+**Cloud "same host":** still two processes (web + MCP); proxy joins them on one hostname.
 
 ## 5.2 Do not do this
 
@@ -474,7 +474,7 @@ urlpatterns = [
 ]
 ```
 
-Reasons: FastMCP’s HTTP stack is ASGI (Starlette), needs its own lifespan/session manager, conflicts with WSGI, and fights Django middleware/auth assumptions. Production deployments use a sidecar process, not Django URL routing.
+Reasons: FastMCP's HTTP stack is ASGI (Starlette), needs its own lifespan/session manager, conflicts with WSGI, and fights Django middleware/auth assumptions. Production deployments use a sidecar process, not Django URL routing.
 
 ## 5.3 Proxy sketch (public `/mcp`)
 
@@ -728,7 +728,7 @@ Key assertion: if any `print()` or Django startup message reached stdout, `json.
 | S2 | First read tool + **full descriptor** + filters/`limit` + T1/T2 |
 | S3 | First write tool through service/API + error contract |
 | S4 | Expand by bounded context; registration count test |
-| S5 | Batch mutate when journey says “all matching X” (filter→batch) |
+| S5 | Batch mutate when journey says "all matching X" (filter→batch) |
 | S6 | (Hybrid/B) facade + Docker + proxy `/mcp` + T3 |
 | S7 | Parity table (Case B); IDE smoke on descriptors + payload gate |
 

@@ -135,8 +135,17 @@ None
 
 ## Rules
 
-See `../rules/` for full rule content.
+None
+
+## Artifacts Produced
+
+- **Infra GH Actions Workflow** (Code) - Required
+
+## Artifacts Consumed
+
+- **Infra Repo Scaffold** (Template) - Required
+- **CDK Stack Templates** (Code) - Required
 
 ## Notes
 
-Exported via Mimir MCP tools.
+No additional notes.

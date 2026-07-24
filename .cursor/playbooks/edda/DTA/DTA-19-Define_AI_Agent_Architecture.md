@@ -1,3 +1,17 @@
+# Activity: Define AI Agent Architecture
+
+**Activity ID**: 200
+**Order**: 19
+**Phase**: Inception
+**Dependencies**: Predecessor: Activity 58 (Define Documentation Strategy)
+Successor: Activity 201 (Define MCP Architecture)
+
+## Description
+
+Define AI Agent Architecture
+
+## Guidance
+
 # Define AI Agent Architecture
 
 **Condition:** Run only if the system has in-app LLM agents (agentic loops, plan/worker execution, or LLM calls inside the application). Skip and write "Not applicable" in SAO §17 if none of: in-app agentic loop, LLM calls initiated by the app, plan/worker execution.
@@ -17,7 +31,8 @@ Pick scenario(s), select capabilities (`CAP-xxx`), choose an assembly template, 
 5. Confirm dependencies in the **Capability table** and **Module wiring** sections.
 6. Note starting assembly template (T-01, T-02, T-03, or T-00 custom).
 7. Name integration proof test IDs (`PRF-SCxx-xx`) as DoD gate.
-8. Record decisions for SAO §17 via Write SAO.md (Activity 59).
+8. If **both** SC-02 and SC-05 are selected, read **SC-02 × SC-05 · Full rescan invariants** in the reference artifact and record checklist in SAO §17.
+9. Record decisions for SAO §17 via Write SAO.md (Activity 59).
 
 ## Decisions to Make
 
@@ -28,7 +43,7 @@ Read the **Scenario cards** in the reference artifact before ticking. Record pri
 | SC-ID | Name | When (summary) | Selected? | Rationale |
 |-------|------|----------------|-----------|-----------|
 | SC-01 | Conversational planner | User chat → tools → optional background plan/worker | | |
-| SC-02 | Field extractor / bootstrap | Batch input → LLM JSON → domain writes; no chat loop | | |
+| SC-02 | Field extractor / batch ingest | D0 pre-filter → D1 LLM canonicalize → propose writes; no chat loop | | |
 | SC-03 | Compiled pipeline | Trigger → known step graph; selective LLM steps | | |
 | SC-04 | Event-driven nudge | Domain event → proactive message/plan without user opening chat | | |
 | SC-05 | Governed mutations | Mutations/deletes need human approval before execute | | |
@@ -71,12 +86,23 @@ Map reference artifact integration proof tests to project test files:
 |--------|----------|-----------|-----------|
 | PRF-SC02-01 | SC-02 thinking JSON | | |
 | PRF-SC02-02 | SC-02 parse fail loud | | |
+| PRF-SC02-03 | SC-02 D0 pre-filter | | |
+| PRF-SC02-04 | SC-02 D1 parse fail loud | | |
 | PRF-SC01-01 | SC-01 plan handoff | | |
 | PRF-SC01-02 | SC-01 429 retry | | |
 | PRF-SC01-03 | SC-01 blackboard retain | | |
 | PRF-SC05-01 | SC-05 HITL | | |
+| PRF-SC05-02 | SC-02+05 full rescan invariants | | |
 
-### 7. Scan Skills
+### 7. SC-02 × SC-05 full rescan (if both selected)
+
+From reference artifact **SC-02 × SC-05 · Full rescan invariants**:
+
+- [ ] Rescan delete ops meet auto-apply confidence threshold (or rescan disables partial auto-apply)
+- [ ] ChangeSet apply ordering: deletes → updates → adds when rescan flag is set
+- [ ] PRF-SC05-02 mapped to integration test file
+
+### 8. Scan Skills
 
 Query Skills where `capability_domain` in: AI_AGENT, LLM_INTEGRATION, ASYNC_TASK. Report gaps.
 
@@ -87,5 +113,30 @@ Query Skills where `capability_domain` in: AI_AGENT, LLM_INTEGRATION, ASYNC_TASK
 - Assembly template (T-01 / T-02 / T-03 / T-00) named
 - Agent identities + model tiers documented
 - PRF test IDs mapped to project test files
+- SC-02 × SC-05 rescan checklist completed (when both scenarios selected)
 - Skill coverage assessed
 - Decision recorded for SAO §17 via Write SAO.md (Activity 59)
+
+## Agent
+
+None
+
+## Skill
+
+None
+
+## Rules
+
+None
+
+## Artifacts Produced
+
+- **AI Agent Reference Architecture** (Document) - Optional
+
+## Artifacts Consumed
+
+None
+
+## Notes
+
+No additional notes.

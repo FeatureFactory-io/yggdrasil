@@ -3,8 +3,6 @@
 **Artifact ID**: 14
 **Type**: Template
 **Required**: True
-**Produced By Activity ID**: 82
-**Consumers**: 5
 
 ## Description
 
@@ -144,4 +142,3 @@ helm upgrade --install {project} deploy/helm/{project} \
 - Image tag set at deploy time via `--set image.tag=...`
 - `--wait` flag in CI/CD ensures deployment health before proceeding
 - Secrets: never stored in values files; use `kubectl create secret` or external secrets
-

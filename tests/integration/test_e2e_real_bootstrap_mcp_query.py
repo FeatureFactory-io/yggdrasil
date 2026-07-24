@@ -7,12 +7,10 @@ a manually running ``make run``.
 Manual certification (optional)::
 
     export YGGDRASIL_E2E=1
-    export LLM_PROVIDER=ollama
-    export LLM_OLLAMA_MODEL=qwen3:14b
-    make up && make up-desktop && make migrate
-    # terminal A: make run
-    # terminal B:
-    pytest tests/integration/test_e2e_real_bootstrap_mcp_query.py -x -m e2e_real -s
+    export LLM_PROVIDER=anthropic
+    export BASE_MODEL=haiku
+    # ANTHROPIC_API_KEY from .env (auto-loaded) or export explicitly
+    uv run pytest tests/integration/test_e2e_real_bootstrap_mcp_query.py -m e2e_real -s
 """
 
 from __future__ import annotations
@@ -28,6 +26,7 @@ from django.contrib.auth import get_user_model
 from yggdrasil.auth.services import TokenService
 from yggdrasil.graph.models import ensure_c4_metamodel
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "repos" / "sample_webapp"
 MANIFEST_NAMES = {
     "Payment API",
@@ -35,6 +34,38 @@ MANIFEST_NAMES = {
     "Order Domain",
     "Billing Worker",
 }
+
+
+def _load_local_env() -> None:
+    """Load repo ``.env`` into os.environ without overriding existing vars."""
+    env_path = PROJECT_ROOT / ".env"
+    if not env_path.is_file():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, value = stripped.partition("=")
+        key = key.strip()
+        if not key:
+            continue
+        parsed = value.strip().strip('"').strip("'")
+        existing = os.environ.get(key)
+        if existing is None or not existing.strip():
+            os.environ[key] = parsed
+
+
+def _require_llm_credentials(provider: str) -> None:
+    """Skip early when the selected real LLM provider lacks credentials."""
+    if provider == "anthropic" and not os.getenv("ANTHROPIC_API_KEY"):
+        pytest.skip(
+            "LLM_PROVIDER=anthropic requires ANTHROPIC_API_KEY "
+            "(export it or add to .env at repo root)"
+        )
+    if provider == "openai" and not os.getenv("OPENAI_API_KEY"):
+        pytest.skip(
+            "LLM_PROVIDER=openai requires OPENAI_API_KEY " "(export it or add to .env at repo root)"
+        )
 
 
 @pytest.fixture
@@ -56,11 +87,15 @@ def test_real_bootstrap_sample_webapp_then_mcp_query(live_server, e2e_token) -> 
     if not os.getenv("YGGDRASIL_E2E"):
         pytest.skip("Set YGGDRASIL_E2E=1 to run real bootstrap E2E")
 
+    _load_local_env()
+    provider = os.getenv("LLM_PROVIDER", "scripted")
+    _require_llm_credentials(provider)
+
     ensure_c4_metamodel()
     server = live_server.url.rstrip("/")
     env = {
         **os.environ,
-        "LLM_PROVIDER": os.getenv("LLM_PROVIDER", "scripted"),
+        "LLM_PROVIDER": provider,
         "YGGDRASIL_SERVER_URL": server,
         "YGGDRASIL_TOKEN": e2e_token,
         "RATATOSK_LOG_LEVEL": "INFO",

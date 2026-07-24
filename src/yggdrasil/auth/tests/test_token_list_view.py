@@ -107,11 +107,10 @@ def test_token_page_shows_usage_snippets(client, django_user_model):
     assert response.status_code == 200
     assert b"pip install ratatosk" in response.content
     assert b"YGGDRASIL_TOKEN" in response.content
-    # Remote Ratatosk snippet: production server URL (HTTP bridge)
-    assert b"yggdrasil.featurefactory.io" in response.content
-    assert b"/mcp/sse" not in response.content
-    assert b"featurefactory-io/yggdrasil-mcp" not in response.content
-    # MCP stdio snippet: local manage.py mcp_server command
+    # Docker snippet: local server URL, not cloud
+    assert b"localhost:8000" in response.content
+    assert b"featurefactory-io/yggdrasil-mcp:latest" in response.content
+    # uv snippet: local manage.py mcp_server command
     assert b"mcp_server" in response.content
 
 
@@ -179,7 +178,7 @@ def test_token_list_view_shows_snippet_copy_buttons(client, django_user_model):
     """
     Authenticated GET /auth/tokens/ renders all four snippet copy buttons.
 
-    Each snippet block (Shell, Ratatosk CLI, Ratatosk remote, MCP stdio) must
+    Each snippet block (Shell, Ratatosk CLI, MCP Docker, MCP Direct) must
     have a copy button with the expected data-testid so users can copy
     config without manually selecting text.
 
@@ -195,8 +194,8 @@ def test_token_list_view_shows_snippet_copy_buttons(client, django_user_model):
     assert response.status_code == 200
     assert b'data-testid="snippet-copy-shell"' in response.content
     assert b'data-testid="snippet-copy-ratatosk"' in response.content
-    assert b'data-testid="snippet-copy-ratatosk-remote"' in response.content
-    assert b'data-testid="snippet-copy-mcp-stdio"' in response.content
+    assert b'data-testid="snippet-copy-mcp-docker"' in response.content
+    assert b'data-testid="snippet-copy-mcp-direct"' in response.content
 
 
 @pytest.mark.django_db
@@ -230,9 +229,8 @@ def test_token_create_view_snippets_contain_raw_token(client, django_user_model)
     assert b"&lt;token&gt;" not in response.content
     # Shell snippet prefix present
     assert b"export YGGDRASIL_TOKEN=" in response.content
-    # Remote Ratatosk snippet uses production server URL
-    assert b"yggdrasil.featurefactory.io" in response.content
-    assert b"/mcp/sse" not in response.content
+    # Docker snippet points to local server, not cloud
+    assert b"localhost:8000" in response.content
 
 
 @pytest.mark.django_db

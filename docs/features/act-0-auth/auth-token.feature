@@ -69,8 +69,8 @@ Feature: AUTH-TOKEN-1 API Token Management
     Then the response status is 200
     And the element "snippet-copy-shell" should be visible
     And the element "snippet-copy-ratatosk" should be visible
-    And the element "snippet-copy-ratatosk-remote" should be visible
-    And the element "snippet-copy-mcp-stdio" should be visible
+    And the element "snippet-copy-mcp-docker" should be visible
+    And the element "snippet-copy-mcp-direct" should be visible
 
   Scenario: AUTH-TOKEN-1-10 After generating a token, snippets show the real token value
     When I POST "/auth/tokens/create/" with name "ci-bot" and scope "read-write"

@@ -80,24 +80,29 @@
 ratatosk bootstrap ./repo --token=$YGGDRASIL_TOKEN</pre>
         </div>
         <div class="col-md-6">
-          <div class="hg-section-label mb-1">Ratatosk (remote server)</div>
-          <pre class="bg-dark text-white rounded p-3 small mb-0" style="font-size:0.78rem;">export YGGDRASIL_SERVER_URL=https://yggdrasil.featurefactory.io
-export YGGDRASIL_TOKEN=&lt;token&gt;
-ratatosk bootstrap ./repo --model yggdrasil --server $YGGDRASIL_SERVER_URL</pre>
-        </div>
-        <div class="col-md-6">
-          <div class="hg-section-label mb-1">MCP stdio (local dev — Cursor)</div>
+          <div class="hg-section-label mb-1">MCP via Docker (recommended)</div>
           <pre class="bg-dark text-white rounded p-3 small mb-0" style="font-size:0.78rem;">{
   "mcpServers": {
     "yggdrasil": {
-      "command": "uv",
+      "command": "docker",
       "args": [
-        "run", "--directory", "&lt;path-to-yggdrasil&gt;",
-        "python", "manage.py",
-        "mcp_server", "--transport", "stdio"
-      ],
-      "env": {
-        "YGGDRASIL_TOKEN": "&lt;token&gt;"
+        "run", "--rm", "-i",
+        "-e", "YGGDRASIL_TOKEN=&lt;token&gt;",
+        "-e", "YGGDRASIL_SERVER_URL=https://yggdrasil.featurefactory.io",
+        "featurefactory-io/yggdrasil-mcp:latest"
+      ]
+    }
+  }
+}</pre>
+        </div>
+        <div class="col-md-6">
+          <div class="hg-section-label mb-1">MCP direct (cloud)</div>
+          <pre class="bg-dark text-white rounded p-3 small mb-0" style="font-size:0.78rem;">{
+  "mcpServers": {
+    "yggdrasil": {
+      "url": "https://yggdrasil.featurefactory.io/mcp/sse",
+      "headers": {
+        "Authorization": "Bearer &lt;token&gt;"
       }
     }
   }

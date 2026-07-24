@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block screen_id %}VIEW-BROWSE-1{% endblock %}
 {% block title %}View Browser{% endblock %}
+{% block nav_active %}browse{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -8,6 +9,7 @@
   .hg-filter-row { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; }
   .hg-view-toggle .btn { font-size:0.78rem; padding:4px 10px; }
   .hg-view-toggle .btn.active { background:var(--hg-accent); border-color:var(--hg-accent); color:var(--hg-ink); }
+  .hg-detail-drawer { background:#fff; border:1px solid var(--hg-border); border-radius:var(--hg-radius); padding:1rem; position:sticky; top:88px; }
 </style>
 {% endblock %}
 
@@ -15,7 +17,7 @@
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
   <div>
     <h1 class="hg-page-title">View Browser</h1>
-    <p class="text-muted small mb-0">VIEW-BROWSE-1 · {{ elements|length }} elements visible · graph query WIP</p>
+    <p class="text-muted small mb-0">VIEW-BROWSE-1 · {{ element_count }} elements visible</p>
   </div>
   <div class="d-flex gap-2 align-items-center">
     <div class="btn-group btn-group-sm" role="group" aria-label="View actions">
@@ -50,15 +52,16 @@
 <div data-testid="view-browse-page">
 
   <section aria-label="Filter panel">
+  <form method="get" action="{% url 'web:view_browse' %}" id="filterForm">
   <div class="hg-filter-row mb-3">
-    <button class="btn btn-sm btn-outline-secondary"
+    <button class="btn btn-sm btn-outline-secondary" type="button"
             data-bs-toggle="collapse" data-bs-target="#filterPanel"
             aria-expanded="false" aria-controls="filterPanel"
             data-testid="filters-toggle">
       <i class="fa-solid fa-sliders me-1" aria-hidden="true"></i>Filters
     </button>
-    <button class="btn btn-sm btn-outline-danger btn-sm" disabled
-            data-testid="clear-filters-btn">Clear</button>
+    <a href="{% url 'web:view_browse' %}" class="btn btn-sm btn-outline-danger"
+       data-testid="clear-filters-btn">Clear</a>
   </div>
 
   <div class="collapse mb-3" id="filterPanel">
@@ -66,95 +69,110 @@
       <div class="row g-3 mb-3">
         <div class="col-md-3">
           <label class="form-label" style="font-size:0.78rem;font-weight:600;">Package</label>
-          <select class="form-select form-select-sm" data-testid="filter-package" aria-label="Filter by package">
-            <option selected>All packages</option>
+          <select name="package" class="form-select form-select-sm" data-testid="filter-package"
+                  aria-label="Filter by package">
+            <option value="">All packages</option>
+            {% for pkg in filter_options.packages %}
+            <option value="{{ pkg.slug }}" {% if active_filters.package == pkg.slug %}selected{% endif %}>
+              {{ pkg.name }}
+            </option>
+            {% endfor %}
           </select>
         </div>
         <div class="col-md-3">
           <label class="form-label" style="font-size:0.78rem;font-weight:600;">Stereotype</label>
-          <select class="form-select form-select-sm" data-testid="filter-stereotype" aria-label="Filter by stereotype">
-            <option selected>All stereotypes</option>
+          <select name="stereotype" class="form-select form-select-sm" data-testid="filter-stereotype"
+                  aria-label="Filter by stereotype">
+            <option value="">All stereotypes</option>
+            {% for st in filter_options.stereotypes %}
+            <option value="{{ st.slug }}" {% if active_filters.stereotype == st.slug %}selected{% endif %}>
+              {{ st.name }}
+            </option>
+            {% endfor %}
           </select>
         </div>
         <div class="col-md-3">
           <label class="form-label" style="font-size:0.78rem;font-weight:600;">Health</label>
-          <select class="form-select form-select-sm" data-testid="filter-health" aria-label="Filter by health">
-            <option selected>All</option>
+          <select name="health" class="form-select form-select-sm" data-testid="filter-health"
+                  aria-label="Filter by health">
+            <option value="">All</option>
+            {% for h in filter_options.health %}
+            <option value="{{ h.value }}" {% if active_filters.health == h.value %}selected{% endif %}>
+              {{ h.label }}
+            </option>
+            {% endfor %}
           </select>
         </div>
         <div class="col-md-3">
           <label class="form-label" style="font-size:0.78rem;font-weight:600;">Time travel</label>
-          <input type="date" class="form-control form-control-sm" data-testid="filter-as-of"
-                 aria-label="View model as of date">
+          <input type="date" name="as_of" class="form-control form-control-sm" data-testid="filter-as-of"
+                 aria-label="View model as of date" value="{{ active_filters.as_of|default:'' }}">
         </div>
       </div>
       <div class="d-flex gap-2">
-        <button class="btn btn-outline-secondary btn-sm" disabled data-testid="filter-panel-clear-btn">Clear</button>
-        <button class="btn btn-outline-secondary btn-sm" disabled>Save View</button>
-        <button class="btn btn-primary btn-sm" disabled data-testid="apply-filters-btn">Apply Filters</button>
+        <a href="{% url 'web:view_browse' %}" class="btn btn-outline-secondary btn-sm"
+           data-testid="filter-panel-clear-btn">Clear</a>
+        <button class="btn btn-outline-secondary btn-sm" type="button" disabled>Save View</button>
+        <button class="btn btn-primary btn-sm" type="submit" data-testid="apply-filters-btn">Apply Filters</button>
       </div>
     </div>
   </div>
+  </form>
   </section>
 
   <div class="row g-3">
-    <div class="col-12">
-      <div class="hg-card">
-        <div class="d-flex align-items-center justify-content-between px-3 py-2 border-bottom">
-          <span style="font-size:0.82rem;color:var(--hg-ink-muted);">
-            {{ elements|length }} elements
-          </span>
-          <div class="hg-view-toggle btn-group" role="group" aria-label="View mode">
-            <button class="btn btn-outline-secondary active" id="tableViewBtn"
-                    data-testid="toggle-table" type="button">
-              <i class="fa-solid fa-table me-1" aria-hidden="true"></i>Table
-            </button>
-            <button class="btn btn-outline-secondary" id="graphViewBtn"
-                    data-testid="toggle-graph" type="button" disabled>
-              <i class="fa-solid fa-diagram-project me-1" aria-hidden="true"></i>Graph
-            </button>
-          </div>
-        </div>
-
-        <div class="table-responsive">
-          <table class="table table-hover mb-0" aria-label="Elements">
-            <thead>
-              <tr>
-                <th>Name</th><th>Stereotype</th><th>Package</th>
-                <th>Owner</th><th>Health</th><th>Source</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for el in elements %}
-              <tr data-testid="element-row-{{ el.id }}">
-                <td class="fw-semibold">{{ el.name }}</td>
-                <td>{{ el.stereotype }}</td>
-                <td class="text-muted">{{ el.package }}</td>
-                <td class="text-muted">{{ el.owner }}</td>
-                <td>{{ el.health }}</td>
-                <td>{{ el.source }}</td>
-                <td></td>
-              </tr>
-              {% empty %}
-              <tr>
-                <td colspan="7" class="text-center text-muted py-5">
-                  No elements yet. Run Ratatosk bootstrap to populate the graph.
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
+    <div class="col-12" id="resultsCol">
+      {% include "web/view/partials/results.html" %}
     </div>
   </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
-    console.log('[view-browse-1] page loaded, elements={{ elements|length }}');
+    console.log('[view-browse-1] page loaded, elements={{ element_count }}');
+    window.viewBrowseGraphUrl = "{% url 'web:view_browse_graph' %}?" + new URLSearchParams(window.location.search).toString();
   });
+
+  function setView(mode) {
+    var table = document.getElementById('tableView');
+    var graph = document.getElementById('graphView');
+    var tableBtn = document.getElementById('tableViewBtn');
+    var graphBtn = document.getElementById('graphViewBtn');
+    if (mode === 'table') {
+      table.classList.remove('d-none');
+      graph.classList.add('d-none');
+      tableBtn.classList.add('active');
+      graphBtn.classList.remove('active');
+    } else {
+      graph.classList.remove('d-none');
+      table.classList.add('d-none');
+      graphBtn.classList.add('active');
+      tableBtn.classList.remove('active');
+      loadGraph();
+    }
+  }
+
+  function loadGraph() {
+    if (window.cyInstance) {
+      return;
+    }
+    fetch(window.viewBrowseGraphUrl, {headers: {'Accept': 'application/json'}})
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        document.getElementById('cy').setAttribute('data-testid', 'graph-json-loaded');
+        window.cyInstance = cytoscape({
+          container: document.getElementById('cy'),
+          elements: data.elements.concat(data.edges),
+          style: [
+            {selector: 'node', style: {'label': 'data(label)', 'font-size': 10}},
+            {selector: 'edge', style: {'width': 2, 'curve-style': 'bezier', 'target-arrow-shape': 'triangle'}}
+          ],
+          layout: {name: 'cose', animate: false}
+        });
+      });
+  }
 </script>
 {% endblock %}

@@ -7,9 +7,8 @@ Never accept user_id as a tool argument (SAO.md §18.5 — auth injection).
 
 Registered against the FastMCP singleton in server.initialize_mcp().
 
-Note: GraphQueryService does not exist yet in this iteration footprint.
-Query tools use private ORM helpers in this module until a graph service
-lands (PIN footprint gap — absorbed). Tools remain thin wrappers.
+Note: Query tools delegate element listing to ``browse_service`` (Act 2).
+Other helpers remain in this module until further extraction.
 """
 
 from __future__ import annotations
@@ -19,6 +18,7 @@ import logging
 from django.db.models import Q
 
 from yggdrasil.changeset.models import ChangeSet
+from yggdrasil.graph import browse_service
 from yggdrasil.graph.models import Element, Package, Relationship, Stereotype, YggdrasilModel
 from yggdrasil.mcp.server import get_current_user_id
 from yggdrasil.ratatosk.models import RataskRun
@@ -61,33 +61,31 @@ def list_elements(
     ymodel = _resolve_model(model)
     page_limit = min(max(limit, 1), _MAX_LIMIT)
     page_offset = max(offset, 0)
-    qs = Element.objects.filter(model=ymodel).select_related("stereotype", "package")
-    if stereotype:
-        qs = qs.filter(
-            Q(stereotype__slug__iexact=stereotype) | Q(stereotype__name__iexact=stereotype)
-        )
-    if package:
-        qs = qs.filter(Q(package__slug__iexact=package) | Q(package__name__iexact=package))
-    # as_of: MVP records metadata only; full ChangeSet replay lands with bitemporal queries.
-    total = qs.count()
-    items = [
-        _element_summary(el) for el in qs.order_by("name")[page_offset : page_offset + page_limit]
-    ]
-    result = {
-        "items": items,
-        "total": total,
-        "limit": page_limit,
-        "offset": page_offset,
+    result = browse_service.list_elements(
+        model_slug=ymodel.slug,
+        stereotype=stereotype,
+        package=package,
+        health=None,
+        as_of=as_of,
+        limit=page_limit,
+        offset=page_offset,
+        user_id=user_id,
+    )
+    payload: dict = {
+        "items": result.items,
+        "total": result.total,
+        "limit": result.limit,
+        "offset": result.offset,
     }
-    if as_of:
-        result["as_of"] = as_of
+    if result.as_of:
+        payload["as_of"] = result.as_of
     logger.info(
         "list_elements | model=%s user=%s count=%s",
         model,
         user_id,
-        len(items),
+        len(result.items),
     )
-    return result
+    return payload
 
 
 def search(
@@ -403,17 +401,7 @@ def _resolve_model(model: str) -> YggdrasilModel:
 
 def _element_summary(element: Element) -> dict:
     """Serialize an Element for list/search responses."""
-    return {
-        "id": element.pk,
-        "name": element.name,
-        "slug": element.slug,
-        "stereotype": element.stereotype.name if element.stereotype_id else "",
-        "stereotype_slug": element.stereotype.slug if element.stereotype_id else "",
-        "package": element.package.name if element.package_id else "",
-        "owner": element.owner,
-        "confidence": element.confidence,
-        "properties": element.properties,
-    }
+    return browse_service.element_summary(element)
 
 
 def _element_detail(element: Element) -> dict:

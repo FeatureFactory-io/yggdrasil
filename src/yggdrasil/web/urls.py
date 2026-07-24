@@ -10,5 +10,6 @@ app_name = "web"
 urlpatterns = [
     path("", views.index, name="index"),
     path("views/", views.ViewBrowseView.as_view(), name="view_browse"),
+    path("views/graph.json", views.ViewBrowseGraphJsonView.as_view(), name="view_browse_graph"),
     path("chat/munin/", MuninChatView.as_view(), name="munin_chat"),
 ]

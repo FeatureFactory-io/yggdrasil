@@ -1,0 +1,34 @@
+{% load static %}
+{# Primary navigation — graduated from mockups/base.html (VIEW-BROWSE-1-13) #}
+<ul class="navbar-nav me-auto gap-1 ms-2">
+  <li class="nav-item">
+    <a class="nav-link {% if nav_active == 'browse' %}active{% endif %}"
+       href="{% url 'web:view_browse' %}" data-testid="nav-view-browser">
+      <i class="fa-solid fa-layer-group me-1" aria-hidden="true"></i>View Browser
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if nav_active == 'elements' %}active{% endif %}"
+       href="/mockups/element/" data-testid="nav-elements">
+      <i class="fa-solid fa-circle-dot me-1" aria-hidden="true"></i>Elements
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if nav_active == 'relationships' %}active{% endif %}"
+       href="/mockups/relationship/" data-testid="nav-relationships">
+      <i class="fa-solid fa-link me-1" aria-hidden="true"></i>Relationships
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if nav_active == 'changesets' %}active{% endif %}"
+       href="/mockups/changeset/" data-testid="nav-changesets">
+      <i class="fa-solid fa-code-branch me-1" aria-hidden="true"></i>ChangeSets
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if nav_active == 'runs' %}active{% endif %}"
+       href="/mockups/ratatosk-run/" data-testid="nav-runs">
+      <i class="fa-solid fa-terminal me-1" aria-hidden="true"></i>Runs
+    </a>
+  </li>
+</ul>

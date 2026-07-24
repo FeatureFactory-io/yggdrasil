@@ -159,9 +159,12 @@
         <i class="fa-solid fa-bars text-white" aria-hidden="true"></i>
       </button>
       <div class="collapse navbar-collapse" id="hgNavbar">
-        <div class="ms-auto">
+        {% if user.is_authenticated %}
+        {% include "web/partials/nav_primary.html" %}
+        {% endif %}
+        <ul class="navbar-nav ms-auto align-items-lg-center">
           {% if user.is_authenticated %}
-          <div class="nav-item dropdown" style="list-style:none">
+          <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle d-flex align-items-center gap-2"
                href="#" role="button" data-bs-toggle="dropdown"
                aria-expanded="false" data-testid="user-menu">
@@ -184,13 +187,15 @@
                 </form>
               </li>
             </ul>
-          </div>
+          </li>
           {% else %}
+          <li class="nav-item">
           <a href="{% url 'auth:login' %}" class="btn btn-sm btn-outline-light" data-testid="navbar-login">
             <i class="fa-solid fa-right-to-bracket me-1" aria-hidden="true"></i> Sign In
           </a>
+          </li>
           {% endif %}
-        </div>
+        </ul>
       </div>
     </div>
   </nav>

@@ -265,6 +265,8 @@ assertions and in form step fields.
 | Apply filters | `apply-filters-btn` |
 | Table toggle | `toggle-table` |
 | Graph toggle | `toggle-graph` |
+| Results container | `results-container` |
+| Graph Cytoscape container | `graph-cy-container` |
 | Element row | `element-row-{id}` |
 | View element link | `view-element-{id}` |
 

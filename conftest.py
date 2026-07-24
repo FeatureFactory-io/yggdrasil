@@ -11,6 +11,8 @@ import pytest
 from django.test import Client
 from tests.fixtures.factories import UserFactory
 
+pytest_plugins = ["tests.fixtures.view_browser"]
+
 
 @pytest.fixture()
 def client() -> Client:

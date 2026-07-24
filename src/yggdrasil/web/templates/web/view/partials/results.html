@@ -1,0 +1,66 @@
+<div id="results-container" data-testid="results-container">
+  <div class="hg-card">
+    <div class="d-flex align-items-center justify-content-between px-3 py-2 border-bottom">
+      <span style="font-size:0.82rem;color:var(--hg-ink-muted);">
+        {{ element_count }} elements
+      </span>
+      <div class="hg-view-toggle btn-group" role="group" aria-label="View mode">
+        <button class="btn btn-outline-secondary active" id="tableViewBtn"
+                data-testid="toggle-table" type="button" onclick="setView('table')">
+          <i class="fa-solid fa-table me-1" aria-hidden="true"></i>Table
+        </button>
+        <button class="btn btn-outline-secondary" id="graphViewBtn"
+                data-testid="toggle-graph" type="button" onclick="setView('graph')">
+          <i class="fa-solid fa-diagram-project me-1" aria-hidden="true"></i>Graph
+        </button>
+      </div>
+    </div>
+
+    <div id="tableView" class="table-responsive">
+      <table class="table table-hover mb-0" aria-label="Elements">
+        <thead>
+          <tr>
+            <th>Name</th><th>Stereotype</th><th>Package</th>
+            <th>Owner</th><th>Health</th><th>Source</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for el in elements %}
+          <tr data-testid="element-row-{{ el.id }}">
+            <td class="fw-semibold">{{ el.name }}</td>
+            <td>
+              <span class="badge" style="background:var(--hg-primary-100);color:var(--hg-primary);font-size:0.72rem;">
+                {{ el.stereotype }}
+              </span>
+            </td>
+            <td class="text-muted">{{ el.package }}</td>
+            <td class="text-muted">{{ el.owner }}</td>
+            <td>
+              <span class="hg-dot hg-dot-{{ el.health }}" title="{{ el.health }}"
+                    aria-label="{{ el.health }}"></span>
+            </td>
+            <td>
+              <span class="hg-badge-source hg-badge-{{ el.source }}">{{ el.source }}</span>
+            </td>
+            <td class="text-end">
+              <a href="/elements/{{ el.id }}/"
+                 class="btn btn-sm btn-outline-secondary"
+                 data-testid="view-element-{{ el.id }}">View</a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-muted py-5">
+              No elements match the current filters.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div id="graphView" class="d-none p-3" style="min-height:320px;">
+      <div id="cy" data-testid="graph-cy-container" style="min-height:300px;width:100%;"></div>
+    </div>
+  </div>
+</div>

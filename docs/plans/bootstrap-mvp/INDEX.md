@@ -87,6 +87,7 @@ Indexed in [09-error-hygiene/README.md](09-error-hygiene/README.md).
 | [01-config](01-config/) | CFG-02 (also W1 optional) |
 | [11-scout-update](11-scout-update/) | SCOUT-01..05, CICD-01..19, CFG-01,03,04,05 |
 | [12-munin-briefing-ui](12-munin-briefing-ui/) | MUNIN-BRIEFING-1-01..10 |
+| [../act-2-view-browser](../act-2-view-browser/) | VIEW-BROWSE-1 (v0.2 — list + graph) |
 | [07-mcp-query](07-mcp-query/) | QUERY-05,06,10 |
 | [08-mcp-changeset](08-mcp-changeset/) | CHANGESET-02..06 |
 | [04-discovery](04-discovery/) | DISC-09,10,12 |

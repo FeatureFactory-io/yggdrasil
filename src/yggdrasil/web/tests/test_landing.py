@@ -56,3 +56,5 @@ def test_view_browser_renders_for_authenticated_user(client, django_user_model):
     body = response.content.decode()
     assert 'data-testid="view-browse-page"' in body
     assert 'data-testid="filters-toggle"' in body
+    assert 'data-testid="toggle-graph"' in body
+    assert 'data-testid="results-container"' in body

@@ -13,6 +13,7 @@ from django.urls import reverse
 PAGE_REGISTRY: dict[str, str] = {
     "landing": "web:index",
     "health": "health",
+    "view-browse": "web:view_browse",
 }
 
 

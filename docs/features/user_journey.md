@@ -33,35 +33,30 @@ Priya opens "Settings → API Access" from the user menu.
     pip install ratatosk
     ratatosk bootstrap ./repo --token=<token>
     ```
-  - MCP via Docker (recommended — MCP client starts the container on demand, token stays local):
-    `mcp_config.json`:
+  - Ratatosk against production (HTTP bridge on the Django app — works today):
+    ```bash
+    export YGGDRASIL_SERVER_URL=https://yggdrasil.featurefactory.io
+    export YGGDRASIL_TOKEN=<token>
+    ratatosk bootstrap ./repo --model yggdrasil --server $YGGDRASIL_SERVER_URL
+    ```
+    Tools are invoked as `POST /mcp/tools/<name>/` with `Authorization: Bearer <token>`.
+  - MCP stdio for Cursor (local clone + local DB — works today):
     ```json
     {
       "mcpServers": {
         "yggdrasil": {
-          "command": "docker",
+          "command": "uv",
           "args": [
-            "run", "--rm", "-i",
-            "-e", "YGGDRASIL_TOKEN=<token>",
-            "-e", "YGGDRASIL_SERVER_URL=https://yggdrasil.featurefactory.io",
-            "featurefactory-io/yggdrasil-mcp:latest"
-          ]
+            "run", "--directory", "<path-to-yggdrasil>",
+            "python", "manage.py", "mcp_server", "--transport", "stdio"
+          ],
+          "env": { "YGGDRASIL_TOKEN": "<token>" }
         }
       }
     }
     ```
-    The container authenticates against the Yggdrasil DRF API using `YGGDRASIL_TOKEN` and exposes MCP tools over stdio. No port mapping needed.
-  - MCP direct (cloud — no Docker required):
-    ```json
-    {
-      "mcpServers": {
-        "yggdrasil": {
-          "url": "https://yggdrasil.featurefactory.io/mcp/sse",
-          "headers": { "Authorization": "Bearer <token>" }
-        }
-      }
-    }
-    ```
+    Requires `make up`, `make migrate`, and a local Yggdrasil checkout — not a remote URL.
+  - **Not available yet:** Docker MCP facade (`Dockerfile.mcp`) and remote MCP URL (`/mcp/sse`) for IDE clients.
 
 ---
 

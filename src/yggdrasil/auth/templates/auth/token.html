@@ -140,34 +140,24 @@ ratatosk bootstrap ./repo --token=$YGGDRASIL_TOKEN</pre>
 
         <div class="col-md-6 d-flex flex-column">
           <div class="d-flex justify-content-between align-items-center mb-1">
-            <div class="hg-section-label mb-0">Docker (stdio — recommended)</div>
+            <div class="hg-section-label mb-0">Ratatosk (remote server)</div>
             <button class="btn btn-sm btn-outline-secondary py-0 px-2"
-                    data-testid="snippet-copy-mcp-docker"
+                    data-testid="snippet-copy-ratatosk-remote"
                     onclick="copySnippet(this)"
                     style="font-size:0.72rem;">
               <i class="fa-solid fa-copy me-1" aria-hidden="true"></i>Copy
             </button>
           </div>
-          <pre class="bg-dark text-white rounded p-3 small mb-0 flex-grow-1" style="font-size:0.78rem;">{
-  "mcpServers": {
-    "yggdrasil": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "YGGDRASIL_TOKEN={% if new_token_raw %}{{ new_token_raw }}{% else %}&lt;token&gt;{% endif %}",
-        "-e", "YGGDRASIL_SERVER_URL=http://localhost:8000",
-        "featurefactory-io/yggdrasil-mcp:latest"
-      ]
-    }
-  }
-}</pre>
+          <pre class="bg-dark text-white rounded p-3 small mb-0 flex-grow-1" style="font-size:0.78rem;">export YGGDRASIL_SERVER_URL=https://yggdrasil.featurefactory.io
+export YGGDRASIL_TOKEN={% if new_token_raw %}{{ new_token_raw }}{% else %}&lt;token&gt;{% endif %}
+ratatosk bootstrap ./repo --model yggdrasil --server $YGGDRASIL_SERVER_URL</pre>
         </div>
 
         <div class="col-md-6 d-flex flex-column">
           <div class="d-flex justify-content-between align-items-center mb-1">
-            <div class="hg-section-label mb-0">uv (stdio — local dev)</div>
+            <div class="hg-section-label mb-0">MCP stdio (local dev — Cursor)</div>
             <button class="btn btn-sm btn-outline-secondary py-0 px-2"
-                    data-testid="snippet-copy-mcp-direct"
+                    data-testid="snippet-copy-mcp-stdio"
                     onclick="copySnippet(this)"
                     style="font-size:0.72rem;">
               <i class="fa-solid fa-copy me-1" aria-hidden="true"></i>Copy

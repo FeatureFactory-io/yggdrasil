@@ -232,8 +232,8 @@ assertions and in form step fields.
 | Create token submit | `create-token-submit` |
 | Copy shell snippet | `snippet-copy-shell` |
 | Copy Ratatosk CLI snippet | `snippet-copy-ratatosk` |
-| Copy MCP Docker snippet | `snippet-copy-mcp-docker` |
-| Copy MCP direct snippet | `snippet-copy-mcp-direct` |
+| Copy Ratatosk remote snippet | `snippet-copy-ratatosk-remote` |
+| Copy MCP stdio snippet | `snippet-copy-mcp-stdio` |
 
 ### MUNIN-BRIEFING-1 (`munin/briefing.html`)
 

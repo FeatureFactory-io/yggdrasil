@@ -101,7 +101,6 @@ Feature: ACT-1-CLI Ratatosk Bootstrap
     And the output does not contain "unchanged:"
     And the output does not contain "to_update:"
 
-  @wip
   Scenario: ACT-1-CLI-04 Munin receives element candidates from bootstrap and plans relationships
     Given Ratatosk has produced bootstrap buckets:
       | bucket | count |

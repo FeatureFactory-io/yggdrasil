@@ -7,7 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+  <!-- Font Awesome Pro (same kit as mimir) -->
+  <script src="https://kit.fontawesome.com/600fa45ed9.js" crossorigin="anonymous"></script>
   <style>
     :root {
       /* Brand — §2.1 */
@@ -162,6 +163,19 @@
       --bs-btn-color:              #fff;
       --bs-btn-hover-color:        #fff;
       --bs-btn-active-color:       #fff;
+      font-size: 0.8rem; font-weight: 600;
+    }
+    .btn-accent {
+      --bs-btn-bg:                 var(--hg-accent);
+      --bs-btn-border-color:       var(--hg-accent);
+      --bs-btn-hover-bg:           var(--hg-accent-700);
+      --bs-btn-hover-border-color: var(--hg-accent-700);
+      --bs-btn-active-bg:          var(--hg-accent-700);
+      --bs-btn-active-border-color: var(--hg-accent-700);
+      --bs-btn-color:              var(--hg-ink);
+      --bs-btn-hover-color:        #fff;
+      --bs-btn-active-color:       #fff;
+      --bs-btn-focus-shadow-rgb:   201, 162, 39;
       font-size: 0.8rem; font-weight: 600;
     }
     /* Mockup nav */

@@ -251,7 +251,9 @@ def list_stereotypes(model: str) -> dict:
             "name": st.name,
             "slug": st.slug,
             "is_edge": st.is_edge,
+            "description": st.description,
             "property_schema": st.property_schema,
+            "allowed_edge_rules": st.allowed_edge_rules,
         }
         for st in Stereotype.objects.filter(metamodel=ymodel.metamodel).order_by("name")
     ]

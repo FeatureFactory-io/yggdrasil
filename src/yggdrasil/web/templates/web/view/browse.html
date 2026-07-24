@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block screen_id %}VIEW-BROWSE-1{% endblock %}
+{% block title %}View Browser{% endblock %}
+
+{% block extra_head %}
+<style>
+  .hg-filter-panel { background:#fff; border:1px solid var(--hg-border); border-radius:var(--hg-radius); padding:1rem; }
+  .hg-filter-row { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; }
+  .hg-view-toggle .btn { font-size:0.78rem; padding:4px 10px; }
+  .hg-view-toggle .btn.active { background:var(--hg-accent); border-color:var(--hg-accent); color:var(--hg-ink); }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+  <div>
+    <h1 class="hg-page-title">View Browser</h1>
+    <p class="text-muted small mb-0">VIEW-BROWSE-1 · {{ elements|length }} elements visible · graph query WIP</p>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <div class="btn-group btn-group-sm" role="group" aria-label="View actions">
+      <button class="btn btn-outline-secondary" type="button" disabled
+              data-testid="export-btn" title="Export — coming soon">
+        <i class="fa-solid fa-file-export me-1" aria-hidden="true"></i>Export
+      </button>
+      <button class="btn btn-outline-secondary" type="button" disabled
+              data-testid="history-btn" title="History — coming soon">
+        <i class="fa-solid fa-clock-rotate-left me-1" aria-hidden="true"></i>History
+      </button>
+      <button class="btn btn-primary" type="button"
+              data-bs-toggle="offcanvas" data-bs-target="#muninPanel"
+              aria-controls="muninPanel" data-testid="open-munin-btn">
+        <i class="fa-solid fa-brain-circuit me-1" aria-hidden="true"></i>Munin
+      </button>
+    </div>
+    <div class="dropdown">
+      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+              data-bs-toggle="dropdown" aria-expanded="false" data-testid="saved-views-dropdown">
+        Saved views
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><span class="dropdown-item-text text-muted small">No saved views yet</span></li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div data-testid="view-browse-page">
+
+  <section aria-label="Filter panel">
+  <div class="hg-filter-row mb-3">
+    <button class="btn btn-sm btn-outline-secondary"
+            data-bs-toggle="collapse" data-bs-target="#filterPanel"
+            aria-expanded="false" aria-controls="filterPanel"
+            data-testid="filters-toggle">
+      <i class="fa-solid fa-sliders me-1" aria-hidden="true"></i>Filters
+    </button>
+    <button class="btn btn-sm btn-outline-danger btn-sm" disabled
+            data-testid="clear-filters-btn">Clear</button>
+  </div>
+
+  <div class="collapse mb-3" id="filterPanel">
+    <div class="hg-filter-panel">
+      <div class="row g-3 mb-3">
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:0.78rem;font-weight:600;">Package</label>
+          <select class="form-select form-select-sm" data-testid="filter-package" aria-label="Filter by package">
+            <option selected>All packages</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:0.78rem;font-weight:600;">Stereotype</label>
+          <select class="form-select form-select-sm" data-testid="filter-stereotype" aria-label="Filter by stereotype">
+            <option selected>All stereotypes</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:0.78rem;font-weight:600;">Health</label>
+          <select class="form-select form-select-sm" data-testid="filter-health" aria-label="Filter by health">
+            <option selected>All</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label" style="font-size:0.78rem;font-weight:600;">Time travel</label>
+          <input type="date" class="form-control form-control-sm" data-testid="filter-as-of"
+                 aria-label="View model as of date">
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary btn-sm" disabled data-testid="filter-panel-clear-btn">Clear</button>
+        <button class="btn btn-outline-secondary btn-sm" disabled>Save View</button>
+        <button class="btn btn-primary btn-sm" disabled data-testid="apply-filters-btn">Apply Filters</button>
+      </div>
+    </div>
+  </div>
+  </section>
+
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="hg-card">
+        <div class="d-flex align-items-center justify-content-between px-3 py-2 border-bottom">
+          <span style="font-size:0.82rem;color:var(--hg-ink-muted);">
+            {{ elements|length }} elements
+          </span>
+          <div class="hg-view-toggle btn-group" role="group" aria-label="View mode">
+            <button class="btn btn-outline-secondary active" id="tableViewBtn"
+                    data-testid="toggle-table" type="button">
+              <i class="fa-solid fa-table me-1" aria-hidden="true"></i>Table
+            </button>
+            <button class="btn btn-outline-secondary" id="graphViewBtn"
+                    data-testid="toggle-graph" type="button" disabled>
+              <i class="fa-solid fa-diagram-project me-1" aria-hidden="true"></i>Graph
+            </button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover mb-0" aria-label="Elements">
+            <thead>
+              <tr>
+                <th>Name</th><th>Stereotype</th><th>Package</th>
+                <th>Owner</th><th>Health</th><th>Source</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for el in elements %}
+              <tr data-testid="element-row-{{ el.id }}">
+                <td class="fw-semibold">{{ el.name }}</td>
+                <td>{{ el.stereotype }}</td>
+                <td class="text-muted">{{ el.package }}</td>
+                <td class="text-muted">{{ el.owner }}</td>
+                <td>{{ el.health }}</td>
+                <td>{{ el.source }}</td>
+                <td></td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="7" class="text-center text-muted py-5">
+                  No elements yet. Run Ratatosk bootstrap to populate the graph.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    console.log('[view-browse-1] page loaded, elements={{ elements|length }}');
+  });
+</script>
+{% endblock %}

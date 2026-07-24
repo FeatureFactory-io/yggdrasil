@@ -149,7 +149,6 @@ Feature: ACT-1-DISC Ratatosk real discovery
 
   # ── MVP-W2 / edge cases ────────────────────────────────────────────────────
 
-  @wip
   Scenario: ACT-1-DISC-03 Re-bootstrap bulk-wipes existing graph before rescan
     Given the Metamodel "c4" exists with C4 stereotypes and packages
     And Priya has a Yggdrasil personal access token with read-write scope
@@ -161,6 +160,39 @@ Feature: ACT-1-DISC Ratatosk real discovery
     And the output contains "to_add:"
     And the output does not contain "unchanged:"
     And a ChangeSet with source "ratatosk" exists
+
+  Scenario: ACT-1-DISC-17 Bootstrap exclude patterns skip paths from file tree
+    Given the Metamodel "c4" exists with C4 stereotypes and packages
+    And Priya has a Yggdrasil personal access token with read-write scope
+    And the fixture repository "sample_webapp" is available
+    When Priya runs ratatosk bootstrap against "sample_webapp" with exclude "src/payment_api/"
+    Then the exit code is 0
+    And the run blackboard tree does not include "src/payment_api/app.py"
+    And bootstrap candidates include all manifest elements:
+      | name           |
+      | Payment API    |
+      | Order Service  |
+      | Order Domain   |
+      | Billing Worker |
+
+  Scenario: ACT-1-DISC-18 Bootstrap instructions are recorded and steer discovery
+    Given the Metamodel "c4" exists with C4 stereotypes and packages
+    And Priya has a Yggdrasil personal access token with read-write scope
+    And the fixture repository "sample_webapp" is available
+    And the discovery LLM will return endpoint-level candidates unless instructions require README-only C4
+    When Priya runs ratatosk bootstrap against "sample_webapp" with instructions:
+      """
+      Only C4 containers and domain components from README; ignore endpoint-level names.
+      """
+    Then the exit code is 0
+    And the run blackboard contains key "instructions"
+    And bootstrap candidates do not include element "Liveness probe"
+    And bootstrap candidates include all manifest elements:
+      | name           |
+      | Payment API    |
+      | Order Service  |
+      | Order Domain   |
+      | Billing Worker |
 
   Scenario: ACT-1-DISC-04 Cleanup drops unknown stereotype before Munin
     Given the Metamodel "c4" exists with C4 stereotypes and packages
@@ -178,6 +210,35 @@ Feature: ACT-1-DISC Ratatosk real discovery
     When Priya runs ratatosk bootstrap against the fixture repository "sample_webapp" with a scripted discovery LLM
     Then the discovery LLM was invoked at least once
     And the run blackboard contains step "project_map"
+
+  @wip @anthropic
+  Scenario: ACT-1-DISC-22 Bootstrap blackboard records distinct planning and extract models
+    Given the environment variable "LLM_PROVIDER" is set to "anthropic"
+    And the environment variable "BASE_MODEL" is set to "haiku"
+    And the environment variable "RATATOSK_PLANNING_MODEL" is set to "sonnet5"
+    And the environment variable "ANTHROPIC_API_KEY" is set
+    And Priya has a Yggdrasil personal access token with read-write scope
+    And the fixture repository "sample_webapp" is available
+    When Priya runs ratatosk bootstrap against the fixture repository "sample_webapp"
+    Then the run blackboard llm_tiers planning_model is not equal to extract_model
+
+  @wip
+  Scenario: ACT-1-DISC-23 Bootstrap blackboard contains synthesize step
+    Given the Metamodel "c4" exists with C4 stereotypes and packages
+    And Priya has a Yggdrasil personal access token with read-write scope
+    And the fixture repository "sample_webapp" is available
+    When Priya runs ratatosk bootstrap against the fixture repository "sample_webapp" with a scripted discovery LLM
+    Then the run blackboard contains step "synthesize"
+    And the run blackboard contains step "prefilter"
+
+  @wip @anthropic
+  Scenario: ACT-1-MUNIN-01 Munin reasoning includes strategy when LLM provider is anthropic
+    Given the environment variable "LLM_PROVIDER" is set to "anthropic"
+    And the environment variable "ANTHROPIC_API_KEY" is set
+    And Priya has a Yggdrasil personal access token with read-write scope
+    And the fixture repository "sample_webapp" is available
+    When Priya runs ratatosk bootstrap against the fixture repository "sample_webapp"
+    Then the latest ChangeSet munin_reasoning contains "strategy="
 
   # ── Expected errors ────────────────────────────────────────────────────────
 

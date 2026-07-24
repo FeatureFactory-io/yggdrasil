@@ -165,7 +165,7 @@ def test_blackboard_has_tree_before_extract() -> None:
 
 @pytest.mark.django_db
 def test_existing_model_yields_delta_buckets() -> None:
-    """DISC-03: existing Payment API → unchanged + possible to_add."""
+    """DISC-03: re-bootstrap wipes pre-seeded Payment API then rescans."""
     mm = ensure_c4_metamodel()
     model = YggdrasilModelFactory(name="Yggdrasil", slug="yggdrasil", metamodel=mm)
     st = StereotypeFactory(metamodel=mm, name="Container", slug="container", is_edge=False)
@@ -184,9 +184,12 @@ def test_existing_model_yields_delta_buckets() -> None:
         llm=ScriptedDiscoveryLLM(),
         snapshot=LocalOrmSnapshotPort(),
     )
+    assert "wiping" in output
     assert "to_add:" in output
-    assert "unchanged:" in output
-    assert len(buckets.unchanged) >= 1 or len(buckets.to_add) >= 0
+    assert "unchanged:" not in output
+    assert len(buckets.to_delete) >= 1
+    assert len(buckets.to_add) >= 1
+    assert buckets.unchanged == []
 
 
 @pytest.mark.django_db

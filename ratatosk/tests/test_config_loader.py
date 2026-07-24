@@ -7,8 +7,15 @@ import pytest
 from ratatosk.config import (
     BootstrapConfig,
     _resolve_base_model,
+    build_extract_llm_from_config,
     build_llm_from_config,
+    build_planning_llm_from_config,
     load_bootstrap_config,
+)
+from ratatosk.discovery.limits import (
+    DEFAULT_MAX_EXTRACT_TARGETS,
+    DEFAULT_MAX_FILE_READS_PER_RUN,
+    MAX_EXTRACT_TARGETS_CEILING,
 )
 from ratatosk.discovery.scripted_llm import ScriptedDiscoveryLLM
 from yggdrasil.llm.adapters.anthropic import AnthropicClient
@@ -174,3 +181,86 @@ def test_load_config_resolved_model_from_base_model_haiku() -> None:
         }
     )
     assert "haiku" in config.resolved_model
+
+
+def test_load_config_exclude_from_env() -> None:
+    """RATATOSK_EXCLUDE merges into exclude_patterns."""
+    config = load_bootstrap_config(env={"RATATOSK_EXCLUDE": "src/payment_api/,docs/"})
+    assert config.exclude_patterns == ["src/payment_api/", "docs/"]
+
+
+def test_load_config_defaults_max_extract_targets_50() -> None:
+    """Unset env yields default max_extract_targets=50."""
+    config = load_bootstrap_config(env={"LLM_PROVIDER": "scripted"})
+    assert config.max_extract_targets == DEFAULT_MAX_EXTRACT_TARGETS
+
+
+def test_load_config_defaults_max_file_reads_1000() -> None:
+    """Unset env yields SAO-aligned max_file_reads_per_run=1000."""
+    config = load_bootstrap_config(env={"LLM_PROVIDER": "scripted"})
+    assert config.max_file_reads_per_run == DEFAULT_MAX_FILE_READS_PER_RUN
+
+
+def test_load_config_clamps_max_extract_targets_at_ceiling() -> None:
+    """Values above 1000 clamp with warning semantics (stored as ceiling)."""
+    config = load_bootstrap_config(
+        env={"LLM_PROVIDER": "scripted", "RATATOSK_MAX_EXTRACT_TARGETS": "5000"}
+    )
+    assert config.max_extract_targets == MAX_EXTRACT_TARGETS_CEILING
+
+
+def test_load_config_max_extract_targets_from_env() -> None:
+    """CFG-14: RATATOSK_MAX_EXTRACT_TARGETS=75 is honored."""
+    config = load_bootstrap_config(
+        env={"LLM_PROVIDER": "scripted", "RATATOSK_MAX_EXTRACT_TARGETS": "75"}
+    )
+    assert config.max_extract_targets == 75
+
+
+def test_load_config_resolved_planning_model_sonnet5_default() -> None:
+    """Anthropic default planning tier resolves sonnet5 alias."""
+    config = load_bootstrap_config(
+        env={"LLM_PROVIDER": "anthropic", "BASE_MODEL": "haiku", "ANTHROPIC_API_KEY": "sk-test"}
+    )
+    assert "sonnet" in config.resolved_planning_model.lower()
+    assert "haiku" in config.resolved_model.lower()
+
+
+def test_build_planning_and_extract_llm_differ_for_anthropic(monkeypatch) -> None:
+    """Planning and extract clients use different resolved model ids."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    config = load_bootstrap_config(
+        env={
+            "LLM_PROVIDER": "anthropic",
+            "BASE_MODEL": "haiku",
+            "RATATOSK_PLANNING_MODEL": "sonnet5",
+        }
+    )
+    planning = build_planning_llm_from_config(config)
+    extract = build_extract_llm_from_config(config)
+    assert planning.model_id == config.resolved_planning_model
+    assert extract.model_id == config.resolved_model
+    assert planning.model_id != extract.model_id
+
+
+def test_build_extract_llm_alias_matches_build_llm_from_config(monkeypatch) -> None:
+    """build_extract_llm_from_config is an alias of build_llm_from_config."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    config = load_bootstrap_config(env={"LLM_PROVIDER": "anthropic", "BASE_MODEL": "haiku"})
+    assert type(build_extract_llm_from_config(config)) is type(build_llm_from_config(config))
+
+
+def test_load_config_instructions_cli_overrides_yaml(tmp_path) -> None:
+    """Non-empty CLI instructions override repo YAML."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "ratatosk.yaml").write_text(
+        "instructions: from yaml\nexclude:\n  - docs/\n",
+        encoding="utf-8",
+    )
+    config = load_bootstrap_config(
+        repo_path=str(repo),
+        flags={"instructions": "from cli"},
+    )
+    assert config.instructions == "from cli"
+    assert "docs/" in config.exclude_patterns

@@ -61,17 +61,23 @@ class ScriptedDiscoveryLLM:
         responses: list[str] | None = None,
         empty_plan: bool = False,
         extra_candidate: dict | None = None,
+        endpoint_noise: bool = False,
+        readme_only_c4: bool = False,
     ) -> None:
         """
         :param responses: Optional fixed response queue (overrides smart replies).
         :param empty_plan: When True, always return empty JSON structures.
         :param extra_candidate: Appended to extract responses (e.g. unknown stereotype).
+        :param endpoint_noise: When True, inject endpoint-level noise unless README-only.
+        :param readme_only_c4: When True, never inject endpoint-level candidates.
         """
         self._responses = list(responses) if responses is not None else None
         self._index = 0
         self._call_count = 0
         self._empty_plan = empty_plan
         self._extra_candidate = extra_candidate
+        self._endpoint_noise = endpoint_noise
+        self._readme_only_c4 = readme_only_c4
 
     @property
     def call_count(self) -> int:
@@ -129,9 +135,32 @@ class ScriptedDiscoveryLLM:
         candidates = list(_SCRIPTED_CANDIDATES)
         if self._extra_candidate:
             candidates.append(dict(self._extra_candidate))
+        if (
+            self._endpoint_noise
+            and not self._readme_only_c4
+            and not self._prompt_requests_readme_only(prompt)
+        ):
+            candidates.append(
+                {
+                    "name": "Liveness probe",
+                    "stereotype": "component",
+                    "package": "application",
+                    "confidence": 0.88,
+                }
+            )
         if "noise" in prompt or "test_health" in prompt:
             return "[]"
         return json.dumps(candidates)
+
+    @staticmethod
+    def _prompt_requests_readme_only(prompt: str) -> bool:
+        """True when operator instructions steer toward README-only C4 extraction."""
+        lowered = prompt.lower()
+        return (
+            "readme" in lowered
+            and "c4" in lowered
+            and ("ignore endpoint" in lowered or "only c4" in lowered)
+        )
 
 
 def build_discovery_llm(
@@ -164,7 +193,25 @@ def build_discovery_llm(
         return ScriptedDiscoveryLLM(empty_plan=empty_plan, extra_candidate=extra_candidate)
 
     logger.info("build_discovery_llm | provider=%s", provider)
-    from ratatosk.config import build_llm_from_config, load_bootstrap_config
+    from ratatosk.config import build_extract_llm_from_config, load_bootstrap_config
 
     config = load_bootstrap_config(env=os.environ)
-    return build_llm_from_config(config)
+    return build_extract_llm_from_config(config)
+
+
+def build_planning_discovery_llm(llm: object | None = None) -> object:
+    """
+    Resolve planning-tier LLM for project map steps.
+
+    :param llm: Explicit injection (tests). When set, returned as-is.
+    :return: LLM client implementing ``complete``.
+    """
+    if llm is not None:
+        return llm
+    provider = os.environ.get("LLM_PROVIDER", "").strip().lower()
+    if provider == "scripted" or not provider:
+        return build_discovery_llm()
+    from ratatosk.config import build_planning_llm_from_config, load_bootstrap_config
+
+    config = load_bootstrap_config(env=os.environ)
+    return build_planning_llm_from_config(config)

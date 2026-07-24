@@ -67,13 +67,13 @@ def test_redirect_ignores_external_next_param(client, django_user_model):
 
     :Example:
 
-    force_login → GET /auth/login/?next=http://evil.com → 302 Location: /
+    force_login → GET /auth/login/?next=http://evil.com → 302 Location: /views/
     """
     user = django_user_model.objects.create_user(username="u3", password="p")
     client.force_login(user)
     response = client.get(reverse("auth:login") + "?next=http://evil.com")
     assert response.status_code == 302
-    assert response["Location"] == "/"
+    assert response["Location"] == "/views/"
 
 
 @pytest.mark.django_db
@@ -85,7 +85,7 @@ def test_login_post_success_redirects(client, django_user_model):
 
     :Example:
 
-    POST email=elena@example.com password=secret → 302 Location: /
+    POST email=elena@example.com password=secret → 302 Location: /views/
     """
     user = django_user_model.objects.create_user(
         username="elena",
@@ -97,7 +97,7 @@ def test_login_post_success_redirects(client, django_user_model):
         {"email": "elena@example.com", "password": "test-pass-only-1234"},
     )
     assert response.status_code == 302
-    assert response["Location"] == "/"
+    assert response["Location"] == "/views/"
     # Session is authenticated
     assert "_auth_user_id" in client.session
     assert int(client.session["_auth_user_id"]) == user.pk

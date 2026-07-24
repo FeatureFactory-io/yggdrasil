@@ -18,6 +18,7 @@ env = environ.Env(
     LOG_LEVEL=(str, "INFO"),
     LLM_PROVIDER=(str, "ollama"),
     OLLAMA_BASE_URL=(str, "http://ollama:11434"),
+    MUNIN_PLANNING_MODEL=(str, "sonnet5"),
 )
 
 # Load .env file when present (local dev)
@@ -119,7 +120,7 @@ CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 min hard limit
 # Session auth redirects
 # ---------------------------------------------------------------------------
 LOGIN_URL = "/auth/login/"
-LOGIN_REDIRECT_URL = "/"
+LOGIN_REDIRECT_URL = "/views/"
 
 # Password validation
 # ---------------------------------------------------------------------------
@@ -170,6 +171,7 @@ REST_FRAMEWORK = {
 # ---------------------------------------------------------------------------
 LLM_PROVIDER = env("LLM_PROVIDER")
 OLLAMA_BASE_URL = env("OLLAMA_BASE_URL")
+MUNIN_PLANNING_MODEL = env("MUNIN_PLANNING_MODEL")
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
 OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
 

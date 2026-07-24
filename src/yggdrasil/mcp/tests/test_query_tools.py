@@ -118,6 +118,15 @@ def test_list_stereotypes(bootstrapped_model) -> None:
 
 
 @pytest.mark.django_db
+def test_list_stereotypes_includes_description_and_edge_rules(bootstrapped_model) -> None:
+    """list_stereotypes returns description and allowed_edge_rules for CLI synthesize."""
+    result = list_stereotypes(model="yggdrasil")
+    container = next(item for item in result["items"] if item["slug"] == "container")
+    assert container.get("description")
+    assert "depends_on" in (container.get("allowed_edge_rules") or [])
+
+
+@pytest.mark.django_db
 def test_list_packages(bootstrapped_model) -> None:
     """QUERY-11: list_packages returns metamodel packages."""
     result = list_packages(model="yggdrasil")

@@ -16,9 +16,9 @@ from django.db.models import Q
 
 from yggdrasil.changeset.models import ChangeSet
 from yggdrasil.graph.models import Element, YggdrasilModel
-from yggdrasil.llm.base import ScriptedLLM
 from yggdrasil.mcp.server import get_current_user_id, get_token_scope
 from yggdrasil.munin.agent import MuninAgent, set_model_review_mode
+from yggdrasil.munin.llm_factory import build_munin_planning_llm
 
 logger = logging.getLogger("yggdrasil.mcp.tools.write")
 
@@ -56,7 +56,7 @@ def create_element(
         getattr(user, "pk", None),
     )
     ymodel = _resolve_model(model)
-    llm = ScriptedLLM(responses=[f"Proposed Add Element for {name}"])
+    llm = build_munin_planning_llm()
     agent = MuninAgent(
         llm=llm,
         model_id=ymodel.pk,
@@ -125,7 +125,7 @@ def update_element(
         raise ValueError(msg)
     ymodel = _resolve_model(model) if model else None
     model_id = ymodel.pk if ymodel else _model_id_for_element(id)
-    llm = ScriptedLLM(responses=[f"Proposed Update Element id={id}"])
+    llm = build_munin_planning_llm()
     agent = MuninAgent(llm=llm, model_id=model_id, user_id=getattr(user, "pk", None))
     field_parts = "|".join(f"{key}={value}" for key, value in updates.items())
     message = f"TOOL:update_element|id={id}|{field_parts}"
@@ -175,7 +175,7 @@ def delete_element(id: int, model: str | None = None) -> dict:
     )
     ymodel = _resolve_model(model) if model else None
     model_id = ymodel.pk if ymodel else _model_id_for_element(id)
-    llm = ScriptedLLM(responses=[f"Blast-radius check for delete element id={id}"])
+    llm = build_munin_planning_llm()
     agent = MuninAgent(llm=llm, model_id=model_id, user_id=getattr(user, "pk", None))
     resp = agent.chat(f"TOOL:delete_element|id={id}", history=[])
     if resp.changeset_id is None:
@@ -236,7 +236,7 @@ def create_relationship(
     )
     ymodel = _resolve_model(model) if model else None
     model_id = ymodel.pk if ymodel else _model_id_for_element(from_id)
-    llm = ScriptedLLM(responses=[f"Proposed Add Relationship {from_id}->{to_id}"])
+    llm = build_munin_planning_llm()
     agent = MuninAgent(llm=llm, model_id=model_id, user_id=getattr(user, "pk", None))
     props = f"|properties={properties!r}" if properties else ""
     message = (
@@ -300,7 +300,7 @@ def update_relationships_batch(
     ymodel = _resolve_model(model) if model else None
     first_from = operations[0].get("from_id") or operations[0].get("source_id")
     model_id = ymodel.pk if ymodel else _model_id_for_element(int(first_from))
-    llm = ScriptedLLM(responses=[f"Proposed batch of {len(operations)} relationships"])
+    llm = build_munin_planning_llm()
     agent = MuninAgent(llm=llm, model_id=model_id, user_id=getattr(user, "pk", None))
     message = f"TOOL:update_relationships_batch|count={len(operations)}|operations={operations!r}"
     resp = agent.chat(message, history=[])

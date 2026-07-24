@@ -16,7 +16,12 @@ from pathlib import Path
 
 import click
 
-from ratatosk.config import build_llm_from_config, load_bootstrap_config
+from ratatosk.discovery.exclude import merge_bootstrap_exclude_patterns, normalize_exclude_patterns
+from ratatosk.config import (
+    build_extract_llm_from_config,
+    build_planning_llm_from_config,
+    load_bootstrap_config,
+)
 from ratatosk.discovery.runner import STDIN_SIZE_CAP_BYTES, run_cli_discovery
 from ratatosk.mcp_client import McpClientError, RatatoskMcpClient
 
@@ -80,10 +85,10 @@ def _require_token(token: str | None) -> str:
 
 
 def _build_llm(config=None):
-    """Resolve LLM for CLI from BootstrapConfig."""
+    """Resolve field-tier extract LLM for CLI from BootstrapConfig."""
     if config is None:
         config = load_bootstrap_config()
-    return build_llm_from_config(config)
+    return build_extract_llm_from_config(config)
 
 
 @main.command()
@@ -105,6 +110,12 @@ def _build_llm(config=None):
 @click.option("--model", "model_name", required=True, help="Target model name/slug.")
 @click.option("--metamodel", default="c4", show_default=True, help="Metamodel profile.")
 @click.option("--instructions", default="", help="Extra analysis instructions.")
+@click.option(
+    "--exclude",
+    "exclude",
+    multiple=True,
+    help="Path prefix or glob to skip (repeatable or comma-separated).",
+)
 def bootstrap(
     path: str,
     token: str | None,
@@ -112,17 +123,30 @@ def bootstrap(
     model_name: str,
     metamodel: str,
     instructions: str,
+    exclude: tuple[str, ...],
 ) -> None:
     """Scan PATH and propose architecture elements via MCP ChangeSet handoff."""
     token = _require_token(token)
+    exclude_csv = ",".join(exclude)
     config = load_bootstrap_config(
-        flags={"server": server, "metamodel": metamodel},
+        flags={
+            "server": server,
+            "metamodel": metamodel,
+            "exclude": exclude_csv,
+            "instructions": instructions,
+        },
         repo_path=path,
     )
+    effective_instructions = instructions.strip() or config.instructions
+    operator_exclude = normalize_exclude_patterns(exclude_csv) or config.exclude_patterns
+    effective_exclude = merge_bootstrap_exclude_patterns(operator_exclude)
     logger.info(
-        "bootstrap | config llm_provider=%s resolved_model=%s server=%s",
+        "bootstrap | config llm_provider=%s resolved_model=%s planning_model=%s "
+        "max_extract_targets=%s server=%s",
         config.llm_provider,
         config.resolved_model,
+        config.resolved_planning_model,
+        config.max_extract_targets,
         config.yggdrasil_server_url,
     )
     logger.info("bootstrap | model=%s metamodel=%s path=%s", model_name, metamodel, path)
@@ -130,16 +154,21 @@ def bootstrap(
         click.echo(f"Error: Repository path does not exist: {path}", err=True)
         sys.exit(1)
     client = RatatoskMcpClient(server=server, token=token)
-    llm = _build_llm(config)
+    planning_llm = build_planning_llm_from_config(config)
+    extract_llm = build_extract_llm_from_config(config)
     try:
         _run_id, _buckets, output = run_cli_discovery(
             client=client,
-            llm=llm,
+            llm=extract_llm,
+            planning_llm=planning_llm,
+            extract_llm=extract_llm,
+            discovery_limits=config.discovery_limits,
             mode="filesystem",
             model_name=model_name,
             metamodel=metamodel,
-            instructions=instructions,
+            instructions=effective_instructions,
             repo_path=path,
+            exclude_patterns=effective_exclude,
         )
     except McpClientError as exc:
         click.echo(f"Error: MCP snapshot failed — {exc}", err=True)
@@ -211,11 +240,15 @@ def update(
         config.resolved_model,
     )
     client = RatatoskMcpClient(server=server, token=token)
-    llm = _build_llm(config)
+    planning_llm = build_planning_llm_from_config(config)
+    extract_llm = build_extract_llm_from_config(config)
     try:
         _run_id, _buckets, output = run_cli_discovery(
             client=client,
-            llm=llm,
+            llm=extract_llm,
+            planning_llm=planning_llm,
+            extract_llm=extract_llm,
+            discovery_limits=config.discovery_limits,
             mode="stdin",
             model_name=model_name,
             metamodel=metamodel,

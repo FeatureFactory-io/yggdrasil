@@ -106,49 +106,43 @@
 <!--
 Skip condition: write "Not applicable — no in-app LLM agent." and remove the subsections below
 if DTA-19 was not run.
-Reference: docs/architecture/artifacts/56-AI_Agent_Reference_Architecture.md
+Reference: Playbook artifact AI Agent Reference Architecture — scenario index and capability table
 -->
 
-### Mission Assessment
+### Scenario selection
 
-<!-- Answer Q1–Q10 from artifact 56 §1.1, or "Not applicable" -->
-| # | Question | Answer | Impact |
-|---|----------|--------|--------|
-| Q1 | Conversational, batch/pipeline, or both? | | |
-| Q2 | Must work survive process crash / 429 mid-flight? | | |
-| Q3 | Does the agent need tools against domain services? | | |
-| Q4 | Multi-turn reasoning with evolving intent inside one task? | | |
-| Q5 | Should the agent improve from user feedback / outcomes? | | |
-| Q6 | Large body of knowledge only partly relevant per task? | | |
-| Q7 | Do users need live tokens / plan progress? | | |
-| Q8 | Should domain events proactively message the user? | | |
-| Q9 | Multiple personas or model tiers (planner vs. field)? | | |
-| Q10 | Destructive actions need human approval? | | |
-| Q11 | Does the agent parse structured JSON from LLM output? | | Requires thinking-aware normalization |
+<!-- Read scenario cards in the AI Agent Reference Architecture before ticking -->
 
-### Module Selection
+| SC-ID | Name | When (summary) | Selected? | Rationale |
+|-------|------|----------------|-----------|-----------|
+| SC-01 | Conversational planner | User chat → tools → optional background plan/worker | | |
+| SC-02 | Field extractor / bootstrap | Batch input → LLM JSON → domain writes; no chat loop | | |
+| SC-03 | Compiled pipeline | Trigger → known step graph; selective LLM steps | | |
+| SC-04 | Event-driven nudge | Domain event → proactive message/plan without user opening chat | | |
+| SC-05 | Governed mutations | Mutations/deletes need human approval before execute | | |
 
-| Module | Required / Optional / Skip | Rationale |
-|--------|---------------------------|-----------|
-| LLM Port | | |
-| Prompt Stack | | |
-| Tool Surface | | |
-| Agent Loop | | |
-| Plan & Steps | | |
-| Worker | | |
-| Agent Blackboard | | |
-| Learning | | |
-| Knowledge Index | | |
-| Chat Streaming | | |
-| Event Ingress | | |
-| Agent Factory / Identities | | |
+### Capability checklist
 
-### Assembly Profile
+<!-- Copy CAP rows from the reference artifact capability table for every CAP implemented -->
 
-- **Profile**: {conversational planner | compiled pipeline | field/batch specialist | custom}
-- **Dependency check**: _passed / see note_
+| CAP-ID | Name | Implement? | Project module path |
+|--------|------|--------------|---------------------|
+| CAP-001 | LLM Port protocol | | |
+| CAP-004 | ScriptedLLM | | |
+| | | | |
 
-### Agent Blackboard (if selected)
+### Assembly template
+
+- **Template**: {T-01 Planner | T-02 Field | T-03 Pipeline | T-00 Custom}
+- **Custom CAP list** (if T-00): CAP-___ , CAP-___ , …
+
+### Agent identities (CAP-121 / CAP-122)
+
+| Identity | Role | Model tier | Allowed tools |
+|----------|------|------------|---------------|
+| | | planning / execution / field | |
+
+### Agent Blackboard (if CAP-070 selected)
 
 | Key | Role | Durability |
 |-----|------|-----------|
@@ -157,49 +151,23 @@ Reference: docs/architecture/artifacts/56-AI_Agent_Reference_Architecture.md
 - Durability tier: {A — in-process | B — run-persistent}
 - Max board size (chars): ______
 
-### Plan & Steps State Machine (if selected)
+### Plan & Steps (if CAP-050 selected)
 
 - States: `pending → running → completed | failed | waiting_retry`
-- Hybrid step types in use: {is_critical, is_planning, is_variable_assessment, data-only}
-- Step synthesis chain: {Yes | No}
-- Per-step model tier routing: {Yes | No}
+- Hybrid step flags in use: {is_critical, is_planning, is_variable_assessment, data-only}
 
-### Model Tiers & Agent Identities
+### Integration proof (DoD gate)
 
-| Tier | Model | Used for |
-|------|-------|---------|
-| Planning (large) | | |
-| Execution (medium) | | |
-| Batch / field (small) | | |
+<!-- Map PRF-SCxx-xx test IDs from the reference artifact integration proof table -->
 
-| Identity | Role | Model tier | Allowed tools |
-|----------|------|------------|---------------|
-| | | | |
-
-### Thinking Models (if Q11 yes)
-
-<!-- Omit if no structured JSON extraction from LLM output -->
-<!-- Reference: artifact 56 §4.1 — Thinking model response normalization -->
-
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Response contract | `LLMResponse.content` / `LLMResponse.thinking` | |
-| Adapter normalization | {adapter module} | |
-| Structured extract utility | {module path} | |
-| Field-tier max_tokens | | Thinking headroom before JSON |
-| Thinking log policy | DEBUG traces; INFO content/thinking char counts | |
-
-### Agent Integration Proof (DoD Gate)
-
-| Profile | Test file | Scenario |
-|---------|-----------|---------|
-| Happy path | | |
-| Failed step | | |
-| 429 / rate limit | | |
-| Bad LLM output | | |
-| Thinking-wrapped JSON | | Parse succeeds; no silent zero-op |
-| Crash / resume | | |
-| Destructive HITL | | |
+| PRF ID | Scenario | Test file |
+|--------|----------|-----------|
+| PRF-SC02-01 | SC-02 thinking JSON | |
+| PRF-SC02-02 | SC-02 parse fail loud | |
+| PRF-SC01-01 | SC-01 plan handoff | |
+| PRF-SC01-02 | SC-01 429 retry | |
+| PRF-SC01-03 | SC-01 blackboard retain | |
+| PRF-SC05-01 | SC-05 HITL | |
 
 ## 18. MCP Architecture
 <!-- Decision from DTA-20 — omit this section if no MCP interface -->

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 from tests.fixtures.factories import UserFactory
 from tests.fixtures.factories.model_factories import YggdrasilModelFactory
@@ -131,6 +133,55 @@ def test_propose_changeset_auto_applies_above_threshold(rw_user) -> None:
     )
     assert result["applied_count"] == 9
     assert result["pending_count"] == 2
+
+
+@pytest.mark.django_db
+def test_propose_changeset_builds_munin_llm_for_enrichment(rw_user) -> None:
+    """Ratatosk handoff builds Munin planning LLM before bootstrap planner runs."""
+    ensure_c4_metamodel()
+    YggdrasilModelFactory(name="Yggdrasil", slug="yggdrasil", metamodel=ensure_c4_metamodel())
+    ops = [
+        {
+            "op_type": ChangeSetItem.OP_ADD_ELEMENT,
+            "detail": {
+                "name": "Service A",
+                "stereotype_slug": "component",
+                "package_slug": "application",
+            },
+            "confidence": 0.95,
+        },
+        {
+            "op_type": ChangeSetItem.OP_ADD_ELEMENT,
+            "detail": {
+                "name": "Service B",
+                "stereotype_slug": "container",
+                "package_slug": "technology",
+            },
+            "confidence": 0.95,
+        },
+    ]
+    fake_llm = object()
+    with (
+        patch(
+            "yggdrasil.munin.llm_factory.build_munin_planning_llm",
+            return_value=fake_llm,
+        ) as factory_mock,
+        patch(
+            "yggdrasil.munin.bootstrap_planner.plan_bootstrap_changeset",
+            return_value=(
+                ops,
+                "Bootstrap handoff: 2 add-element ops, 1 add-relationship ops (source=llm)",
+            ),
+        ) as planner_mock,
+    ):
+        propose_changeset(
+            model="yggdrasil",
+            operations=ops,
+            source=ChangeSet.SOURCE_RATATOSK,
+            run_id="run-factory",
+        )
+    factory_mock.assert_called_once()
+    assert planner_mock.call_args.kwargs["llm"] is fake_llm
 
 
 @pytest.mark.django_db

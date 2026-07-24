@@ -418,14 +418,43 @@ def step_munin_produces_n_ops(context, count):
 
 @given("Ratatosk has produced bootstrap buckets:")
 def step_ratatosk_bootstrap_buckets_cli(context):
-    """@wip — bootstrap add-heavy bucket fixture."""
-    raise NotImplementedError("TFK-07: bootstrap wipe + add-heavy buckets")
+    """Build element-only bootstrap ops and hand off to Munin via propose_changeset."""
+    from yggdrasil.mcp.tools.propose import propose_changeset
+
+    ensure_c4_metamodel()
+    YggdrasilModel.objects.get_or_create(
+        slug="yggdrasil",
+        defaults={"name": "Yggdrasil", "metamodel": ensure_c4_metamodel()},
+    )
+    counts = {row["bucket"]: int(row["count"]) for row in context.table}
+    to_add_count = counts.get("to_add", 0)
+    ops = [
+        {
+            "op_type": ChangeSetItem.OP_ADD_ELEMENT,
+            "detail": {
+                "name": f"Bootstrap Element {idx}",
+                "stereotype_slug": "container",
+                "package_slug": "technology",
+            },
+            "confidence": 0.95,
+        }
+        for idx in range(to_add_count)
+    ]
+    result = propose_changeset(
+        model="yggdrasil",
+        operations=ops,
+        source=ChangeSet.SOURCE_RATATOSK,
+        run_id="run-cli04-at",
+    )
+    context.changeset_id = int(result["changeset_id"])
 
 
 @then("Munin produces ChangeSet with at least {count:d} planned operations")
 def step_munin_at_least_n_ops_cli(context, count):
-    """@wip — Munin relationship planning from element candidates."""
-    raise NotImplementedError("TFK-07: Munin plans relationships from bootstrap candidates")
+    """Assert Munin planned at least N ChangeSet items (elements + relationships)."""
+    cs = ChangeSet.objects.get(pk=context.changeset_id)
+    actual = cs.items.count()
+    assert actual >= count, f"Expected at least {count} ops, got {actual}"
 
 
 @then('the ChangeSet summary contains "{text}"')

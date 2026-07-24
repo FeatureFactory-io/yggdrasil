@@ -119,6 +119,7 @@ C4 is the default — and only — Metamodel in MVP. It is a first-class type ca
 | 3 | Filesystem tree (paths only) | Stdin blob (diff, commit log, prose); size-capped |
 | 4 | Map project kind → target paths | **Scout plan** — paths, issue keys, MCP probe intents |
 | 5 | Read files → extract element candidates | Gather evidence (local `--repo` + Yggdrasil MCP + connector MCPs) → extract |
+| 5b | **Synthesize** — D0 pre-filter + D1 Sonnet canonicalize (merges/rejects) | Same (update mode when candidates present) |
 | 6 | Cleanup, dedupe, constrain to metamodel | Cleanup + **delta reconcile** (`to_add` / `to_update` / `to_delete`) |
 | 7 | ChangeSet (add-heavy; `source=ratatosk`) | ChangeSet (delta; `unchanged` never sent) |
 
@@ -144,7 +145,7 @@ A full snapshot remains in code for reconcile (`by_slug`); only the summary text
 | Layer | Content |
 |-------|---------|
 | System | Role (field NER), pipeline handoff to Munin, precision-over-recall, no direct graph writes |
-| User (metamodel) | `_metamodel_guidance()` — Stereotypes, Packages, allowed element kinds from bound Metamodel |
+| User (metamodel) | `build_metamodel_guidance()` — Stereotypes, Packages, allowed element kinds from bound Metamodel |
 | User (context) | ModelSummary + materialized input (file excerpt or scout evidence) + optional `--instructions` |
 | Tools | Local file reads + Yggdrasil MCP read subset + connector MCPs per config allowlist |
 

@@ -133,6 +133,8 @@ Filesystem trees for Ratatosk CLI/discovery AT and optional `@ollama` E2E.
 
 **Scope:** AT + subprocess CLI bootstrap. **Dependency:** C4 metamodel seeded, empty Yggdrasil model. **Not required:** `docker compose up` in CI.
 
+**DISC-17:** `--exclude src/payment_api/` skips `src/payment_api/app.py` from the file tree; manifest elements still discovered via README/scripted LLM.
+
 See [`repos/README.md`](repos/README.md).
 
 ### `repos/sample_stdin/`

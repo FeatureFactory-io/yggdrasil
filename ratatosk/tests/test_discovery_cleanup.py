@@ -8,6 +8,8 @@ from ratatosk.discovery.runner import (
     _normalize_package_slug,
     _parse_readme_architecture_table,
     _prioritize_targets,
+    _reconcile,
+    _reconcile_incremental,
 )
 
 
@@ -79,3 +81,49 @@ def test_prioritize_targets_puts_readme_first() -> None:
     tree = ["src/a.py", "README.md", "src/b.py"]
     targets = ["src/a.py", "src/b.py"]
     assert _prioritize_targets(tree, targets)[0] == "README.md"
+
+
+def test_reconcile_bootstrap_rescan_deletes_all_existing() -> None:
+    """Bootstrap re-scan wipes every existing slug and re-adds candidates."""
+    by_slug = {
+        "payment-api": {"id": 1, "name": "Payment API", "slug": "payment-api"},
+        "legacy-batch": {"id": 2, "name": "LegacyBatch", "slug": "legacy-batch"},
+    }
+    candidates = [{"name": "Payment API", "stereotype": "container", "confidence": 0.9}]
+    buckets = _reconcile(candidates, by_slug, bootstrap_rescan=True)
+    assert len(buckets.to_delete) == 2
+    assert buckets.to_delete[0]["confidence"] == 1.0
+    assert len(buckets.to_add) == 1
+    assert buckets.unchanged == []
+    assert buckets.to_update == []
+
+
+def test_all_bucket_operations_bootstrap_puts_deletes_first() -> None:
+    """Bootstrap handoff applies wipe before adds so get_or_create gets fresh slugs."""
+    from ratatosk.discovery.runner import DeltaBuckets, _all_bucket_operations
+
+    buckets = DeltaBuckets(
+        to_add=[
+            {"name": "Auth", "stereotype": "component", "package": "application", "confidence": 0.9}
+        ],
+        to_delete=[
+            {"name": "Legacy", "element_id": 99, "confidence": 1.0},
+        ],
+    )
+    ops = _all_bucket_operations(buckets, bootstrap_rescan=True)
+    assert ops[0]["op_type"] == "delete_element"
+    assert ops[1]["op_type"] == "add_element"
+    assert ops[0]["confidence"] == 1.0
+
+
+def test_reconcile_incremental_deletes_unmatched_slugs() -> None:
+    """Update mode deletes existing elements missing from new candidates."""
+    by_slug = {
+        "payment-api": {"id": 1, "name": "Payment API", "slug": "payment-api"},
+        "legacy-batch": {"id": 2, "name": "LegacyBatch", "slug": "legacy-batch"},
+    }
+    candidates = [{"name": "Payment API", "stereotype": "container", "confidence": 0.9}]
+    buckets = _reconcile_incremental(candidates, by_slug)
+    assert len(buckets.unchanged) == 1
+    assert len(buckets.to_delete) == 1
+    assert buckets.to_delete[0]["name"] == "LegacyBatch"

@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("yggdrasil.auth")
 
-_DEFAULT_REDIRECT = "/"
+_DEFAULT_REDIRECT = "/views/"
 
 
 class LoginView(View):
@@ -35,7 +35,7 @@ class LoginView(View):
 
     :Example:
 
-    On success: redirect to ``VIEW-BROWSE-1`` (``/``).
+    On success: redirect to ``VIEW-BROWSE-1`` (``/views/``).
     On failure: re-render form with error message.
     """
 
@@ -146,7 +146,7 @@ class LoginView(View):
         :Example:
 
         ?next=/graph/ → redirect to /graph/
-        (no next)     → redirect to /
+        (no next)     → redirect to /views/
         """
         next_url = request.POST.get("next") or request.GET.get("next", _DEFAULT_REDIRECT)
         if not next_url or not next_url.startswith("/") or next_url.startswith("//"):

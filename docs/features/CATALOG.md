@@ -540,12 +540,15 @@ Owned by Metamodel `c4` (Django admin / `ensure_c4_metamodel()`), not by each Mo
 | `When Marcus pipes the stdin fixture "{name}" into ratatosk update with repo "./repo"` | Update with local file reads (@wip) |
 | `When Marcus pipes commit message stdin into ratatosk update with repo "./repo":` | Commit-log scout trigger (@wip) |
 | `And an MCP tool call to "{tool}" was recorded on the blackboard` | Scout MCP drill-down (@wip) |
-| `And the delta buckets contain bucket "{bucket}" with count at least {n}` | Update to_delete policy (@wip) |
-| `And the Yggdrasil model "Yggdrasil" still has {n} elements` | Update never wipes (@wip) |
-| `Given Ratatosk has produced bootstrap buckets:` | Bootstrap add-heavy handoff (@wip) |
-| `Then Munin produces ChangeSet with at least {n:d} planned operations` | Munin plans relationships (@wip) |
-| `And the output contains wipe no-op for empty graph` | CLI-08: `wiping 0 elements and 0 relationships` |
-| `Then bootstrap candidates include all manifest elements:` | DISC-01 / LLM-03 table: name, stereotype, package (@wip TFK-07) |
+| `And the delta buckets contain bucket "{bucket}" with count at least {n}` | Bootstrap/update bucket min counts (DISC-03, CICD-15) |
+| `When Priya runs ratatosk bootstrap against "{name}" with exclude "{patterns}"` | DISC-17 operator scope control |
+| `When Priya runs ratatosk bootstrap against "{name}" with instructions:` | DISC-18 operator LLM steering |
+| `Then the run blackboard tree does not include "{path}"` | DISC-17 excluded paths absent from tree |
+| `Given Ratatosk has produced bootstrap buckets:` | CLI-04 Munin handoff fixture |
+| `Then Munin produces ChangeSet with at least {n:d} planned operations` | CLI-04 relationship planning |
+| `And the output contains wipe no-op for empty graph` | CLI-08: `wipe no-op for empty graph` |
+| `Then bootstrap candidates include all manifest elements:` | DISC-01 / DISC-17 / DISC-18 manifest table |
+| `Then bootstrap candidates do not include element "{name}"` | DISC-18 negative manifest assertion |
 | `Given the environment variable "{name}" is set to "{value}"` | Bootstrap env (CFG-*, CLI-09) (@wip TFK-07) |
 | `When Priya runs ratatosk bootstrap against fixture "{name}" via subprocess` | DISC-21 / LLM-* production CLI path (@wip TFK-07) |
 | `Then MCP tool "{tool}" was called during bootstrap` | DISC-21 MCP handoff chain (@wip TFK-07) |
@@ -571,8 +574,8 @@ Owned by Metamodel `c4` (Django admin / `ensure_c4_metamodel()`), not by each Mo
 ### Bootstrap MVP-W1 scenario IDs
 
 ```
-CLI-01, CLI-06, CLI-07, CLI-08, CLI-09
-DISC-01, DISC-02, DISC-04, DISC-05, DISC-06, DISC-07, DISC-11, DISC-13, DISC-15, DISC-16, DISC-21
+CLI-01, CLI-04, CLI-06, CLI-07, CLI-08, CLI-09
+DISC-01, DISC-02, DISC-03, DISC-04, DISC-05, DISC-06, DISC-07, DISC-11, DISC-13, DISC-15, DISC-16, DISC-17, DISC-18, DISC-21
 LLM-01, LLM-02, LLM-03, LLM-04  (@ollama @wip)
 LLM-05, LLM-06  (@anthropic @wip)
 CFG-02, CFG-06, CFG-07, CFG-08, CFG-09, CFG-10, CFG-11, CFG-12, CFG-13

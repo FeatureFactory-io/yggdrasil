@@ -361,7 +361,75 @@ def step_url_points_to_run_view(context):
     assert run.run_id in output
 
 
-def _run_bootstrap(context, *, repo_name: str, metamodel: str = "c4") -> None:
+@given(
+    "the discovery LLM will return endpoint-level candidates unless instructions require README-only C4"
+)
+def step_llm_endpoint_noise_unless_readme(context):
+    """Configure scripted LLM to inject endpoint noise unless README-only instructions."""
+    context.discovery_llm = ScriptedDiscoveryLLM(endpoint_noise=True)
+
+
+@when('Priya runs ratatosk bootstrap against "{name}" with exclude "{patterns}"')
+def step_bootstrap_with_exclude(context, name, patterns):
+    """Bootstrap with path exclude patterns."""
+    from ratatosk.discovery.exclude import normalize_exclude_patterns
+
+    context.cli_exclude_patterns = normalize_exclude_patterns(patterns)
+    _run_bootstrap(context, repo_name=name, exclude_patterns=context.cli_exclude_patterns)
+
+
+@when('Priya runs ratatosk bootstrap against "{name}" with instructions:')
+def step_bootstrap_with_instructions(context, name):
+    """Bootstrap with operator instructions from docstring."""
+    instructions = context.text.strip()
+    context.cli_instructions = instructions
+    llm = getattr(context, "discovery_llm", None)
+    if llm is None and instructions:
+        llm = ScriptedDiscoveryLLM(endpoint_noise=True)
+        context.discovery_llm = llm
+    _run_bootstrap(context, repo_name=name, instructions=instructions)
+
+
+@then('the run blackboard contains key "{key}"')
+def step_blackboard_contains_key(context, key):
+    """Assert a top-level blackboard key exists."""
+    board = context.cli_run.blackboard or {}
+    assert key in board, f"Missing blackboard key {key!r} in {list(board.keys())}"
+
+
+@then('the run blackboard tree does not include "{path}"')
+def step_blackboard_tree_excludes(context, path):
+    """Assert tree paths exclude a relative path."""
+    paths = (context.cli_run.blackboard or {}).get("tree", {}).get("paths") or []
+    assert path not in paths, f"Unexpected {path!r} in tree paths"
+
+
+@then("bootstrap candidates include all manifest elements:")
+def step_bootstrap_manifest_include(context):
+    """Assert all table manifest element names appear in bootstrap candidates."""
+    buckets = context.cli_buckets
+    names = {item.get("name") for item in buckets.to_add}
+    for row in context.table:
+        expected = row["name"]
+        assert expected in names, f"Missing manifest element {expected!r}; got {sorted(names)}"
+
+
+@then('bootstrap candidates do not include element "{name}"')
+def step_bootstrap_manifest_exclude(context, name):
+    """Assert a named element is absent from bootstrap candidates."""
+    buckets = context.cli_buckets
+    names = {item.get("name") for item in buckets.to_add}
+    assert name not in names, f"Unexpected element {name!r} in candidates {sorted(names)}"
+
+
+def _run_bootstrap(
+    context,
+    *,
+    repo_name: str,
+    metamodel: str = "c4",
+    instructions: str = "",
+    exclude_patterns: list[str] | None = None,
+) -> None:
     """Shared bootstrap runner for discovery AT steps."""
     path = getattr(context, "cli_repo_path", None) or str(_FIXTURE_REPOS / repo_name)
     llm = getattr(context, "discovery_llm", None) or ScriptedDiscoveryLLM()
@@ -373,6 +441,8 @@ def _run_bootstrap(context, *, repo_name: str, metamodel: str = "c4") -> None:
             repo_path=path,
             model_name="Yggdrasil",
             metamodel=metamodel,
+            instructions=instructions or getattr(context, "cli_instructions", ""),
+            exclude_patterns=exclude_patterns,
             user=getattr(context, "current_user", None),
             llm=llm,
             snapshot=snapshot,
@@ -398,6 +468,29 @@ def step_output_does_not_contain(context, text):
     assert text not in output, f"Unexpected {text!r} in output:\n{output}"
 
 
+@then('the delta buckets contain bucket "{bucket}" with count at least {n:d}')
+def step_delta_bucket_min(context, bucket, n):
+    """Assert a delta bucket meets a minimum count."""
+    buckets = context.cli_buckets
+    actual = len(getattr(buckets, bucket))
+    assert actual >= n, f"{bucket}: {actual} < {n}"
+
+
+@then('the delta buckets contain bucket "{bucket}" with count {n:d}')
+def step_delta_bucket_exact(context, bucket, n):
+    """Assert a delta bucket has an exact count."""
+    buckets = context.cli_buckets
+    actual = len(getattr(buckets, bucket))
+    assert actual == n, f"{bucket}: expected {n}, got {actual}"
+
+
+@then("the output contains wipe no-op for empty graph")
+def step_wipe_noop_phrase(context):
+    """Assert bootstrap on empty graph logs wipe no-op."""
+    output = getattr(context, "cli_output", "") or ""
+    assert "wipe no-op for empty graph" in output, f"Missing wipe no-op in:\n{output}"
+
+
 # ─── @wip scout / config / ModelSummary stubs (BPE) ─────────────────────────
 
 
@@ -411,18 +504,11 @@ def _wip_step(name: str):
 
 
 for _decorator, _phrase, _name in [
-    (then, 'the run blackboard contains key "{key}"', "blackboard key assertion"),
-    (
-        then,
-        "the run blackboard model_summary_chars is at most {n:d} tokens equivalent",
-        "ModelSummary budget",
-    ),
     (
         then,
         'the run blackboard metamodel_guidance mentions stereotype "{name}"',
         "metamodel guidance blackboard",
     ),
-    (then, "bootstrap candidates include all manifest elements:", "manifest 4/4 assertion"),
     (
         when,
         'Priya runs ratatosk bootstrap against fixture "{name}" via subprocess',
@@ -432,7 +518,6 @@ for _decorator, _phrase, _name in [
     (given, 'Ollama is reachable at "{url}"', "Ollama reachable"),
     (given, 'Ollama model "{model}" is not available', "Ollama model missing"),
     (then, "the discovery LLM was invoked at least {n:d} times", "LLM call count"),
-    (then, "the output contains wipe no-op for empty graph", "wipe no-op phrase"),
     (
         when,
         'Marcus pipes the stdin fixture "{name}" into ratatosk update with repo "./repo"',
@@ -443,12 +528,6 @@ for _decorator, _phrase, _name in [
         'Marcus pipes commit message stdin into ratatosk update with repo "./repo":',
         "commit scout trigger",
     ),
-    (
-        then,
-        'the delta buckets contain bucket "{bucket}" with count at least {n:d}',
-        "to_delete min count",
-    ),
-    (then, 'the delta buckets contain bucket "{bucket}" with count {n:d}', "to_delete exact count"),
     (
         then,
         'the Yggdrasil model "Yggdrasil" still has {n:d} elements',

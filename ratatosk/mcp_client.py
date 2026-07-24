@@ -33,7 +33,7 @@ class RatatoskMcpClient:
         server: str,
         token: str,
         *,
-        timeout: float = 30.0,
+        timeout: float = 180.0,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         """

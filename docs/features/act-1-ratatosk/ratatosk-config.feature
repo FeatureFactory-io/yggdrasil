@@ -66,6 +66,12 @@ Feature: ACT-1-CFG Ratatosk CLI configuration
     When Ratatosk loads configuration for bootstrap with repo "./tests/fixtures/repos/sample_webapp"
     Then the effective config key "llm_provider" is "anthropic"
 
+  @wip
+  Scenario: ACT-1-CFG-14 RATATOSK_MAX_EXTRACT_TARGETS env sets scout extract ceiling
+    Given the environment variable "RATATOSK_MAX_EXTRACT_TARGETS" is set to "75"
+    When Ratatosk loads configuration for bootstrap
+    Then the effective config key "max_extract_targets" is 75
+
   # ── MVP-W2: scout / update / doctor ────────────────────────────────────────
 
   @wip

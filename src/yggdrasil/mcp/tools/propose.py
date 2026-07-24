@@ -79,6 +79,7 @@ def propose_changeset(
     run_id: str = "",
     allow_empty: bool = False,
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
+    handoff_context: dict[str, Any] | None = None,
 ) -> dict:
     """
     Propose a ChangeSet from structured operations (Ratatosk CLI handoff).
@@ -109,6 +110,13 @@ def propose_changeset(
         run_id,
         allow_empty,
     )
+    if handoff_context:
+        synth = handoff_context.get("synthesize") or {}
+        logger.info(
+            "propose_changeset | handoff_context keys=%s synthesize_canonical_count=%s",
+            sorted(handoff_context.keys()),
+            synth.get("canonical_count"),
+        )
     ymodel = _resolve_model(model)
     if not ops and not allow_empty:
         msg = "operations must not be empty"
@@ -121,11 +129,51 @@ def propose_changeset(
     )
 
     reasoning = munin_reasoning
-    if should_enrich_ratatosk_ops(source, ops):
+    enrich = should_enrich_ratatosk_ops(source, ops)
+    ratatosk_op_count = len(ops)
+    logger.info(
+        "propose_changeset | munin_enrichment_check source=%s ratatosk_ops=%s enrich=%s",
+        source,
+        ratatosk_op_count,
+        enrich,
+    )
+    if enrich:
+        from yggdrasil.munin.llm_factory import build_munin_planning_llm
+        from yggdrasil.munin.logging_utils import log_munin_entry, log_munin_exit
+
+        log_munin_entry(
+            "propose_changeset_munin_enrichment",
+            where="mcp.tools.propose.propose_changeset",
+            user_id=getattr(user, "pk", None),
+            model_id=ymodel.pk,
+            why="ratatosk_handoff_element_ops_only",
+            ratatosk_op_count=ratatosk_op_count,
+            run_id=run_id,
+        )
+        llm = build_munin_planning_llm()
+        llm_model = getattr(llm, "model_id", type(llm).__name__)
         ops, reasoning = plan_bootstrap_changeset(
             model_id=ymodel.pk,
             element_ops=ops,
             user_id=getattr(user, "pk", None),
+            llm=llm,
+            confidence_threshold=confidence_threshold,
+            handoff_context=handoff_context,
+        )
+        rel_added = len(ops) - ratatosk_op_count
+        log_munin_exit(
+            "propose_changeset_munin_enrichment",
+            where="mcp.tools.propose.propose_changeset",
+            user_id=getattr(user, "pk", None),
+            success=rel_added > 0,
+            llm_model=llm_model,
+            relationship_ops_added=rel_added,
+            summary=reasoning,
+        )
+    else:
+        logger.info(
+            "propose_changeset | munin_planner_skipped reason=%s",
+            "not_ratatosk_element_only_handoff" if source == "ratatosk" else f"source={source}",
         )
 
     changeset = _service.propose(
@@ -155,6 +203,7 @@ def propose_changeset(
         "pending_count": pending_count,
         "run_url": run_url,
         "operations_count": changeset.items.count(),
+        "munin_reasoning": reasoning,
     }
     logger.info(
         "propose_changeset | changeset_id=%s status=%s applied=%s pending=%s",

@@ -7,14 +7,28 @@ Never imports Django.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
+import sys
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+from ratatosk.discovery.candidates import attach_source_paths, merge_candidates_by_slug
+from ratatosk.discovery.exclude import normalize_exclude_patterns, path_is_excluded
+from ratatosk.discovery.limits import (
+    DiscoveryLimits,
+    README_SOURCE,
+    SAO_ARCHITECTURE_SOURCE,
+    cap_extract_targets,
+    prioritize_targets,
+)
 from ratatosk.discovery.model_summary import build_model_summary
+from ratatosk.discovery.prefilter import prefilter_candidates
+from ratatosk.discovery.synthesize import run_synthesis_phase
+from yggdrasil.graph.metamodel_guidance import build_metamodel_guidance_from_stereotypes
 from yggdrasil.llm.structured import extract_json_array as _parse_candidate_json
 from yggdrasil.llm.structured import extract_json_object as _parse_json_object
 
@@ -35,14 +49,13 @@ _IGNORE_DIR_NAMES = {
     "build",
 }
 _IGNORE_FILE_NAMES = {".gitkeep", ".DS_Store"}
-_MAX_EXTRACT_TARGETS = 12
 _STEREOTYPE_DEFAULT_PACKAGE: dict[str, str] = {
     "container": "technology",
     "system": "technology",
     "component": "application",
     "person": "context",
 }
-_README_SOURCE = "README.md"
+_README_SOURCE = README_SOURCE
 
 
 @dataclass
@@ -70,20 +83,35 @@ def run_cli_discovery(
     repo_path: str = "",
     stdin_text: str = "",
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
+    exclude_patterns: list[str] | None = None,
+    extract_llm: Any | None = None,
+    planning_llm: Any | None = None,
+    discovery_limits: DiscoveryLimits | None = None,
 ) -> tuple[str, DeltaBuckets, str]:
     """
     Run discovery and hand off via MCP. No Django.
 
     :param client: Object with ``call_tool(name, arguments) -> dict``.
-    :param llm: Object with ``complete(messages, system=...) -> response``.
+    :param llm: Field-tier LLM (legacy param; use ``extract_llm`` when set).
+    :param extract_llm: Haiku/fast model for per-file extract steps.
+    :param planning_llm: Sonnet/planning model for ``_llm_project_map``.
+    :param discovery_limits: Scout bounds (default 50 targets / 1000 file reads).
     :return: (run_id, buckets, CLI output text)
     """
+    limits = discovery_limits or DiscoveryLimits()
+    field_llm = extract_llm or llm
+    map_llm = planning_llm or field_llm
     logger.info(
-        "run_cli_discovery | entry mode=%s model=%s metamodel=%s confidence_threshold=%s",
+        "run_cli_discovery | entry mode=%s model=%s metamodel=%s confidence_threshold=%s "
+        "max_extract_targets=%s max_file_reads=%s planning_llm=%s extract_llm=%s",
         mode,
         model_name,
         metamodel,
         confidence_threshold,
+        limits.max_extract_targets,
+        limits.max_file_reads_per_run,
+        getattr(map_llm, "model_id", type(map_llm).__name__),
+        getattr(field_llm, "model_id", type(field_llm).__name__),
     )
     if mode == "filesystem":
         logger.info(
@@ -123,14 +151,6 @@ def run_cli_discovery(
         if item.get("name") or item.get("slug")
     }
 
-    wipe_line = ""
-    if mode == "filesystem":
-        if element_count == 0:
-            wipe_line = "wipe no-op for empty graph"
-        else:
-            wipe_line = f"wiping {element_count} elements before bootstrap rescan"
-        logger.info("run_cli_discovery | %s", wipe_line)
-
     summary_text, summary_meta = build_model_summary(elements, relationships)
     logger.info(
         "run_cli_discovery | building ModelSummary chars=%s depth=%s",
@@ -151,6 +171,12 @@ def run_cli_discovery(
         len(instructions),
     )
 
+    exclude_patterns = normalize_exclude_patterns(exclude_patterns or [])
+    instructions_preview = instructions[:80] if instructions else ""
+    instructions_hash = (
+        hashlib.sha256(instructions.encode("utf-8")).hexdigest()[:12] if instructions else ""
+    )
+
     blackboard: dict[str, Any] = {
         "fetched_model": {
             "elements": element_count,
@@ -158,6 +184,21 @@ def run_cli_discovery(
         },
         "model_summary": summary_meta,
         "metamodel": {"slug": metamodel},
+        "exclude_patterns": exclude_patterns,
+        "instructions": {
+            "chars": len(instructions),
+            "preview": instructions_preview,
+            "hash": instructions_hash,
+        },
+        "discovery_limits": {
+            "max_extract_targets": limits.max_extract_targets,
+            "max_file_reads_per_run": limits.max_file_reads_per_run,
+            "effective_cap": limits.effective_cap,
+        },
+        "llm_tiers": {
+            "planning_model": getattr(map_llm, "model_id", type(map_llm).__name__),
+            "extract_model": getattr(field_llm, "model_id", type(field_llm).__name__),
+        },
     }
 
     if mode == "filesystem":
@@ -165,8 +206,9 @@ def run_cli_discovery(
             "run_cli_discovery | scan_start repo_path=%s reason=bootstrap_filesystem_scan",
             repo_path,
         )
-        tree = _build_file_tree(repo_path)
+        tree, skipped_exclude = _build_file_tree(repo_path, exclude_patterns)
         blackboard["tree"] = {"paths": tree, "count": len(tree)}
+        blackboard["skipped_by_exclude_count"] = skipped_exclude
         blackboard["input_mode"] = "filesystem"
         if not tree:
             candidates: list[dict] = []
@@ -176,21 +218,24 @@ def run_cli_discovery(
                 "reason=empty_tree",
             )
         else:
-            project_map = _llm_project_map(llm, tree, ontology)
+            project_map = _llm_project_map(map_llm, tree, ontology, limits, instructions)
             blackboard["project_map"] = project_map
-            targets = _prioritize_targets(
-                tree,
-                project_map.get("targets") or tree[:_MAX_EXTRACT_TARGETS],
-            )
+            raw_targets = project_map.get("targets") or tree[: limits.effective_cap]
+            targets = prioritize_targets(tree, raw_targets, limits)
+            blackboard["llm_tiers"]["targets_planned"] = len(project_map.get("targets") or [])
+            blackboard["llm_tiers"]["targets_extracted"] = len(targets)
             logger.info(
                 "run_cli_discovery | scan_map_complete project_kind=%s "
-                "tree_paths=%s mapped_targets=%s targets=%s",
+                "tree_paths=%s mapped_targets=%s targets=%s effective_cap=%s",
                 project_map.get("project_kind"),
                 len(tree),
                 len(project_map.get("targets") or []),
                 targets,
+                limits.effective_cap,
             )
-            candidates = _llm_extract_files(llm, repo_path, targets, ontology, instructions)
+            candidates = _llm_extract_files(
+                field_llm, repo_path, targets, ontology, instructions, limits
+            )
             logger.info(
                 "run_cli_discovery | extract_complete raw_candidates=%s summary=%s",
                 len(candidates),
@@ -205,10 +250,43 @@ def run_cli_discovery(
             candidates = []
             blackboard["extract"] = {"candidates": 0, "reason": "empty stdin"}
         else:
-            _llm_map_stdin(llm, stdin_text, kind, ontology, instructions)
+            _llm_map_stdin(map_llm, stdin_text, kind, ontology, instructions)
             candidates = _llm_extract_text(
-                llm, stdin_text, kind, ontology, instructions, source_label="stdin"
+                field_llm, stdin_text, kind, ontology, instructions, source_label="stdin"
             )
+            candidates = merge_candidates_by_slug(candidates)
+
+    synthesis_meta: dict[str, Any] = {}
+    if candidates:
+        pf = prefilter_candidates(candidates)
+        blackboard["prefilter"] = {
+            "input": len(candidates),
+            "kept": len(pf.kept),
+            "rejected": len(pf.rejected),
+        }
+        candidates, synthesis_meta = run_synthesis_phase(
+            map_llm,
+            pf.kept,
+            ontology,
+            pf.cluster_hints,
+            instructions,
+        )
+        blackboard["synthesize"] = synthesis_meta
+        logger.info(
+            "run_cli_discovery | synthesize before=%s after=%s merges=%s fallback=%s",
+            synthesis_meta.get("before_count"),
+            synthesis_meta.get("after_count"),
+            len(synthesis_meta.get("merges") or []),
+            synthesis_meta.get("fallback"),
+        )
+    else:
+        blackboard["prefilter"] = {"input": 0, "kept": 0, "rejected": 0}
+        blackboard["synthesize"] = {
+            "canonical_count": 0,
+            "merges": [],
+            "rejects": [],
+            "do_not_reference": [],
+        }
 
     cleaned = _cleanup(candidates, element_slugs, package_slugs)
     blackboard["cleanup"] = {"raw": len(candidates), "accepted": len(cleaned)}
@@ -221,7 +299,7 @@ def run_cli_discovery(
         _summarize_candidates(candidates),
         _summarize_candidates(cleaned),
     )
-    buckets = _reconcile(cleaned, by_slug)
+    buckets = _reconcile(cleaned, by_slug, bootstrap_rescan=(mode == "filesystem"))
     logger.info(
         "run_cli_discovery | reconcile to_add=%s to_update=%s to_delete=%s unchanged=%s "
         "add_names=%s",
@@ -232,10 +310,22 @@ def run_cli_discovery(
         [item.get("name") for item in buckets.to_add],
     )
 
+    wipe_line = ""
+    if mode == "filesystem":
+        if buckets.to_delete:
+            wipe_line = (
+                f"wiping {len(buckets.to_delete)} elements and "
+                f"{relationship_count} relationships before bootstrap rescan"
+            )
+        elif element_count == 0:
+            wipe_line = "wipe no-op for empty graph"
+        if wipe_line:
+            logger.info("run_cli_discovery | %s", wipe_line)
+
     run_id = f"run-{uuid.uuid4().hex[:12]}"
     operations = _buckets_to_operations(buckets, confidence_threshold)
     # Include below-threshold ops too (server splits apply)
-    operations = _all_bucket_operations(buckets)
+    operations = _all_bucket_operations(buckets, bootstrap_rescan=(mode == "filesystem"))
     logger.info(
         "run_cli_discovery | munin_handoff_start run_id=%s ratatosk_element_ops=%s "
         "confidence_threshold=%s op_types=%s",
@@ -259,9 +349,27 @@ def run_cli_discovery(
             "run_id": run_id,
             "allow_empty": not operations,
             "confidence_threshold": confidence_threshold,
+            "handoff_context": {
+                "synthesize": {
+                    "merges": synthesis_meta.get("merges") or [],
+                    "rejects": synthesis_meta.get("rejects") or [],
+                    "do_not_reference": synthesis_meta.get("do_not_reference") or [],
+                    "canonical_count": synthesis_meta.get("canonical_count", len(cleaned)),
+                },
+                "instructions": instructions,
+                "metamodel_slug": metamodel,
+            },
         },
     )
     changeset_id = propose["changeset_id"]
+    munin_reasoning = str(propose.get("munin_reasoning") or "")
+    if "0 add-relationship ops" in munin_reasoning and "source=none" in munin_reasoning:
+        warning = (
+            "WARNING: Munin bootstrap produced zero relationships — "
+            "graph will have no edges until relationships are planned"
+        )
+        logger.warning("run_cli_discovery | %s | munin_reasoning=%s", warning, munin_reasoning)
+        print(warning, file=sys.stderr)
     blackboard["handoff"] = {
         "changeset_id": changeset_id,
         "ops": propose.get("operations_count", len(operations)),
@@ -300,17 +408,16 @@ def run_cli_discovery(
     output_lines: list[str] = []
     if wipe_line:
         output_lines.append(wipe_line)
+    if mode == "filesystem" and instructions.strip():
+        output_lines.append(f"scanning {repo_path} with instructions")
     output_lines.extend(
-        [
-            "building ModelSummary",
-            f"found {element_count} existing elements",
-            f"found {relationship_count} relationships",
-            f"to_add: {len(buckets.to_add)}",
-            f"to_update: {len(buckets.to_update)}",
-            f"to_delete: {len(buckets.to_delete)}",
-            f"unchanged: {len(buckets.unchanged)}",
-            f"trigger: ratatosk {'bootstrap' if mode == 'filesystem' else 'update'}",
-        ]
+        _format_discovery_output_lines(
+            element_count=element_count,
+            relationship_count=relationship_count,
+            buckets=buckets,
+            trigger="bootstrap" if mode == "filesystem" else "update",
+            bootstrap_rescan=(mode == "filesystem"),
+        )
     )
     if mode == "filesystem" and blackboard.get("tree", {}).get("count") == 0:
         output_lines.append("nothing to scan")
@@ -339,13 +446,18 @@ def run_cli_discovery(
     return run_id, buckets, output
 
 
-def _build_file_tree(repo_path: str) -> list[str]:
+def _build_file_tree(
+    repo_path: str,
+    exclude_patterns: list[str] | None = None,
+) -> tuple[list[str], int]:
     """Walk repo_path and return relative file paths (ignored dirs skipped)."""
+    patterns = exclude_patterns or []
     logger.info(
-        "_build_file_tree | entry repo_path=%s ignore_dirs=%s ignore_files=%s",
+        "_build_file_tree | entry repo_path=%s ignore_dirs=%s ignore_files=%s exclude=%s",
         repo_path,
         sorted(_IGNORE_DIR_NAMES),
         sorted(_IGNORE_FILE_NAMES),
+        patterns,
     )
     root = Path(repo_path)
     if not root.exists():
@@ -355,29 +467,39 @@ def _build_file_tree(repo_path: str) -> list[str]:
     paths: list[str] = []
     skipped_dirs = 0
     skipped_files = 0
+    skipped_exclude = 0
     for path in sorted(root.rglob("*")):
         if not path.is_file():
             continue
         rel = path.relative_to(root)
+        rel_posix = rel.as_posix()
         if any(part in _IGNORE_DIR_NAMES for part in rel.parts[:-1]):
             skipped_dirs += 1
             continue
         if rel.name.lower() in _IGNORE_FILE_NAMES:
             skipped_files += 1
             continue
-        paths.append(rel.as_posix())
+        if path_is_excluded(rel_posix, patterns):
+            skipped_exclude += 1
+            logger.info(
+                "_build_file_tree | excluded path=%s reason=exclude_pattern",
+                rel_posix,
+            )
+            continue
+        paths.append(rel_posix)
     preview = paths[:8]
     tail = paths[-3:] if len(paths) > 8 else []
     logger.info(
         "_build_file_tree | result file_count=%s skipped_under_ignore_dir=%s "
-        "skipped_ignore_file=%s head=%s tail=%s",
+        "skipped_ignore_file=%s skipped_exclude=%s head=%s tail=%s",
         len(paths),
         skipped_dirs,
         skipped_files,
+        skipped_exclude,
         preview,
         tail,
     )
-    return paths
+    return paths, skipped_exclude
 
 
 def _classify_stdin(text: str) -> str:
@@ -392,46 +514,47 @@ def _classify_stdin(text: str) -> str:
 def _guidance_from_stereotypes(
     items: list[dict],
 ) -> tuple[str, set[str], set[str]]:
-    element_slugs: set[str] = set()
-    package_slugs: set[str] = set()
-    lines = ["# Metamodel stereotypes (from MCP list_stereotypes)", ""]
-    for st in items:
-        slug = str(st.get("slug") or "")
-        if st.get("is_edge"):
-            lines.append(f"- edge `{slug}` — {st.get('name')}")
-        else:
-            element_slugs.add(slug)
-            lines.append(f"- element `{slug}` — {st.get('name')}")
-    # C4 packages are not on list_stereotypes; allow common c4 package slugs.
-    package_slugs |= {"context", "technology", "application", "code"}
-    lines.append("")
-    lines.append(
-        "Package slug must be one of: context, technology, application, code. "
-        "Containers → technology. Domain/components → application."
-    )
-    lines.append("Use only element stereotype slugs from the list. Do not invent types.")
-    lines.append(
-        "Use human-readable element names from docs (e.g. 'Billing Worker' not 'BillingWorker')."
-    )
-    return "\n".join(lines), element_slugs, package_slugs
+    element_slugs = {
+        str(st.get("slug") or "") for st in items if not st.get("is_edge") and st.get("slug")
+    }
+    package_slugs = {"context", "technology", "application", "code"}
+    ontology = build_metamodel_guidance_from_stereotypes(items, metamodel_slug="c4")
+    return ontology, element_slugs, package_slugs
 
 
-def _llm_project_map(llm: Any, tree: list[str], ontology: str) -> dict[str, Any]:
+def _llm_project_map(
+    llm: Any,
+    tree: list[str],
+    ontology: str,
+    limits: DiscoveryLimits,
+    instructions: str = "",
+) -> dict[str, Any]:
     from ratatosk.discovery.scripted_llm import LLMMessage
 
+    max_targets = limits.max_extract_targets
     logger.info(
-        "_llm_project_map | entry tree_paths=%s ontology_chars=%s llm=%s",
+        "_llm_project_map | entry tree_paths=%s ontology_chars=%s llm=%s max_targets=%s",
         len(tree),
         len(ontology),
         getattr(llm, "model_id", type(llm).__name__),
+        max_targets,
     )
     tree_preview = "\n".join(tree[:200])
-    system = "You are Ratatosk mapping a repository. Return JSON only."
+    system = (
+        "You are Ratatosk planning bootstrap discovery. Return JSON only. "
+        "Pick architecture-relevant paths diligently through the full tree — "
+        "not alphabetical head, not only top-level files."
+    )
+    instructions_block = instructions[:500] or "(none)"
     user_content = (
         "Given this repository file tree (paths only), return ONLY JSON:\n"
         '{"project_kind": "...", "targets": ["path", ...]}\n'
-        "Always include README.md when present. Prefer manifest/source paths over __init__.py.\n"
-        f"File tree:\n{tree_preview}\n\n{ontology}\n"
+        f"Select up to {max_targets} paths worth reading for C4 architecture extraction.\n"
+        f"Always include {README_SOURCE} and {SAO_ARCHITECTURE_SOURCE} when present.\n"
+        "Prefer: architecture docs, README, docker-compose, package manifests, "
+        "service entrypoints, Django apps, MCP/server modules — over __init__.py noise.\n"
+        f"Instructions: {instructions_block}\n\n"
+        f"File tree ({len(tree)} paths):\n{tree_preview}\n\n{ontology}\n"
     )
     logger.info(
         "_llm_project_map | request system_chars=%s user_chars=%s preview=%s",
@@ -449,11 +572,21 @@ def _llm_project_map(llm: Any, tree: list[str], ontology: str) -> dict[str, Any]
         _preview(response),
     )
     parsed = _parse_json_object(response) or {}
-    targets = [str(t) for t in (parsed.get("targets") or []) if str(t) in tree]
-    if _README_SOURCE in tree and _README_SOURCE not in targets:
-        targets.insert(0, _README_SOURCE)
+    tree_set = set(tree)
+    targets = [str(t) for t in (parsed.get("targets") or []) if str(t) in tree_set]
+    dropped_unknown = len(parsed.get("targets") or []) - len(targets)
+    if dropped_unknown:
+        logger.info(
+            "_llm_project_map | dropped_unknown_paths=%s reason=not_in_tree",
+            dropped_unknown,
+        )
+    if README_SOURCE in tree and README_SOURCE not in targets:
+        targets.insert(0, README_SOURCE)
+    if SAO_ARCHITECTURE_SOURCE in tree and SAO_ARCHITECTURE_SOURCE not in targets:
+        insert_at = 1 if targets and targets[0] == README_SOURCE else 0
+        targets.insert(insert_at, SAO_ARCHITECTURE_SOURCE)
     if not targets:
-        targets = tree[:_MAX_EXTRACT_TARGETS]
+        targets = tree[: limits.effective_cap]
         logger.info(
             "_llm_project_map | branch=fallback_tree_head targets=%s reason=empty_or_invalid_json",
             len(targets),
@@ -466,7 +599,7 @@ def _llm_project_map(llm: Any, tree: list[str], ontology: str) -> dict[str, Any]
         )
     return {
         "project_kind": str(parsed.get("project_kind") or "unknown"),
-        "targets": targets[:_MAX_EXTRACT_TARGETS],
+        "targets": cap_extract_targets(targets, limits),
     }
 
 
@@ -519,21 +652,25 @@ def _llm_extract_files(
     targets: list[str],
     ontology: str,
     instructions: str,
+    limits: DiscoveryLimits | None = None,
 ) -> list[dict]:
     """Read each target file from disk and run LLM extract (paths-only map precedes this)."""
-    bounded = targets[:_MAX_EXTRACT_TARGETS]
+    effective = limits or DiscoveryLimits()
+    bounded = targets[: effective.max_file_reads_per_run]
     logger.info(
-        "_llm_extract_files | entry repo_path=%s target_count=%s max_targets=%s targets=%s",
+        "_llm_extract_files | entry repo_path=%s target_count=%s max_file_reads=%s "
+        "extract_llm=%s targets=%s",
         repo_path,
         len(bounded),
-        _MAX_EXTRACT_TARGETS,
+        effective.max_file_reads_per_run,
+        getattr(llm, "model_id", type(llm).__name__),
         bounded,
     )
     root = Path(repo_path)
     all_c: list[dict] = []
     read_count = 0
     skipped_missing = 0
-    for rel in bounded:
+    for index, rel in enumerate(bounded, start=1):
         path = root / rel
         if not path.is_file():
             skipped_missing += 1
@@ -546,7 +683,8 @@ def _llm_extract_files(
         text = path.read_text(encoding="utf-8", errors="replace")[:_MAX_FILE_CHARS]
         read_count += 1
         logger.info(
-            "_llm_extract_files | read path=%s bytes=%s extracted_chars=%s capped=%s",
+            "_llm_extract_files | read index=%s path=%s bytes=%s extracted_chars=%s capped=%s",
+            index,
             rel,
             raw_bytes,
             len(text),
@@ -569,7 +707,7 @@ def _llm_extract_files(
         len(all_c),
         _summarize_candidates(all_c),
     )
-    return all_c
+    return merge_candidates_by_slug(all_c)
 
 
 def _llm_extract_text(
@@ -644,7 +782,7 @@ def _llm_extract_text(
         len(candidates),
         candidates != [] or response.strip() in {"[]", ""},
     )
-    return candidates
+    return attach_source_paths(candidates, source_label)
 
 
 def _cleanup(
@@ -718,38 +856,151 @@ def _cleanup(
     return accepted
 
 
-def _reconcile(candidates: list[dict], by_slug: dict[str, dict]) -> DeltaBuckets:
+def _reconcile(
+    candidates: list[dict],
+    by_slug: dict[str, dict],
+    *,
+    bootstrap_rescan: bool = False,
+) -> DeltaBuckets:
+    """Diff candidates against existing model elements.
+
+    Bootstrap rescans bulk-delete all existing elements then re-add candidates.
+    Update mode incrementally merges candidates without wiping matched slugs.
+    """
     logger.info(
-        "_reconcile | entry candidate_count=%s existing_slugs=%s",
+        "_reconcile | entry candidate_count=%s existing_slugs=%s bootstrap_rescan=%s",
         len(candidates),
         len(by_slug),
+        bootstrap_rescan,
     )
+    if bootstrap_rescan:
+        buckets = _reconcile_bootstrap_rescan(candidates, by_slug)
+    else:
+        buckets = _reconcile_incremental(candidates, by_slug)
+    logger.info(
+        "_reconcile | result to_add=%s to_update=%s to_delete=%s unchanged=%s branch=%s",
+        len(buckets.to_add),
+        len(buckets.to_update),
+        len(buckets.to_delete),
+        len(buckets.unchanged),
+        "bootstrap_rescan" if bootstrap_rescan else "incremental",
+    )
+    return buckets
+
+
+_BOOTSTRAP_DELETE_CONFIDENCE = 1.0
+
+
+def _reconcile_bootstrap_rescan(
+    candidates: list[dict],
+    by_slug: dict[str, dict],
+) -> DeltaBuckets:
+    """Bootstrap: delete every existing element, add all fresh candidates."""
+    to_add: list[dict] = []
+    for candidate in candidates:
+        slug = _slugify(candidate["name"])
+        to_add.append({**candidate, "slug": slug, "op": "add"})
+    to_delete: list[dict] = []
+    for slug, element in by_slug.items():
+        to_delete.append(
+            {
+                "name": element.get("name"),
+                "slug": slug,
+                "element_id": element.get("id"),
+                "confidence": _BOOTSTRAP_DELETE_CONFIDENCE,
+                "op": "delete",
+            }
+        )
+    return DeltaBuckets(to_add=to_add, to_delete=to_delete)
+
+
+def _reconcile_incremental(
+    candidates: list[dict],
+    by_slug: dict[str, dict],
+) -> DeltaBuckets:
+    """Update/scout: merge candidates; delete slugs absent from the scan."""
     to_add: list[dict] = []
     to_update: list[dict] = []
     unchanged: list[dict] = []
+    seen_slugs: set[str] = set()
     for candidate in candidates:
         slug = _slugify(candidate["name"])
+        seen_slugs.add(slug)
         current = by_slug.get(slug)
         if current is None:
             to_add.append({**candidate, "slug": slug, "op": "add"})
         else:
             unchanged.append({**candidate, "slug": slug, "op": "unchanged"})
-    buckets = DeltaBuckets(to_add=to_add, to_update=to_update, unchanged=unchanged)
-    logger.info(
-        "_reconcile | result to_add=%s to_update=%s to_delete=%s unchanged=%s " "branch=%s",
-        len(buckets.to_add),
-        len(buckets.to_update),
-        len(buckets.to_delete),
-        len(buckets.unchanged),
-        "empty_model_add_heavy" if not by_slug else "delta_reconcile",
+    to_delete: list[dict] = []
+    for slug, element in by_slug.items():
+        if slug in seen_slugs:
+            continue
+        to_delete.append(
+            {
+                "name": element.get("name"),
+                "slug": slug,
+                "element_id": element.get("id"),
+                "confidence": 0.5,
+                "op": "delete",
+            }
+        )
+    return DeltaBuckets(
+        to_add=to_add,
+        to_update=to_update,
+        to_delete=to_delete,
+        unchanged=unchanged,
     )
-    return buckets
 
 
-def _all_bucket_operations(buckets: DeltaBuckets) -> list[dict]:
-    ops: list[dict] = []
+def _format_discovery_output_lines(
+    *,
+    element_count: int,
+    relationship_count: int,
+    buckets: DeltaBuckets,
+    trigger: str,
+    bootstrap_rescan: bool,
+) -> list[str]:
+    """Format stable CLI log lines for bootstrap vs update runs."""
+    lines = [
+        "building ModelSummary",
+        f"found {element_count} existing elements",
+        f"found {relationship_count} relationships",
+        f"to_add: {len(buckets.to_add)}",
+    ]
+    if not bootstrap_rescan:
+        lines.extend(
+            [
+                f"to_update: {len(buckets.to_update)}",
+                f"to_delete: {len(buckets.to_delete)}",
+                f"unchanged: {len(buckets.unchanged)}",
+            ]
+        )
+    elif buckets.to_delete:
+        lines.append(f"to_delete: {len(buckets.to_delete)}")
+    lines.append(f"trigger: ratatosk {trigger}")
+    return lines
+
+
+def _all_bucket_operations(buckets: DeltaBuckets, *, bootstrap_rescan: bool = False) -> list[dict]:
+    delete_ops: list[dict] = []
+    for item in buckets.to_delete:
+        delete_ops.append(
+            {
+                "op_type": "delete_element",
+                "detail": {
+                    "element_id": item.get("element_id"),
+                    "name": item.get("name"),
+                },
+                "confidence": float(
+                    item.get(
+                        "confidence", _BOOTSTRAP_DELETE_CONFIDENCE if bootstrap_rescan else 0.5
+                    )
+                ),
+            }
+        )
+    add_ops: list[dict] = []
     for item in buckets.to_add:
-        ops.append(
+        add_ops.append(
             {
                 "op_type": "add_element",
                 "detail": {
@@ -760,8 +1011,9 @@ def _all_bucket_operations(buckets: DeltaBuckets) -> list[dict]:
                 "confidence": float(item.get("confidence", 0.9)),
             }
         )
+    update_ops: list[dict] = []
     for item in buckets.to_update:
-        ops.append(
+        update_ops.append(
             {
                 "op_type": "update_element",
                 "detail": {
@@ -771,18 +1023,9 @@ def _all_bucket_operations(buckets: DeltaBuckets) -> list[dict]:
                 "confidence": float(item.get("confidence", 0.85)),
             }
         )
-    for item in buckets.to_delete:
-        ops.append(
-            {
-                "op_type": "delete_element",
-                "detail": {
-                    "element_id": item.get("element_id"),
-                    "name": item.get("name"),
-                },
-                "confidence": float(item.get("confidence", 0.5)),
-            }
-        )
-    return ops
+    if bootstrap_rescan:
+        return delete_ops + add_ops + update_ops
+    return add_ops + update_ops + delete_ops
 
 
 def _buckets_to_operations(buckets: DeltaBuckets, threshold: float) -> list[dict]:
@@ -792,14 +1035,8 @@ def _buckets_to_operations(buckets: DeltaBuckets, threshold: float) -> list[dict
 
 
 def _prioritize_targets(tree: list[str], targets: list[str]) -> list[str]:
-    """Put README.md first so architecture overview is extracted before source files."""
-    ordered: list[str] = []
-    if _README_SOURCE in tree:
-        ordered.append(_README_SOURCE)
-    for rel in targets:
-        if rel not in ordered:
-            ordered.append(rel)
-    return ordered[:_MAX_EXTRACT_TARGETS]
+    """Backward-compatible wrapper; prefer ``ratatosk.discovery.limits.prioritize_targets``."""
+    return prioritize_targets(tree, targets, DiscoveryLimits())
 
 
 def _normalize_package_slug(pkg: str, stereotype: str, package_slugs: set[str]) -> str:

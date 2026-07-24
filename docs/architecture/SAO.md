@@ -875,7 +875,7 @@ Trigger (CLI `ratatosk bootstrap` | `ratatosk update` | CI pipeline)
   → [bootstrap only] bulk wipe Elements + Relationships on Model (single ChangeSet op; revertible)
   → ModelSummary (token-budget depth expansion) + MCP snapshot for reconcile
   → Metamodel guidance text (_metamodel_guidance)
-  → [bootstrap] filesystem tree scan → map paths → read files → extract
+  → [bootstrap] filesystem tree scan → Sonnet/planning map (up to `max_extract_targets`, default 50) → Haiku/field read + extract (hard stop `max_file_reads_per_run`=1000)
   → [update] stdin trigger → scout plan → local tools + Yggdrasil/connector MCP gather → extract
   → Extract element candidates only (Ratatosk NER — no relationship invention)
   → [update only] delta reconcile (to_add / to_update / to_delete / unchanged)
@@ -936,6 +936,7 @@ Trigger (CLI `ratatosk bootstrap` | `ratatosk update` | CI pipeline)
 | Data step (no LLM, tool-only) | **Yes** | Graph reads, element lookups, relationship scans — Ratatosk's majority steps |
 
 - **Step synthesis chain:** Yes — each LLM step stores `llm_synthesis`; subsequent steps receive prior synthesis chain as context
+- **Ratatosk Phase D synthesize:** After extract merge, deterministic pre-filter (D0) then one planning-tier Sonnet batch (D1) canonicalizes candidates; merge map flows to Munin via `handoff_context` on `propose_changeset`
 - **Per-step model tier routing:** Yes — planning/narrative steps → large model; assessment steps → medium; data steps → no LLM
 
 ---

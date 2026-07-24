@@ -212,8 +212,8 @@ def ask_munin(question: str, model: str | None = None) -> dict:
     from django.db.models import Q
 
     from yggdrasil.graph.models import YggdrasilModel
-    from yggdrasil.llm.base import ScriptedLLM
     from yggdrasil.munin.agent import MuninAgent
+    from yggdrasil.munin.llm_factory import build_munin_planning_llm
 
     user = _resolve_current_user()
     logger.info(
@@ -233,7 +233,7 @@ def ask_munin(question: str, model: str | None = None) -> dict:
         msg = "No Yggdrasil model available for ask_munin"
         raise ValueError(msg)
     agent = MuninAgent(
-        llm=ScriptedLLM(responses=["Munin MCP answer"]),
+        llm=build_munin_planning_llm(),
         model_id=ymodel.pk,
         user_id=getattr(user, "pk", None),
     )

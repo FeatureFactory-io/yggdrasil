@@ -82,7 +82,7 @@ Indexed in [09-error-hygiene/README.md](09-error-hygiene/README.md).
 
 | Package | Scenarios |
 |---------|-----------|
-| [10-rebootstrap](10-rebootstrap/) | CLI-02, CLI-03, DISC-03 |
+| [10-rebootstrap](10-rebootstrap/) | CLI-02, CLI-03 (DISC-03, DISC-17, DISC-18 green) |
 | [03-cli-bootstrap](03-cli-bootstrap/) | CLI-05, CLI-07 |
 | [01-config](01-config/) | CFG-02 (also W1 optional) |
 | [11-scout-update](11-scout-update/) | SCOUT-01..05, CICD-01..19, CFG-01,03,04,05 |

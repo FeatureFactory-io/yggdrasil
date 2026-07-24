@@ -12,7 +12,6 @@ Elements are never written outside a ChangeSet (``source=ratatosk``).
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
 from dataclasses import dataclass, field
@@ -21,9 +20,21 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from django.utils import timezone
 from django.utils.text import slugify
+from ratatosk.discovery.candidates import attach_source_paths, merge_candidates_by_slug
+from ratatosk.discovery.exclude import path_is_excluded
+from ratatosk.discovery.limits import (
+    README_SOURCE,
+    SAO_ARCHITECTURE_SOURCE,
+    DiscoveryLimits,
+    cap_extract_targets,
+    prioritize_targets,
+)
+from ratatosk.discovery.prefilter import prefilter_candidates
+from ratatosk.discovery.synthesize import run_synthesis_phase
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
 from yggdrasil.changeset.services import ChangeSetService
+from yggdrasil.graph.metamodel_guidance import build_metamodel_guidance
 from yggdrasil.graph.models import Metamodel, YggdrasilModel, ensure_c4_metamodel
 from yggdrasil.llm.base import BaseLLM, LLMMessage
 from yggdrasil.llm.structured import extract_json_array as _parse_candidate_json
@@ -60,8 +71,8 @@ _IGNORE_DIR_NAMES = {
     ".ruff_cache",
 }
 _IGNORE_FILE_NAMES = {".gitkeep", ".DS_Store", "thumbs.db"}
-_MAX_EXTRACT_TARGETS = 12
 _MAX_FILE_CHARS = 8_000
+_BOOTSTRAP_DELETE_CONFIDENCE = 1.0
 
 
 @dataclass
@@ -73,6 +84,7 @@ class DiscoveryInput:
     stdin_text: str = ""
     source_label: str = ""
     stdin_kind: str = ""  # diff | prose | unknown
+    exclude_patterns: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -111,19 +123,29 @@ class RataskAgent:
         llm: BaseLLM,
         run: RataskRun,
         snapshot: SnapshotPort | None = None,
+        *,
+        planning_llm: BaseLLM | None = None,
+        discovery_limits: DiscoveryLimits | None = None,
     ) -> None:
         """
-        :param llm: LLM client for map/extract turns.
+        :param llm: Field-tier LLM for extract turns.
         :param run: RataskRun record that tracks this execution.
         :param snapshot: Model snapshot port (defaults to local ORM for ATs).
+        :param planning_llm: Planning-tier LLM for project map (defaults to ``llm``).
+        :param discovery_limits: Scout bounds for bootstrap extract.
         """
         self._llm = llm
+        self._planning_llm = planning_llm or llm
+        self._limits = discovery_limits or DiscoveryLimits()
         self._run = run
         self._snapshot = snapshot or LocalOrmSnapshotPort()
         logger.info(
-            "RataskAgent: initialised | run_id=%s repo=%s",
+            "RataskAgent: initialised | run_id=%s repo=%s max_extract=%s planning_llm=%s extract_llm=%s",
             run.run_id,
             run.repo_path,
+            self._limits.max_extract_targets,
+            getattr(self._planning_llm, "model_id", type(self._planning_llm).__name__),
+            getattr(self._llm, "model_id", type(self._llm).__name__),
         )
 
     def execute(self, discovery_input: DiscoveryInput | None = None) -> DeltaBuckets:
@@ -173,11 +195,19 @@ class RataskAgent:
 
         # 2 — Metamodel guidance
         metamodel = self._run.model.metamodel
-        ontology = _metamodel_guidance(metamodel)
+        ontology = build_metamodel_guidance(metamodel)
         self._update_blackboard(
             "metamodel",
             {"slug": metamodel.slug, "guidance_chars": len(ontology)},
         )
+        if self._run.instructions:
+            self._update_blackboard(
+                "instructions",
+                {
+                    "chars": len(self._run.instructions),
+                    "preview": self._run.instructions[:80],
+                },
+            )
 
         # 3-5 — Materialize, map, extract (mode-specific)
         snapshot_ctx = f"ModelSummary:\n{summary_text}\n\n{snapshot_context_line(existing)}"
@@ -185,14 +215,37 @@ class RataskAgent:
         if raw_candidates is None:
             return DeltaBuckets()
 
+        merged = merge_candidates_by_slug(raw_candidates)
+        pf = prefilter_candidates(merged)
+        self._update_blackboard(
+            "prefilter",
+            {
+                "input": len(merged),
+                "kept": len(pf.kept),
+                "rejected": len(pf.rejected),
+            },
+        )
+        synthesized, synth_meta = run_synthesis_phase(
+            self._planning_llm,
+            pf.kept,
+            ontology,
+            pf.cluster_hints,
+            self._run.instructions or "",
+        )
+        self._update_blackboard("synthesize", synth_meta)
+
         # 6 — Cleanup + reconcile vs snapshot (prep for 7 Munin)
-        cleaned = self._cleanup_candidates(raw_candidates, metamodel)
+        cleaned = self._cleanup_candidates(synthesized, metamodel)
         self._update_blackboard(
             "cleanup",
-            {"raw": len(raw_candidates), "accepted": len(cleaned)},
+            {"raw": len(synthesized), "accepted": len(cleaned)},
         )
         self._update_blackboard("extract", {"candidates": len(cleaned)})
-        buckets = self._reconcile(cleaned, existing)
+        buckets = self._reconcile(
+            cleaned,
+            existing,
+            bootstrap_rescan=(d_input.mode == "filesystem"),
+        )
         self._update_blackboard(
             "reconcile",
             {
@@ -220,7 +273,12 @@ class RataskAgent:
     ) -> list[dict] | None:
         """Steps 3-5: build tree/stdin, LLM map, LLM extract. None = empty input."""
         if d_input.mode == "filesystem":
-            return self._extract_from_filesystem(d_input.repo_path, ontology, snapshot_ctx)
+            return self._extract_from_filesystem(
+                d_input.repo_path,
+                ontology,
+                snapshot_ctx,
+                d_input.exclude_patterns,
+            )
         return self._extract_from_stdin(d_input, ontology, snapshot_ctx)
 
     def _extract_from_filesystem(
@@ -228,19 +286,45 @@ class RataskAgent:
         repo_path: str,
         ontology: str,
         snapshot_ctx: str,
+        exclude_patterns: list[str] | None = None,
     ) -> list[dict] | None:
         """Filesystem mode: tree → project map → file extracts."""
-        tree = self._build_file_tree(repo_path)
+        tree, skipped_exclude = self._build_file_tree(repo_path, exclude_patterns)
         self._update_blackboard(
             "tree",
-            {"paths": tree, "count": len(tree), "input_mode": "filesystem"},
+            {
+                "paths": tree,
+                "count": len(tree),
+                "input_mode": "filesystem",
+                "skipped_by_exclude_count": skipped_exclude,
+            },
         )
+        if exclude_patterns:
+            self._update_blackboard("exclude_patterns", {"patterns": exclude_patterns})
         if not tree:
             self._update_blackboard("extract", {"candidates": 0, "reason": "nothing to scan"})
             return None
+        self._update_blackboard(
+            "discovery_limits",
+            {
+                "max_extract_targets": self._limits.max_extract_targets,
+                "max_file_reads_per_run": self._limits.max_file_reads_per_run,
+                "effective_cap": self._limits.effective_cap,
+            },
+        )
+        self._update_blackboard(
+            "llm_tiers",
+            {
+                "planning_model": getattr(
+                    self._planning_llm, "model_id", type(self._planning_llm).__name__
+                ),
+                "extract_model": getattr(self._llm, "model_id", type(self._llm).__name__),
+            },
+        )
         project_map = self._llm_project_map(tree, ontology, snapshot_ctx)
         self._update_blackboard("project_map", project_map)
-        targets = project_map.get("targets") or tree[:_MAX_EXTRACT_TARGETS]
+        raw_targets = project_map.get("targets") or tree[: self._limits.effective_cap]
+        targets = prioritize_targets(tree, raw_targets, self._limits)
         return self._llm_extract_from_files(repo_path, targets, ontology, snapshot_ctx)
 
     def _extract_from_stdin(
@@ -274,8 +358,13 @@ class RataskAgent:
         logger.info("_fetch_snapshot | model=%s", slug)
         return self._snapshot.fetch_model(slug)
 
-    def _build_file_tree(self, repo_path: str) -> list[str]:
+    def _build_file_tree(
+        self,
+        repo_path: str,
+        exclude_patterns: list[str] | None = None,
+    ) -> tuple[list[str], int]:
         """Step 3a: list relative file paths under repo, applying ignore rules."""
+        patterns = exclude_patterns or []
         root = Path(repo_path)
         if not root.exists():
             msg = f"Repository path does not exist: {repo_path}"
@@ -284,19 +373,33 @@ class RataskAgent:
             msg = f"Repository path is not a directory: {repo_path}"
             raise RuntimeError(msg)
         paths: list[str] = []
+        skipped_exclude = 0
         for path in sorted(root.rglob("*")):
             if not path.is_file():
                 continue
             rel = path.relative_to(root)
+            rel_posix = rel.as_posix()
             if any(part in _IGNORE_DIR_NAMES for part in rel.parts[:-1]):
                 continue
             if rel.name.lower() in _IGNORE_FILE_NAMES:
                 continue
             if rel.name.startswith(".") and rel.name not in {".gitignore"}:
                 continue
-            paths.append(rel.as_posix())
-        logger.info("_build_file_tree | root=%s files=%s", repo_path, len(paths))
-        return paths
+            if path_is_excluded(rel_posix, patterns):
+                skipped_exclude += 1
+                logger.info(
+                    "_build_file_tree | excluded path=%s reason=exclude_pattern",
+                    rel_posix,
+                )
+                continue
+            paths.append(rel_posix)
+        logger.info(
+            "_build_file_tree | root=%s files=%s skipped_exclude=%s",
+            repo_path,
+            len(paths),
+            skipped_exclude,
+        )
+        return paths, skipped_exclude
 
     def _llm_project_map(
         self,
@@ -304,18 +407,24 @@ class RataskAgent:
         ontology: str,
         snapshot_ctx: str,
     ) -> dict[str, Any]:
-        """Step 4 (filesystem): ask LLM for project kind + target paths."""
+        """Step 4 (filesystem): ask planning LLM for project kind + target paths."""
+        max_targets = self._limits.max_extract_targets
         tree_preview = "\n".join(tree[:200])
-        response = self._llm.complete(
+        instructions = self._run.instructions[:500] or "(none)"
+        response = self._planning_llm.complete(
             messages=[
                 LLMMessage(
                     role="user",
                     content=(
                         "Given this repository file tree (paths only), return ONLY JSON:\n"
                         '{"project_kind": "...", "targets": ["path", ...]}\n'
-                        "Pick up to 12 architecture-relevant target paths to read.\n\n"
+                        f"Select up to {max_targets} paths worth reading for C4 architecture extraction.\n"
+                        f"Always include {README_SOURCE} and {SAO_ARCHITECTURE_SOURCE} when present.\n"
+                        "Pick architecture-relevant paths diligently through the full tree — "
+                        "not alphabetical head.\n\n"
                         f"{snapshot_ctx}\n\n"
-                        f"File tree:\n{tree_preview}\n\n"
+                        f"Instructions: {instructions}\n\n"
+                        f"File tree ({len(tree)} paths):\n{tree_preview}\n\n"
                         f"{ontology}\n"
                     ),
                 )
@@ -327,15 +436,21 @@ class RataskAgent:
             logger.info("_llm_project_map | empty or non-JSON plan; using tree head as targets")
             return {
                 "project_kind": "unknown",
-                "targets": tree[:_MAX_EXTRACT_TARGETS],
+                "targets": tree[: self._limits.effective_cap],
                 "empty_plan": response.strip() != "" and _parse_candidate_json(response) is None,
             }
-        targets = [str(t) for t in (parsed.get("targets") or []) if str(t) in tree]
+        tree_set = set(tree)
+        targets = [str(t) for t in (parsed.get("targets") or []) if str(t) in tree_set]
+        if README_SOURCE in tree and README_SOURCE not in targets:
+            targets.insert(0, README_SOURCE)
+        if SAO_ARCHITECTURE_SOURCE in tree and SAO_ARCHITECTURE_SOURCE not in targets:
+            insert_at = 1 if targets and targets[0] == README_SOURCE else 0
+            targets.insert(insert_at, SAO_ARCHITECTURE_SOURCE)
         if not targets:
-            targets = tree[:_MAX_EXTRACT_TARGETS]
+            targets = tree[: self._limits.effective_cap]
         return {
             "project_kind": str(parsed.get("project_kind") or "unknown"),
-            "targets": targets[:_MAX_EXTRACT_TARGETS],
+            "targets": cap_extract_targets(targets, self._limits),
         }
 
     def _llm_map_stdin(
@@ -380,7 +495,8 @@ class RataskAgent:
         """Step 5 (filesystem): read targets and extract candidates via LLM."""
         root = Path(repo_path)
         all_candidates: list[dict] = []
-        for rel in targets[:_MAX_EXTRACT_TARGETS]:
+        bounded = targets[: self._limits.max_file_reads_per_run]
+        for index, rel in enumerate(bounded, start=1):
             path = root / rel
             if not path.is_file():
                 continue
@@ -389,6 +505,12 @@ class RataskAgent:
             except OSError as exc:
                 logger.warning("_llm_extract_from_files | skip %s: %s", rel, exc)
                 continue
+            logger.info(
+                "_llm_extract_from_files | read index=%s path=%s chars=%s",
+                index,
+                rel,
+                len(text),
+            )
             batch = self._llm_extract_from_text(
                 text,
                 kind="file",
@@ -397,7 +519,7 @@ class RataskAgent:
                 snapshot_ctx=snapshot_ctx,
             )
             all_candidates.extend(batch)
-        return all_candidates
+        return merge_candidates_by_slug(all_candidates)
 
     def _llm_extract_from_text(
         self,
@@ -446,7 +568,7 @@ class RataskAgent:
                 {"source": label, "status": "empty plan", "raw_preview": response[:120]},
             )
             return []
-        return candidates
+        return attach_source_paths(candidates, label)
 
     def _cleanup_candidates(self, candidates: list[dict], metamodel: Metamodel) -> list[dict]:
         """Step 6: dedupe by slug, confidence floor, constrain to metamodel."""
@@ -463,9 +585,53 @@ class RataskAgent:
                 by_slug[slug] = item
         return list(by_slug.values())
 
-    def _reconcile(self, candidates: list[dict], existing: dict) -> DeltaBuckets:
+    def _reconcile(
+        self,
+        candidates: list[dict],
+        existing: dict,
+        *,
+        bootstrap_rescan: bool = False,
+    ) -> DeltaBuckets:
         """Diff candidates against existing model to produce delta buckets."""
         by_slug = existing.get("by_slug") or {}
+        if bootstrap_rescan:
+            return self._reconcile_bootstrap_rescan(candidates, by_slug)
+        return self._reconcile_incremental(candidates, by_slug)
+
+    def _reconcile_bootstrap_rescan(
+        self,
+        candidates: list[dict],
+        by_slug: dict[str, dict],
+    ) -> DeltaBuckets:
+        """Bootstrap: delete every existing element, add all fresh candidates."""
+        to_add: list[dict] = []
+        for candidate in candidates:
+            slug = slugify(candidate["name"])
+            to_add.append({**candidate, "slug": slug, "op": "add"})
+        to_delete: list[dict] = []
+        for slug, element in by_slug.items():
+            to_delete.append(
+                {
+                    "name": element["name"],
+                    "slug": slug,
+                    "element_id": element["id"],
+                    "confidence": _BOOTSTRAP_DELETE_CONFIDENCE,
+                    "op": "delete",
+                }
+            )
+        return DeltaBuckets(
+            to_add=to_add,
+            to_update=[],
+            to_delete=to_delete,
+            unchanged=[],
+        )
+
+    def _reconcile_incremental(
+        self,
+        candidates: list[dict],
+        by_slug: dict[str, dict],
+    ) -> DeltaBuckets:
+        """Update/scout: merge candidates; delete slugs absent from the scan."""
         to_add: list[dict] = []
         to_update: list[dict] = []
         unchanged: list[dict] = []
@@ -547,6 +713,7 @@ def bootstrap_repository(
     model_name: str,
     metamodel: str = "c4",
     instructions: str = "",
+    exclude_patterns: list[str] | None = None,
     user: User | None = None,
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
     llm: BaseLLM | None = None,
@@ -564,7 +731,12 @@ def bootstrap_repository(
     """
     _assert_write_permission(require_write_token, token_scope)
     model = _ensure_model(model_name, metamodel)
-    d_input = DiscoveryInput(mode="filesystem", repo_path=repo_path, source_label=repo_path)
+    d_input = DiscoveryInput(
+        mode="filesystem",
+        repo_path=repo_path,
+        source_label=repo_path,
+        exclude_patterns=list(exclude_patterns or []),
+    )
     return _run_discovery(
         d_input=d_input,
         model=model,
@@ -662,23 +834,36 @@ def _run_discovery(
     element_count = int(fetched.get("elements") or 0)
     relationship_count = int(fetched.get("relationships") or 0)
     output_lines: list[str] = []
-    if trigger == "bootstrap":
-        if element_count == 0:
+    bootstrap_rescan = trigger == "bootstrap"
+    if bootstrap_rescan:
+        if buckets.to_delete:
+            output_lines.append(
+                f"wiping {len(buckets.to_delete)} elements and "
+                f"{relationship_count} relationships before bootstrap rescan"
+            )
+        elif element_count == 0:
             output_lines.append("wipe no-op for empty graph")
-        else:
-            output_lines.append(f"wiping {element_count} elements before bootstrap rescan")
+        if instructions.strip() and d_input.mode == "filesystem":
+            output_lines.append(f"scanning {d_input.repo_path} with instructions")
     output_lines.extend(
         [
             "building ModelSummary",
             f"found {element_count} existing elements",
             f"found {relationship_count} relationships",
             f"to_add: {len(buckets.to_add)}",
-            f"to_update: {len(buckets.to_update)}",
-            f"to_delete: {len(buckets.to_delete)}",
-            f"unchanged: {len(buckets.unchanged)}",
-            f"trigger: ratatosk {trigger}",
         ]
     )
+    if not bootstrap_rescan:
+        output_lines.extend(
+            [
+                f"to_update: {len(buckets.to_update)}",
+                f"to_delete: {len(buckets.to_delete)}",
+                f"unchanged: {len(buckets.unchanged)}",
+            ]
+        )
+    elif buckets.to_delete:
+        output_lines.append(f"to_delete: {len(buckets.to_delete)}")
+    output_lines.append(f"trigger: ratatosk {trigger}")
 
     tree = (run.blackboard or {}).get("tree") or {}
     if d_input.mode == "filesystem" and tree.get("count") == 0:
@@ -689,7 +874,9 @@ def _run_discovery(
             output_lines.append("empty plan")
 
     above, below = agent._apply_confidence_threshold(buckets, confidence_threshold)
-    operations = _buckets_to_operations(above) + _buckets_to_operations(below)
+    operations = _buckets_to_operations(
+        above, bootstrap_rescan=bootstrap_rescan
+    ) + _buckets_to_operations(below, bootstrap_rescan=bootstrap_rescan)
     if below.to_add or below.to_update or below.to_delete:
         output_lines.append(
             f"below threshold: {len(below.to_add) + len(below.to_update) + len(below.to_delete)} "
@@ -702,6 +889,18 @@ def _run_discovery(
         "to_delete": len(buckets.to_delete),
         "unchanged": len(buckets.unchanged),
     }
+    board = dict(run.blackboard or {})
+    synth = board.get("synthesize") or {}
+    handoff_context = {
+        "synthesize": {
+            "merges": synth.get("merges") or [],
+            "rejects": synth.get("rejects") or [],
+            "do_not_reference": synth.get("do_not_reference") or [],
+            "canonical_count": synth.get("canonical_count", 0),
+        },
+        "instructions": instructions,
+        "metamodel_slug": model.metamodel.slug,
+    }
     propose_result = handoff_port.propose(
         model_slug=model.slug,
         operations=operations,
@@ -710,6 +909,7 @@ def _run_discovery(
         allow_empty=not operations,
         confidence_threshold=confidence_threshold,
         user=user,
+        handoff_context=handoff_context,
     )
     changeset_id = int(propose_result["changeset_id"])
     agent._update_blackboard(
@@ -799,11 +999,27 @@ def _munin_summary(buckets: DeltaBuckets) -> str:
     )
 
 
-def _buckets_to_operations(buckets: DeltaBuckets) -> list[dict]:
+def _buckets_to_operations(buckets: DeltaBuckets, *, bootstrap_rescan: bool = False) -> list[dict]:
     """Convert delta buckets into ChangeSetService.propose operation dicts."""
-    ops: list[dict] = []
+    delete_ops: list[dict] = []
+    for item in buckets.to_delete:
+        delete_ops.append(
+            {
+                "op_type": ChangeSetItem.OP_DELETE_ELEMENT,
+                "detail": {
+                    "element_id": item.get("element_id"),
+                    "name": item.get("name"),
+                },
+                "confidence": float(
+                    item.get(
+                        "confidence", _BOOTSTRAP_DELETE_CONFIDENCE if bootstrap_rescan else 0.5
+                    )
+                ),
+            }
+        )
+    add_ops: list[dict] = []
     for item in buckets.to_add:
-        ops.append(
+        add_ops.append(
             {
                 "op_type": ChangeSetItem.OP_ADD_ELEMENT,
                 "detail": {
@@ -814,8 +1030,9 @@ def _buckets_to_operations(buckets: DeltaBuckets) -> list[dict]:
                 "confidence": float(item.get("confidence", 0.9)),
             }
         )
+    update_ops: list[dict] = []
     for item in buckets.to_update:
-        ops.append(
+        update_ops.append(
             {
                 "op_type": ChangeSetItem.OP_UPDATE_ELEMENT,
                 "detail": {
@@ -827,18 +1044,9 @@ def _buckets_to_operations(buckets: DeltaBuckets) -> list[dict]:
                 "confidence": float(item.get("confidence", 0.85)),
             }
         )
-    for item in buckets.to_delete:
-        ops.append(
-            {
-                "op_type": ChangeSetItem.OP_DELETE_ELEMENT,
-                "detail": {
-                    "element_id": item.get("element_id"),
-                    "name": item.get("name"),
-                },
-                "confidence": float(item.get("confidence", 0.5)),
-            }
-        )
-    return ops
+    if bootstrap_rescan:
+        return delete_ops + add_ops + update_ops
+    return add_ops + update_ops + delete_ops
 
 
 def _classify_stdin(text: str) -> str:
@@ -890,45 +1098,8 @@ def _ensure_model(model_name: str, metamodel_slug: str) -> YggdrasilModel:
 
 
 def _metamodel_guidance(metamodel: Metamodel) -> str:
-    """Build detailed Metamodel instruction text for the Ratatosk LLM."""
-    lines: list[str] = [
-        f"# Metamodel: {metamodel.name} (slug={metamodel.slug})",
-        metamodel.description.strip() or "(no metamodel description)",
-        "",
-        "## Element stereotypes (use `stereotype` = slug)",
-    ]
-    for st in metamodel.stereotypes.filter(is_edge=False).order_by("slug"):
-        lines.extend(_stereotype_guidance_block(st))
-    lines.append("")
-    lines.append("## Relationship stereotypes (use for edges only)")
-    for st in metamodel.stereotypes.filter(is_edge=True).order_by("slug"):
-        lines.extend(_stereotype_guidance_block(st))
-    lines.append("")
-    lines.append("## Packages (use `package` = slug)")
-    for pkg in metamodel.packages.order_by("slug"):
-        desc = pkg.description.strip() or "(no description)"
-        lines.append(f"- `{pkg.slug}` — {pkg.name}: {desc}")
-    lines.append("")
-    lines.append(
-        "Rules: every candidate MUST use an element stereotype slug and package "
-        "slug from the lists above. Do not invent slugs."
-    )
-    return "\n".join(lines)
-
-
-def _stereotype_guidance_block(st: Any) -> list[str]:
-    """Format one Stereotype as LLM guidance lines."""
-    desc = getattr(st, "description", "") or ""
-    desc = desc.strip() or "(no description)"
-    schema = json.dumps(st.property_schema or {}, sort_keys=True)
-    rules = st.allowed_edge_rules or []
-    rules_txt = ", ".join(rules) if rules else "(none)"
-    return [
-        f"### `{st.slug}` — {st.name}",
-        f"- When to use: {desc}",
-        f"- property_schema: {schema}",
-        f"- allowed_edge_rules (outbound): [{rules_txt}]",
-    ]
+    """Build detailed Metamodel instruction text for the Ratatosk LLM (compat alias)."""
+    return build_metamodel_guidance(metamodel)
 
 
 def _constrain_candidates_to_metamodel(

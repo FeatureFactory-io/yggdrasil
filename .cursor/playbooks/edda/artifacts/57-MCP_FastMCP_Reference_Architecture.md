@@ -12,8 +12,6 @@ Portable blueprint for adding MCP to a Django application with FastMCP. Use duri
 
 **Out of scope:** in-app agent loops (artifact 56); project-specific package maps and domain write pipelines.
 
-**Evidence base (appendix only):** Taciturn2 (Case A), Mimir (Case A + Case B facade), FastMCP HTTP deployment docs.
-
 ---
 
 # 0. Purpose & How to Use
@@ -79,7 +77,7 @@ flowchart LR
   subgraph caseB [CaseB_APIFacade]
     CB[AI_Client] --> FB[FastMCP]
     FB --> HX[httpx]
-    HX --> API[DRF_/api]
+    HX --> API[DRF_API_endpoints]
     API --> SVB[services.py]
   end
 ```
@@ -332,7 +330,7 @@ async def list_log_entries(*, user_id: str) -> dict:
     ...
 ```
 
-**Good** (Taciturn2-shaped: filters first, `limit` default, `total_count` back):
+**Good** (filters first, `limit` default, `total_count` back):
 
 ```python
 @mcp.tool()
@@ -363,7 +361,7 @@ async def list_log_entries(
     ...
 ```
 
-**Common-case filter patterns** (from Taciturn2 — teach these in descriptors):
+**Common-case filter patterns** (teach these in descriptors):
 
 | Pattern | Example tool shape | User phrase it serves |
 |---------|-------------------|------------------------|
@@ -395,12 +393,7 @@ async def list_log_entries(
 1. Optional confirm: `list_objectives(due_date=today)` with a small `limit` / count.
 2. One batch tool scoped by the **same common-case filter** (or by ids from that list).
 
-```mermaid
-flowchart LR
-  Intent[User_reschedule_today] --> List[list_objectives_due_date]
-  List --> Batch[reschedule_objectives_filter_or_ids]
-  Batch --> Result[updated_count_summary]
-```
+**Flow:** user intent → filtered list → one batch mutation → summary (`updated_count`).
 
 ### Two batch styles
 
@@ -409,7 +402,7 @@ flowchart LR
 | **Filter-scoped** (preferred for NL) | `reschedule_objectives(from_due_date=…, to_due_date=…)` | User named a set (“all today”) |
 | **Id-list** | `update_objectives(ids=[…], due_date=…)` | Model already listed and selected ids |
 
-Taciturn2 already shows the **filter half** (`list_objectives(due_date=…)`) and **batch create** (`create_log_entries(entries=[…])`). Ship the **mutation twin** when journeys say “all matching X”.
+Ship list tools with common-case filters (`list_objectives(due_date=…)`) and batch create (`create_log_entries(entries=[…])`) first; add the **mutation twin** when journeys say “all matching X”.
 
 ### Good batch descriptor (illustrative)
 
@@ -457,16 +450,7 @@ async def reschedule_objectives(
 
 MCP is **not** mounted through Django’s URL router. Reference implementations run FastMCP as a **separate process**. A public path like `/mcp` is a **reverse-proxy** concern, not a `path("mcp/", …)` view.
 
-```mermaid
-flowchart TB
-  IDE[IDE] -->|stdio| ProcStdio[MCP_process]
-  Remote[Remote_client] --> Proxy["Reverse_proxy_path_/mcp"]
-  Proxy -->|HTTP_or_SSE| ProcHttp[MCP_process]
-  Django[Django_web] --> API["/api/..."]
-  ProcStdio -->|Case_A| Django
-  ProcHttp -->|Case_A_ORM| Django
-  ProcHttp -->|Case_B| API
-```
+**Topology (summary):** local IDE → stdio → MCP process → services (Case A) or API (Case B); remote clients → reverse proxy → MCP process over HTTP/SSE.
 
 ## 5.1 Recommended patterns
 
@@ -490,7 +474,7 @@ urlpatterns = [
 ]
 ```
 
-Reasons: FastMCP’s HTTP stack is ASGI (Starlette), needs its own lifespan/session manager, conflicts with WSGI, and fights Django middleware/auth assumptions. Neither Taciturn2 nor Mimir put MCP on `urls.py`.
+Reasons: FastMCP’s HTTP stack is ASGI (Starlette), needs its own lifespan/session manager, conflicts with WSGI, and fights Django middleware/auth assumptions. Production deployments use a sidecar process, not Django URL routing.
 
 ## 5.3 Proxy sketch (public `/mcp`)
 
@@ -747,28 +731,6 @@ Key assertion: if any `print()` or Django startup message reached stdout, `json.
 | S5 | Batch mutate when journey says “all matching X” (filter→batch) |
 | S6 | (Hybrid/B) facade + Docker + proxy `/mcp` + T3 |
 | S7 | Parity table (Case B); IDE smoke on descriptors + payload gate |
-
----
-
-# Appendix — Source Anchors
-
-| Topic | Where |
-|-------|-------|
-| Case A server + `register_tools` | Taciturn2 `mcp_server/server.py`, `mcp_server/tools/*.py` |
-| Case A `sync_to_async(..., thread_sensitive=True)` | Taciturn2 tool modules |
-| Case A FastMCP Client tests | Taciturn2 `tests/integration/mcp/conftest.py` |
-| Filters + `limit` + `total_count` | Taciturn2 `list_log_entries` in `mcp_server/tools/day_tools.py` |
-| Common-case `due_date` filter | Taciturn2 `list_objectives` in `mcp_server/tools/week_tools.py` |
-| Default `active_only` filter | Taciturn2 `list_intents` in `mcp_server/tools/intent_tools.py` |
-| Batch create | Taciturn2 `create_log_entries` in `mcp_server/tools/day_tools.py` |
-| Small default backlog limit | Taciturn2 `get_backlog_objectives` in `mcp_server/tools/objective_tools.py` |
-| Case A in-process tools + contextvars | Mimir `mcp_integration/tools.py`, `context.py` |
-| Case A stdio manage command | Mimir `mcp_integration/management/commands/mcp_server.py` |
-| Case B facade | Mimir `mcp_integration/facade/{server,client,tools_http}.py`, `Dockerfile.mcp` |
-| Case B process/facade tests | Mimir `tests/integration/test_mcp_facade.py`, `test_mcp_server_acceptance.py` |
-| API↔tool parity | Mimir `docs/architecture/API_MCP_RECONCILIATION.md` |
-| Async ORM lessons | Mimir SAO “Django ORM in Async MCP Tools” |
-| HTTP app / Starlette mount / proxy buffering | FastMCP docs: HTTP deployment (`http_app`, lifespan, nginx) |
 
 ---
 

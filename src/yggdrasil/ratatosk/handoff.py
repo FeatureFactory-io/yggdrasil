@@ -35,6 +35,7 @@ class HandoffPort(Protocol):
         allow_empty: bool,
         confidence_threshold: float,
         user: Any = None,
+        handoff_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Propose a ChangeSet; return dict with changeset_id, status, counts."""
         ...
@@ -70,6 +71,7 @@ class LocalOrmHandoffPort:
         allow_empty: bool,
         confidence_threshold: float,
         user: Any = None,
+        handoff_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create ChangeSet via ChangeSetService and auto-apply above threshold."""
         model = YggdrasilModel.objects.get(slug__iexact=model_slug)
@@ -162,25 +164,30 @@ class McpHandoffPort:
         allow_empty: bool,
         confidence_threshold: float,
         user: Any = None,
+        handoff_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Call MCP propose_changeset (server enforces token scope)."""
         logger.info(
-            "McpHandoffPort.propose | model=%s ops=%s run_id=%s",
+            "McpHandoffPort.propose | model=%s ops=%s run_id=%s handoff_keys=%s",
             model_slug,
             len(operations),
             run_id,
+            sorted((handoff_context or {}).keys()),
         )
+        payload: dict[str, Any] = {
+            "model": model_slug,
+            "operations": operations,
+            "source": ChangeSet.SOURCE_RATATOSK,
+            "munin_reasoning": munin_reasoning,
+            "run_id": run_id,
+            "allow_empty": allow_empty,
+            "confidence_threshold": confidence_threshold,
+        }
+        if handoff_context:
+            payload["handoff_context"] = handoff_context
         return self._client.call_tool(
             "propose_changeset",
-            {
-                "model": model_slug,
-                "operations": operations,
-                "source": ChangeSet.SOURCE_RATATOSK,
-                "munin_reasoning": munin_reasoning,
-                "run_id": run_id,
-                "allow_empty": allow_empty,
-                "confidence_threshold": confidence_threshold,
-            },
+            payload,
         )
 
     def record_run(

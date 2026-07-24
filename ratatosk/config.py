@@ -10,6 +10,16 @@ from typing import Any, Mapping
 
 import yaml
 
+from ratatosk.discovery.exclude import normalize_exclude_patterns
+from ratatosk.discovery.limits import (
+    DEFAULT_MAX_EXTRACT_TARGETS,
+    DEFAULT_MAX_FILE_READS_PER_RUN,
+    MAX_EXTRACT_TARGETS_CEILING,
+    MAX_FILE_READS_PER_RUN_CEILING,
+    DiscoveryLimits,
+    clamp_int_limit,
+)
+
 logger = logging.getLogger("ratatosk.config")
 
 _DEFAULT_SERVER = "https://yggdrasil.featurefactory.io"
@@ -20,14 +30,26 @@ _DEFAULT_METAMODEL = "c4"
 _DEFAULT_BUDGET = 8000
 _DEFAULT_PROVIDER = "ollama"
 
+_DEFAULT_PLANNING_ALIAS = "sonnet5"
+
 _YAML_ALLOWLIST = frozenset(
-    {"llm_provider", "base_model", "ollama_base_url", "model_summary_token_budget"}
+    {
+        "llm_provider",
+        "base_model",
+        "planning_model",
+        "ollama_base_url",
+        "model_summary_token_budget",
+        "max_extract_targets",
+        "max_file_reads_per_run",
+        "exclude",
+        "instructions",
+    }
 )
 
 _MODEL_ALIASES: dict[str, dict[str, str]] = {
     "anthropic": {
         "haiku": _DEFAULT_ANTHROPIC_MODEL,
-        "sonnet5": "claude-sonnet-4-20250514",
+        "sonnet5": "claude-sonnet-4-5-20250929",
     },
     "ollama": {},
 }
@@ -46,7 +68,21 @@ class BootstrapConfig:
     ollama_base_url: str = _DEFAULT_OLLAMA_URL
     metamodel: str = _DEFAULT_METAMODEL
     model_summary_token_budget: int = _DEFAULT_BUDGET
+    exclude_patterns: list[str] = field(default_factory=list)
+    instructions: str = ""
+    planning_model: str = ""
+    resolved_planning_model: str = ""
+    max_extract_targets: int = DEFAULT_MAX_EXTRACT_TARGETS
+    max_file_reads_per_run: int = DEFAULT_MAX_FILE_READS_PER_RUN
     extra_env: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def discovery_limits(self) -> DiscoveryLimits:
+        """Scout bounds for bootstrap extract loop."""
+        return DiscoveryLimits(
+            max_extract_targets=self.max_extract_targets,
+            max_file_reads_per_run=self.max_file_reads_per_run,
+        )
 
 
 def _resolve_base_model(provider: str, raw: str, env: Mapping[str, str]) -> str:
@@ -200,6 +236,44 @@ def load_bootstrap_config(
     except (TypeError, ValueError):
         budget = _DEFAULT_BUDGET
 
+    exclude_raw = flags.get("exclude") or raw.get("RATATOSK_EXCLUDE") or yaml_layer.get("exclude")
+    exclude_patterns = normalize_exclude_patterns(
+        exclude_raw if isinstance(exclude_raw, list) else str(exclude_raw or "")
+    )
+
+    instructions_flag = str(flags.get("instructions") or "").strip()
+    instructions_yaml = str(yaml_layer.get("instructions") or "").strip()
+    instructions = instructions_flag or instructions_yaml
+
+    planning_raw = str(
+        raw.get("RATATOSK_PLANNING_MODEL") or yaml_layer.get("planning_model") or ""
+    ).strip()
+    if provider == "scripted":
+        resolved_planning = resolved
+    elif provider == "ollama":
+        resolved_planning = (
+            _resolve_base_model(provider, planning_raw, raw) if planning_raw else resolved
+        )
+    else:
+        resolved_planning = _resolve_base_model(
+            provider,
+            planning_raw or _DEFAULT_PLANNING_ALIAS,
+            raw,
+        )
+
+    max_extract = clamp_int_limit(
+        raw.get("RATATOSK_MAX_EXTRACT_TARGETS") or yaml_layer.get("max_extract_targets"),
+        default=DEFAULT_MAX_EXTRACT_TARGETS,
+        ceiling=MAX_EXTRACT_TARGETS_CEILING,
+        name="max_extract_targets",
+    )
+    max_file_reads = clamp_int_limit(
+        raw.get("RATATOSK_MAX_FILE_READS_PER_RUN") or yaml_layer.get("max_file_reads_per_run"),
+        default=DEFAULT_MAX_FILE_READS_PER_RUN,
+        ceiling=MAX_FILE_READS_PER_RUN_CEILING,
+        name="max_file_reads_per_run",
+    )
+
     config = BootstrapConfig(
         llm_provider=provider,
         yggdrasil_server_url=server,
@@ -210,60 +284,98 @@ def load_bootstrap_config(
         ollama_base_url=ollama_url,
         metamodel=metamodel.strip().lower(),
         model_summary_token_budget=budget,
+        exclude_patterns=exclude_patterns,
+        instructions=instructions,
+        planning_model=planning_raw,
+        resolved_planning_model=resolved_planning,
+        max_extract_targets=max_extract,
+        max_file_reads_per_run=max_file_reads,
     )
     logger.info(
-        "load_bootstrap_config | llm_provider=%s base_model=%r resolved_model=%s ollama_base_url=%s",
+        "load_bootstrap_config | llm_provider=%s base_model=%r resolved_model=%s "
+        "planning_model=%r resolved_planning_model=%s max_extract_targets=%s "
+        "max_file_reads_per_run=%s ollama_base_url=%s",
         config.llm_provider,
         config.base_model,
         config.resolved_model,
+        config.planning_model,
+        config.resolved_planning_model,
+        config.max_extract_targets,
+        config.max_file_reads_per_run,
         config.ollama_base_url,
     )
     return config
 
 
-def build_llm_from_config(config: BootstrapConfig):
+def build_llm_from_config(config: BootstrapConfig, *, model: str | None = None):
     """
-    Instantiate discovery LLM from config.
+    Instantiate field-tier (extract) discovery LLM from config.
 
     :param config: Loaded bootstrap config.
+    :param model: Optional override model id (planning tier passes its resolved id).
     :return: LLM client with ``complete`` method.
     :raises RuntimeError: When provider cannot be constructed.
     :raises LLMError: When anthropic provider lacks API key.
     """
+    return _build_llm_client(config, model or config.resolved_model, tier="extract")
+
+
+def build_extract_llm_from_config(config: BootstrapConfig):
+    """
+    Alias for field-tier extract LLM (Haiku / fast model).
+
+    :param config: Loaded bootstrap config.
+    :return: LLM client with ``complete`` method.
+    """
+    return build_llm_from_config(config)
+
+
+def build_planning_llm_from_config(config: BootstrapConfig):
+    """
+    Instantiate planning-tier LLM for ``_llm_project_map``.
+
+    :param config: Loaded bootstrap config.
+    :return: LLM client with ``complete`` method.
+    """
+    return _build_llm_client(config, config.resolved_planning_model, tier="planning")
+
+
+def _build_llm_client(config: BootstrapConfig, model_id: str, *, tier: str):
     from ratatosk.discovery.scripted_llm import ScriptedDiscoveryLLM
     from yggdrasil.llm.base import LLMError
 
     provider = config.llm_provider
     logger.info(
-        "build_llm_from_config | provider=%s resolved_model=%s",
+        "_build_llm_client | tier=%s provider=%s model_id=%s",
+        tier,
         provider,
-        config.resolved_model,
+        model_id,
     )
     if provider == "scripted":
         client = ScriptedDiscoveryLLM()
-        logger.info("build_llm_from_config | client=%s", type(client).__name__)
+        logger.info("_build_llm_client | tier=%s client=%s", tier, type(client).__name__)
         return client
     if provider == "ollama":
         try:
             from yggdrasil.llm.adapters.ollama import OllamaClient
 
-            client = OllamaClient(model=config.resolved_model, base_url=config.ollama_base_url)
-            logger.info("build_llm_from_config | client=%s", type(client).__name__)
+            client = OllamaClient(model=model_id, base_url=config.ollama_base_url)
+            logger.info("_build_llm_client | tier=%s client=%s", tier, type(client).__name__)
             return client
         except Exception as exc:
             msg = f"LLM_PROVIDER=ollama but Ollama client failed: {exc}"
-            logger.error("build_llm_from_config | %s", msg)
+            logger.error("_build_llm_client | tier=%s %s", tier, msg)
             raise RuntimeError(msg) from exc
     if provider == "anthropic":
         api_key = str(os.environ.get("ANTHROPIC_API_KEY") or "").strip()
         if not api_key:
             msg = "LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set"
-            logger.error("build_llm_from_config | reason=missing_api_key")
+            logger.error("_build_llm_client | tier=%s reason=missing_api_key", tier)
             raise LLMError(msg)
         from yggdrasil.llm.adapters.anthropic import AnthropicClient
 
-        client = AnthropicClient(model=config.resolved_model, api_key=api_key)
-        logger.info("build_llm_from_config | client=%s", type(client).__name__)
+        client = AnthropicClient(model=model_id, api_key=api_key)
+        logger.info("_build_llm_client | tier=%s client=%s", tier, type(client).__name__)
         return client
     msg = f"Unknown LLM_PROVIDER={provider!r}; use scripted, ollama, or anthropic"
     raise RuntimeError(msg)

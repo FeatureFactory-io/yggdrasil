@@ -11,7 +11,6 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
-from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.utils.decorators import method_decorator
@@ -19,8 +18,8 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from yggdrasil.graph.models import YggdrasilModel, ensure_c4_metamodel
-from yggdrasil.llm.base import ScriptedLLM
 from yggdrasil.munin.agent import MuninAgent
+from yggdrasil.munin.llm_factory import build_munin_planning_llm
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -77,12 +76,8 @@ class MuninChatView(LoginRequiredMixin, View):
         return http
 
     def _get_llm_client(self):
-        """Instantiate the LLM client based on LLM_PROVIDER setting."""
-        provider = getattr(settings, "LLM_PROVIDER", "scripted")
-        if provider == "scripted" or settings.DEBUG:
-            return ScriptedLLM(responses=["Munin grounded response"])
-        # Production adapters land with LLM wiring; AT always uses ScriptedLLM.
-        return ScriptedLLM(responses=["Munin grounded response"])
+        """Instantiate the Munin planning-tier LLM client from settings."""
+        return build_munin_planning_llm()
 
     def _get_model_id(self, request: HttpRequest) -> int:
         """Extract model_id from session or query param."""

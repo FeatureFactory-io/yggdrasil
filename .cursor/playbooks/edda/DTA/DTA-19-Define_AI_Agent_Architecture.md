@@ -1,207 +1,91 @@
-# Activity: Define AI Agent Architecture
-
-**Activity ID**: 60
-**Order**: 19
-**Phase**: Inception
-**Dependencies**: Predecessor: Activity 44 (Define Integration & API Design)
-**Condition**: Run only if the system has in-app LLM agents (agentic loops, plan/worker execution, or any LLM calls inside the application). Skip if the system is purely a data API or static site with no in-app agent.
-
-## Description
-
-Define AI Agent Architecture
-
-## Guidance
-
 # Define AI Agent Architecture
 
-## Objective
-
-Assess the AI agent mission, select modules from the AI Agent Reference Architecture, choose an assembly profile, and document all decisions in SAO §17 — so that implementation follows a coherent, testable agent stack.
+**Condition:** Run only if the system has in-app LLM agents (agentic loops, plan/worker execution, or LLM calls inside the application). Skip and write "Not applicable" in SAO §17 if none of: in-app agentic loop, LLM calls initiated by the app, plan/worker execution.
 
 **Reference:** Playbook artifact **AI Agent Reference Architecture** (latest released Edda version).
 
----
+## Objective
 
-## When to Skip
+Pick scenario(s), select capabilities (`CAP-xxx`), choose an assembly template, and record decisions in SAO §17.
 
-Skip this activity (write "Not applicable" in SAO §17) if all of the following are true:
-- No in-app agentic loop (no ReAct/tool-calling loop inside the application)
-- No LLM calls initiated by the application itself (only user-facing passthrough is fine)
-- No plan/worker execution pattern
+## Process
 
-If MCP tools exist but the agent loop lives elsewhere (e.g. in the AI client), run DTA-20 for MCP and skip this activity.
-
----
-
-## Internal Process
-
-1. **Fetch the latest AI Agent Reference Architecture** from the playbook and read §0–§1 before answering any question below.
-2. **Answer mission questions** — determine which modules are required.
-3. **Select modules** — use the §1.3 selection matrix.
-4. **Pick assembly profile** — §6, or compose a custom set and verify §2.2 dependency rules.
-5. **Design module-specific details** — blackboard schema, step types, model tiers, etc.
-6. **Name proof scenarios** — required for DoD gate.
-7. **Record decisions** for SAO §17.
-
----
+1. **Fetch** the latest AI Agent Reference Architecture from the playbook.
+2. Read **How to use** and **Scenario index** sections.
+3. Pick primary **SC-xx** scenario(s); use the decision tree for secondary CAP additions.
+4. Copy required + chosen optional **CAP-IDs** into SAO §17.
+5. Confirm dependencies in the **Capability table** and **Module wiring** sections.
+6. Note starting assembly template (T-01, T-02, T-03, or T-00 custom).
+7. Name integration proof test IDs (`PRF-SCxx-xx`) as DoD gate.
+8. Record decisions for SAO §17 via Write SAO.md (Activity 59).
 
 ## Decisions to Make
 
-### 1. Mission Assessment (answer all 10 questions)
+### 1. Scenario selection
 
-Answer each question Yes / No / Partial and note the impact:
+Read the **Scenario cards** in the reference artifact before ticking. Record primary scenario(s) and rationale.
 
-| # | Question | Answer | Impact |
-|---|----------|--------|--------|
-| Q1 | Is the agent conversational, batch/pipeline, or both? | | Selects Agent Loop vs. compiled Plan |
-| Q2 | Must work survive process crash / 429 mid-flight? | | Requires Plan & Steps + Worker + durable Blackboard |
-| Q3 | Does the agent need tools against domain services? | | Requires Tool Surface |
-| Q4 | Multi-turn reasoning with evolving intent inside one task? | | Requires Agent Blackboard |
-| Q5 | Should the agent improve from user feedback / outcomes? | | Requires Learning |
-| Q6 | Is there a large body of knowledge only partly relevant per task? | | Optional Knowledge Index |
-| Q7 | Do users need live tokens / plan progress? | | Chat Streaming (SSE) and/or polling fallback |
-| Q8 | Should domain events proactively message the user? | | Event Ingress |
-| Q9 | Multiple personas or model tiers (planner vs. field)? | | Agent Factory / Identities |
-| Q10 | Destructive actions need human approval? | | HITL on Tool Surface |
-| Q11 | Does the agent parse structured JSON from LLM output? | | Requires thinking-aware normalization + Structured Output Extraction (artifact §4.1) |
+| SC-ID | Name | When (summary) | Selected? | Rationale |
+|-------|------|----------------|-----------|-----------|
+| SC-01 | Conversational planner | User chat → tools → optional background plan/worker | | |
+| SC-02 | Field extractor / bootstrap | Batch input → LLM JSON → domain writes; no chat loop | | |
+| SC-03 | Compiled pipeline | Trigger → known step graph; selective LLM steps | | |
+| SC-04 | Event-driven nudge | Domain event → proactive message/plan without user opening chat | | |
+| SC-05 | Governed mutations | Mutations/deletes need human approval before execute | | |
 
-### 2. Module Selection
+### 2. Capability checklist
 
-Using artifact 56 §1.3, mark each module:
+From the reference artifact capability table — tick every CAP your project implements:
 
-| Module | Required / Optional / Skip | Rationale |
-|--------|---------------------------|-----------|
-| LLM Port | | |
-| Prompt Stack | | |
-| Tool Surface | | |
-| Agent Loop | | |
-| Plan & Steps | | |
-| Worker | | |
-| Agent Blackboard | | |
-| Learning | | |
-| Knowledge Index | | |
-| Chat Streaming | | |
-| Event Ingress | | |
-| Agent Factory / Identities | | |
+| CAP-ID | Name | Required for SC? | Implement? | Module path in project |
+|--------|------|------------------|------------|------------------------|
+| CAP-001 | LLM Port protocol | | | |
+| … | (copy rows for each selected CAP) | | | |
 
-### 3. Assembly Profile
+Minimum: all **required** CAP-IDs from your selected SC-xx row.
 
-Choose one (or document a custom set with dependency check per artifact 56 §2.2):
+### 3. Assembly template
 
-- [ ] **Conversational planner** — chat → tools → optional plan → worker → notify
-- [ ] **Compiled pipeline** — trigger → plan template → worker → domain artifact
-- [ ] **Field / batch specialist** — batch input → tool/extract → optional blackboard → result
-- [ ] **Custom** — document chosen subset + dependency validation
+- [ ] **T-01 Planner** (SC-01)
+- [ ] **T-02 Field** (SC-02)
+- [ ] **T-03 Pipeline** (SC-03)
+- [ ] **T-00 Custom** — list CAP-IDs: _______________
 
-### 4. Agent Blackboard (if selected)
-
-- Schema keys (max 5–7 keys, mission-tuned):
-
-| Key | Role |
-|-----|------|
-| `phase` | |
-| `hypothesis` | |
-| `current_plan` | |
-| `last_actions` | |
-| `next_intent` | |
-
-- Durability tier: `[ ] A — in-process` / `[ ] B — run-persistent (JSON column on plan/conversation)`
-- Max board size (chars): ______
-- Rationale: _____
-
-### 5. Plan & Steps (if selected)
-
-- State machine: `pending → running → completed | failed | waiting_retry` (standard) / custom:
-- Hybrid step types in use:
-
-| Flag | Used? | Rationale |
-|------|-------|-----------|
-| `is_critical` (abort on failure) | | |
-| `is_planning` (LLM narrative step) | | |
-| `is_variable_assessment` (LLM JSON metric) | | |
-| Data step only (no LLM) | | |
-
-- Step synthesis chain (prior LLM synthesis passed to subsequent steps): `[ ] Yes` / `[ ] No`
-- Per-step model tier routing: `[ ] Yes` / `[ ] No`
-
-### 6. Model Tiers & Identities
-
-| Tier | Model | Used for |
-|------|-------|---------|
-| Planning (large) | | Narrative, planning steps, extended reasoning |
-| Execution (medium) | | Assessment, tool-calling loops |
-| Batch / field (small) | | Fast/cheap batch steps |
-
-Agent identities (name + role + allowed tools):
+### 4. Agent identities (CAP-121, CAP-122)
 
 | Identity | Role | Model tier | Allowed tools |
 |----------|------|------------|---------------|
-| | | | |
+| | | planning / execution / field | |
 
-### 6.5 Thinking Models (if Q11 is yes, or field/batch profile)
+### 5. Agent Blackboard (if CAP-070 selected)
 
-Document how the project handles reasoning models that emit thinking separately from answers:
+- Durability tier: A — in-process / B — run-persistent
+- Schema keys: phase, hypothesis, current_plan, last_actions, next_intent
+- Max board size (chars): ______
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Response contract | `content` = machine answer; `thinking` = optional trace | Downstream parsers never see mixed prose + JSON |
-| Normalization location | LLM adapter `_parse_response` | One fix protects all callers |
-| Structured extract utility | Module name / path | Single shared strip + JSON parse — no duplicate agent/runner parsers |
-| Field-tier `max_tokens` | e.g. 8000 | Thinking headroom before JSON arrays; truncation → silent empty ops |
-| Thinking log level | DEBUG for traces; INFO for content_chars/thinking_chars | Observability without log noise |
-| Disable thinking when possible? | e.g. Ollama `think=false` | Reduces cost; still parse defensively |
+### 6. Integration proof (DoD gate)
 
-### 7. Agent Integration Proof (DoD Gate)
+Map reference artifact integration proof tests to project test files:
 
-Name the integration test files/scenarios required by artifact 56 §7. These are blocking DoD gates — a slice is not done until these pass.
+| PRF ID | Scenario | Test file | Selected? |
+|--------|----------|-----------|-----------|
+| PRF-SC02-01 | SC-02 thinking JSON | | |
+| PRF-SC02-02 | SC-02 parse fail loud | | |
+| PRF-SC01-01 | SC-01 plan handoff | | |
+| PRF-SC01-02 | SC-01 429 retry | | |
+| PRF-SC01-03 | SC-01 blackboard retain | | |
+| PRF-SC05-01 | SC-05 HITL | | |
 
-| Profile | Test file | Scenario |
-|---------|-----------|---------|
-| Happy path | | Message → tool → plan → worker → complete |
-| Failed step | | Step marked failed; policy honored |
-| 429 / rate limit | | Retry; completed steps not re-run |
-| Bad LLM output | | Blackboard retained; no crash |
-| Thinking-wrapped JSON | | Structured extract succeeds; parse fail ≠ silent zero-op success |
-| Crash / resume | | Mid-plan restart; completed steps skipped |
-| Destructive HITL | | Mutation not executed until approval (if HITL selected) |
+### 7. Scan Skills
 
-### 8. Scan Skills
-
-Query Playbook Skills where `capability_domain` in:
-- `AI_AGENT`
-- `LLM_INTEGRATION`
-- `ASYNC_TASK`
-
-Report coverage and gaps.
-
----
+Query Skills where `capability_domain` in: AI_AGENT, LLM_INTEGRATION, ASYNC_TASK. Report gaps.
 
 ## Deliverables
 
-- ✅ **Mission questions answered** (Q1–Q10 with rationale)
-- ✅ **Module set defined** (Required / Optional / Skip for each)
-- ✅ **Assembly profile chosen** with dependency check
-- ✅ **Agent Blackboard schema** documented (if selected)
-- ✅ **Plan & Steps state machine + step types** documented (if selected)
-- ✅ **Model tiers + agent identities** defined
-- ✅ **Agent Integration Proof scenarios** named as DoD gate test files
-- ✅ **Skill coverage** assessed for this domain
-- ✅ **Thinking model handling documented** (if Q11 yes — content/thinking contract, extract utility, token headroom)
-- ✅ **Decision recorded** for inclusion in SAO §17 (DTA-18)
-
-## Agent
-
-**Name**: Dr. Dobbs v2
-**Description**: Cautious developer. Read the full AI Agent Reference Architecture before answering mission questions. Do not invent modules — select from the catalog. Do not skip the proof scenarios — they are the DoD gate.
-
-## Skill
-
-None
-
-## Rules
-
-See `../rules/` for full rule content.
-
-## Notes
-
-Exported via Mimir MCP tools.
+- Primary SC-xx scenario(s) chosen with rationale
+- CAP-ID checklist complete for selected scenarios
+- Assembly template (T-01 / T-02 / T-03 / T-00) named
+- Agent identities + model tiers documented
+- PRF test IDs mapped to project test files
+- Skill coverage assessed
+- Decision recorded for SAO §17 via Write SAO.md (Activity 59)

@@ -11,7 +11,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+  <!-- Font Awesome Pro (same kit as mimir) -->
+  <script src="https://kit.fontawesome.com/600fa45ed9.js" crossorigin="anonymous"></script>
 
   <style>
     /* ── Design tokens (Huginn-compatible) ──────────────────────────────── */
@@ -57,6 +58,40 @@
       min-height: 100vh;
     }
 
+    /* ── Landing navbar (Huginn pattern — transparent over hero) ─────────── */
+    body.yrg-landing .yrg-landing-nav {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: transparent;
+      border-bottom: none;
+    }
+
+    body.yrg-landing .yrg-landing-nav .navbar-brand,
+    body.yrg-landing .yrg-landing-nav .nav-link {
+      color: #ffffff;
+    }
+
+    body.yrg-landing .yrg-landing-nav .navbar-brand .accent {
+      color: var(--hg-accent);
+    }
+
+    body.yrg-landing .yrg-landing-nav .navbar-toggler {
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+
+    .yrg-navbar .navbar-brand {
+      color: #fff;
+      font-weight: var(--hg-fw-bold);
+      font-size: 1rem;
+    }
+
+    .yrg-navbar .navbar-brand .accent {
+      color: var(--hg-accent);
+    }
+
     /* ── Bootstrap btn-primary wired to hg-primary ────────────────────── */
     .btn-primary {
       --bs-btn-bg:                var(--hg-primary);
@@ -95,7 +130,9 @@
     .yrg-landing-hero-inner {
       position: relative;
       z-index: 10;
-      max-width: 1000px;
+      width: 100%;
+      max-width: 52rem;
+      margin-inline: auto;
       padding: 0 1.25rem;
       color: #ffffff;
     }
@@ -114,21 +151,33 @@
     }
 
     .yrg-landing-title {
-      font-size: clamp(1.8rem, 4vw, 4rem);
+      font-size: clamp(1.8rem, 4vw, 3.5rem);
       font-weight: var(--hg-fw-bold);
-      line-height: 1.1;
+      line-height: 1.15;
       color: #ffffff;
       letter-spacing: -0.01em;
-      white-space: nowrap;
+      text-wrap: balance;
+      max-width: 22em;
+      margin-inline: auto;
       margin-bottom: 1rem;
     }
 
     .yrg-landing-tagline {
-      font-size: clamp(1.25rem, 2.5vw, 1.6rem);
+      font-size: clamp(1rem, 2vw, 1.35rem);
       font-weight: var(--hg-fw-medium);
       color: rgba(255, 255, 255, 0.90);
       line-height: 1.55;
-      margin-bottom: 1rem;
+      text-wrap: pretty;
+      max-width: 42rem;
+      margin-inline: auto;
+      margin-bottom: 1.75rem;
+    }
+
+    .yrg-landing-cta {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.85rem;
     }
 
     /* ghost link — same pattern as Huginn */
@@ -231,7 +280,29 @@
     }
   </style>
 </head>
-<body data-testid="landing-loaded">
+<body class="yrg-landing" data-testid="landing-loaded">
+
+  <nav class="navbar navbar-expand-lg yrg-navbar yrg-landing-nav" aria-label="Yggdrasil main navigation"
+       data-testid="main-navbar">
+    <div class="container-fluid px-3">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'web:index' %}" data-testid="nav-brand">
+        <i class="fa-solid fa-tree accent" aria-hidden="true"></i>
+        Yggdrasil
+      </a>
+      <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse"
+              data-bs-target="#yrgLandingNav" aria-controls="yrgLandingNav" aria-expanded="false"
+              aria-label="Toggle navigation">
+        <i class="fa-solid fa-bars text-white" aria-hidden="true"></i>
+      </button>
+      <div class="collapse navbar-collapse" id="yrgLandingNav">
+        <div class="ms-auto">
+          <a href="{% url 'auth:login' %}" class="btn btn-sm btn-outline-light" data-testid="navbar-login">
+            <i class="fa-solid fa-right-to-bracket me-1" aria-hidden="true"></i> Sign In
+          </a>
+        </div>
+      </div>
+    </div>
+  </nav>
 
   <!-- ── Hero ─────────────────────────────────────────────────────────── -->
   <section class="yrg-landing-hero" data-testid="landing-hero">
@@ -245,8 +316,8 @@
         Bootstrapped from your existing repos, CMDBs, and Confluence in&nbsp;48&nbsp;hours.
         Kept current forever by Ratatosk — so people and AI agents can safely understand and change systems.
       </p>
-      <div class="d-flex gap-4 flex-wrap justify-content-center align-items-center">
-        <a href="/admin/" class="btn btn-primary btn-lg px-5" data-testid="landing-cta-signin">
+      <div class="yrg-landing-cta">
+        <a href="{% url 'auth:login' %}" class="btn btn-primary btn-lg px-5" data-testid="landing-cta-signin">
           Get Started
         </a>
         <a href="#features" class="yrg-landing-link" data-testid="landing-cta-learn">Learn more</a>

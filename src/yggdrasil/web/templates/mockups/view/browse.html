@@ -9,7 +9,7 @@
   .hg-filter-row { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; }
   .hg-filter-rule { background:var(--hg-primary-100); border:1px solid #c5d3e8; border-radius:4px; padding:4px 8px; font-size:0.78rem; display:flex; align-items:center; gap:4px; }
   .hg-view-toggle .btn { font-size:0.78rem; padding:4px 10px; }
-  .hg-view-toggle .btn.active { background:var(--hg-primary); border-color:var(--hg-primary); color:#fff; }
+  .hg-view-toggle .btn.active { background:var(--hg-accent); border-color:var(--hg-accent); color:var(--hg-ink); }
   .hg-detail-drawer { background:#fff; border:1px solid var(--hg-border); border-radius:var(--hg-radius); padding:1rem; position:sticky; top:88px; }
   .hg-time-travel-banner {
     background:var(--hg-primary-100); border:1px solid #c5d3e8; border-radius:4px;
@@ -25,19 +25,21 @@
     <p class="text-muted small mb-0">VIEW-BROWSE-1 · synced 4m ago · {{ elements|length }} elements visible</p>
   </div>
   <div class="d-flex gap-2 align-items-center">
-    <button class="btn btn-sm btn-outline-secondary" type="button"
-            data-bs-toggle="offcanvas" data-bs-target="#muninPanel"
-            aria-controls="muninPanel" data-testid="open-munin-btn">
-      <i class="fa-solid fa-brain me-1" aria-hidden="true"></i>Munin
-    </button>
-    <a href="{% url 'mockup_view_export' %}" class="btn btn-sm btn-outline-secondary"
-       data-testid="export-btn">
-      <i class="fa-solid fa-file-export me-1" aria-hidden="true"></i>Export
-    </a>
-    <a href="{% url 'mockup_view_history' %}" class="btn btn-sm btn-outline-secondary"
-       data-testid="history-btn">
-      <i class="fa-solid fa-clock-rotate-left me-1" aria-hidden="true"></i>History
-    </a>
+    <div class="btn-group btn-group-sm" role="group" aria-label="View actions">
+      <a href="{% url 'mockup_view_export' %}" class="btn btn-outline-secondary"
+         data-testid="export-btn">
+        <i class="fa-solid fa-file-export me-1" aria-hidden="true"></i>Export
+      </a>
+      <a href="{% url 'mockup_view_history' %}" class="btn btn-outline-secondary"
+         data-testid="history-btn">
+        <i class="fa-solid fa-clock-rotate-left me-1" aria-hidden="true"></i>History
+      </a>
+      <button class="btn btn-primary" type="button"
+              data-bs-toggle="offcanvas" data-bs-target="#muninPanel"
+              aria-controls="muninPanel" data-testid="open-munin-btn">
+        <i class="fa-solid fa-brain-circuit me-1" aria-hidden="true"></i>Munin
+      </button>
+    </div>
     <div class="dropdown">
       <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
               data-bs-toggle="dropdown" aria-expanded="false" data-testid="saved-views-dropdown">

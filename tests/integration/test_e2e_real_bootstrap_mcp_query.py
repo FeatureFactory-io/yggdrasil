@@ -148,6 +148,30 @@ def test_real_bootstrap_sample_webapp_then_mcp_query(live_server, e2e_token) -> 
     for manifest_name in MANIFEST_NAMES:
         assert manifest_name in names, f"missing {manifest_name!r}; got {names}"
 
+    rel_resp = httpx.post(
+        f"{server}/mcp/tools/list_relationships",
+        json={"arguments": {"model": "yggdrasil", "limit": 50, "offset": 0}},
+        headers={"Authorization": f"Bearer {e2e_token}"},
+        timeout=30.0,
+    )
+    assert rel_resp.status_code == 200, rel_resp.text
+    rel_result = rel_resp.json().get("result") or rel_resp.json()
+    rel_items = rel_result.get("items") or []
+    assert len(rel_items) >= 1, rel_result
+
+    cs_resp = httpx.post(
+        f"{server}/mcp/tools/list_changesets",
+        json={"arguments": {"model": "yggdrasil", "limit": 5}},
+        headers={"Authorization": f"Bearer {e2e_token}"},
+        timeout=30.0,
+    )
+    assert cs_resp.status_code == 200, cs_resp.text
+    cs_items = (cs_resp.json().get("result") or cs_resp.json()).get("items") or []
+    assert cs_items, "expected at least one changeset after bootstrap"
+    latest_reasoning = str(cs_items[0].get("munin_reasoning") or "")
+    if provider != "scripted":
+        assert "source=llm" in latest_reasoning, latest_reasoning
+
     traverse_resp = httpx.post(
         f"{server}/mcp/tools/traverse",
         json={
@@ -163,3 +187,92 @@ def test_real_bootstrap_sample_webapp_then_mcp_query(live_server, e2e_token) -> 
     assert traverse_resp.status_code == 200, traverse_resp.text
     traverse_result = traverse_resp.json().get("result") or traverse_resp.json()
     assert len(traverse_result.get("edges") or []) >= 1
+
+    proc2 = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+    )
+    combined_lines2: list[str] = []
+    assert proc2.stdout is not None
+    for line in proc2.stdout:
+        combined_lines2.append(line)
+    returncode2 = proc2.wait(timeout=600)
+    combined2 = "".join(combined_lines2)
+    assert returncode2 == 0, combined2
+    assert "wiping" in combined2
+    assert "unchanged:" not in combined2
+    assert "to_add:" in combined2
+
+
+@pytest.mark.e2e_self
+@pytest.mark.django_db(transaction=True)
+def test_real_bootstrap_self_repo_then_relationships(live_server, e2e_token) -> None:
+    """Optional: bootstrap yggdrasil repo root and assert Munin LLM relationships."""
+    if not os.getenv("YGGDRASIL_E2E"):
+        pytest.skip("Set YGGDRASIL_E2E=1 to run real bootstrap E2E")
+
+    _load_local_env()
+    provider = os.getenv("LLM_PROVIDER", "scripted")
+    _require_llm_credentials(provider)
+    if provider == "scripted":
+        pytest.skip("e2e_self requires a real LLM provider (anthropic or ollama)")
+
+    ensure_c4_metamodel()
+    server = live_server.url.rstrip("/")
+    env = {
+        **os.environ,
+        "LLM_PROVIDER": provider,
+        "MUNIN_PLANNING_MODEL": os.getenv("MUNIN_PLANNING_MODEL", "sonnet5"),
+        "YGGDRASIL_SERVER_URL": server,
+        "YGGDRASIL_TOKEN": e2e_token,
+        "RATATOSK_LOG_LEVEL": "INFO",
+    }
+    cmd = [
+        sys.executable,
+        "-m",
+        "ratatosk.cli",
+        "bootstrap",
+        str(PROJECT_ROOT),
+        f"--token={e2e_token}",
+        "--model",
+        "Yggdrasil",
+        "--metamodel=c4",
+        f"--server={server}",
+        "--exclude=docs/plans/",
+        "--instructions=README and SAO only; C4 containers and components only",
+    ]
+    proc = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=900,
+        check=False,
+    )
+    combined = proc.stdout + proc.stderr
+    assert proc.returncode == 0, combined
+
+    import httpx
+
+    rel_resp = httpx.post(
+        f"{server}/mcp/tools/list_relationships",
+        json={"arguments": {"model": "yggdrasil", "limit": 50, "offset": 0}},
+        headers={"Authorization": f"Bearer {e2e_token}"},
+        timeout=30.0,
+    )
+    assert rel_resp.status_code == 200, rel_resp.text
+    rel_items = (rel_resp.json().get("result") or rel_resp.json()).get("items") or []
+    assert len(rel_items) >= 1, rel_items
+
+    cs_resp = httpx.post(
+        f"{server}/mcp/tools/list_changesets",
+        json={"arguments": {"model": "yggdrasil", "limit": 1}},
+        headers={"Authorization": f"Bearer {e2e_token}"},
+        timeout=30.0,
+    )
+    cs_items = (cs_resp.json().get("result") or cs_resp.json()).get("items") or []
+    assert cs_items
+    assert "source=llm" in str(cs_items[0].get("munin_reasoning") or "")

@@ -1,5 +1,5 @@
 ---
-alwaysApply: false
+alwaysApply: true
 ---
 
 Every service call or controller action must log to `app.log` at **INFO**. Configure logging if missing; `app.log` is cleared on restart for clean diagnosis.

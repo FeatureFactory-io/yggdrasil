@@ -15,7 +15,7 @@ JSONB columns (SAO.md §4):
 from __future__ import annotations
 
 import logging
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from django.contrib.auth.models import User
 from django.db import models
@@ -118,7 +118,7 @@ class ChangeSetItem(models.Model):
       - ``delete_relationship``: detail = {relationship_id}
       - ``add_to_diagram``: detail = {element_id, diagram_id}
 
-    ``confidence`` is 0.0-1.0, set by Ratatosk or Munin.
+    ``confidence`` is 0.0-1.0, set[Any] by Ratatosk or Munin.
 
     :Example:
 
@@ -160,7 +160,7 @@ class ChangeSetItem(models.Model):
     )
     order = models.PositiveIntegerField(default=0)
     op_type = models.CharField(max_length=30, choices=OP_CHOICES)
-    detail = models.JSONField(default=dict)
+    detail = models.JSONField(default=dict[str, Any])
     status = models.CharField(
         max_length=20, choices=ITEM_STATUS_CHOICES, default=ITEM_STATUS_PENDING
     )

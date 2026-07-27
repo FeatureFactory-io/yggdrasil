@@ -10,6 +10,7 @@ Auth: user_id injected server-side via ContextVar — never from tool args.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from django.contrib.auth.models import User
 from django.db.models import Q
@@ -29,8 +30,8 @@ def create_element(
     model: str,
     package: str | None = None,
     owner: str = "",
-    properties: dict | None = None,
-) -> dict:
+    properties: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Propose adding a new element via the Munin/ChangeSet pipeline.
 
@@ -42,7 +43,7 @@ def create_element(
     :param model: Model slug. Example: "yggdrasil"
     :param package: Package slug. Example: "technology"
     :param owner: Owner team. Example: "payments-team"
-    :param properties: Stereotype-driven attributes dict. Example: {"framework": "FastAPI"}
+    :param properties: Stereotype-driven attributes dict[str, Any]. Example: {"framework": "FastAPI"}
     :return: {"changeset_id": N, "status": "applied"|"pending", "operation": {...}}
     :raises PermissionError: If current user token has read-only scope.
     :raises ValueError: If stereotype or model not found.
@@ -94,8 +95,8 @@ def create_element(
 def update_element(
     id: int,
     model: str | None = None,
-    fields: dict | None = None,
-) -> dict:
+    fields: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Propose updating specific fields of an existing element.
 
@@ -152,7 +153,7 @@ def update_element(
     return result
 
 
-def delete_element(id: int, model: str | None = None) -> dict:
+def delete_element(id: int, model: str | None = None) -> dict[str, Any]:
     """
     Propose deleting an element after Munin checks blast-radius.
 
@@ -196,7 +197,7 @@ def delete_element(id: int, model: str | None = None) -> dict:
         "blast_radius": blast_radius,
         "operation": {
             "op_type": "delete_element",
-            "detail": cs.items.first().detail if cs.items.exists() else {},
+            "detail": (first.detail if (first := cs.items.first()) else {}),
         },
     }
     logger.info(
@@ -213,8 +214,8 @@ def create_relationship(
     to_id: int,
     stereotype: str,
     model: str | None = None,
-    properties: dict | None = None,
-) -> dict:
+    properties: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Propose a new relationship between two elements.
 
@@ -275,9 +276,9 @@ def create_relationship(
 
 
 def update_relationships_batch(
-    operations: list[dict],
+    operations: list[dict[str, Any]],
     model: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """
     Propose a batch of relationship create/update/delete operations.
 
@@ -299,7 +300,7 @@ def update_relationships_batch(
     )
     ymodel = _resolve_model(model) if model else None
     first_from = operations[0].get("from_id") or operations[0].get("source_id")
-    model_id = ymodel.pk if ymodel else _model_id_for_element(int(first_from))
+    model_id = ymodel.pk if ymodel else _model_id_for_element(int(first_from or 0))
     llm = build_munin_planning_llm()
     agent = MuninAgent(llm=llm, model_id=model_id, user_id=getattr(user, "pk", None))
     message = f"TOOL:update_relationships_batch|count={len(operations)}|operations={operations!r}"
@@ -321,7 +322,7 @@ def update_relationships_batch(
     return result
 
 
-def set_model_mode(model_id: str, mode: str) -> dict:
+def set_model_mode(model_id: str, mode: str) -> dict[str, Any]:
     """
     Toggle a model between auto-approval and manual-review mode.
 

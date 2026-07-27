@@ -9,6 +9,7 @@ Auth: user_id injected server-side — never from tool args.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from django.contrib.auth.models import User
 
@@ -24,7 +25,7 @@ _service = ChangeSetService()
 def approve_changeset(
     id: int,
     item_ids: list[int] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """
     Apply all (or specified) pending operations in a ChangeSet.
 
@@ -90,7 +91,7 @@ def reject_changeset(
     id: int,
     item_ids: list[int] | None = None,
     reason: str = "",
-) -> dict:
+) -> dict[str, Any]:
     """
     Reject all (or specified) pending operations; optionally learn from reason.
 
@@ -147,7 +148,7 @@ def do_other_changeset(
     id: int,
     item_ids: list[int],
     instructions: str,
-) -> dict:
+) -> dict[str, Any]:
     """
     Reject specified items and queue Munin to re-plan them with instructions.
 
@@ -196,7 +197,7 @@ def do_other_changeset(
     return result
 
 
-def ask_munin(question: str, model: str | None = None) -> dict:
+def ask_munin(question: str, model: str | None = None) -> dict[str, Any]:
     """
     Ask Munin a natural-language question about the architecture graph.
 

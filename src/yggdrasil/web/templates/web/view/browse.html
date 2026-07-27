@@ -1,23 +1,322 @@
 {% extends "base.html" %}
+{% load static %}
 {% block screen_id %}VIEW-BROWSE-1{% endblock %}
 {% block title %}View Browser{% endblock %}
 {% block nav_active %}browse{% endblock %}
+{% block body_class %}{% if view_mode == 'graph' %}yrg-view-browser{% endif %}{% endblock %}
 
 {% block extra_head %}
 <style>
-  .hg-filter-panel { background:#fff; border:1px solid var(--hg-border); border-radius:var(--hg-radius); padding:1rem; }
-  .hg-filter-row { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; }
-  .hg-view-toggle .btn { font-size:0.78rem; padding:4px 10px; }
-  .hg-view-toggle .btn.active { background:var(--hg-accent); border-color:var(--hg-accent); color:var(--hg-ink); }
-  .hg-detail-drawer { background:#fff; border:1px solid var(--hg-border); border-radius:var(--hg-radius); padding:1rem; position:sticky; top:88px; }
+  /* ── Graph mode: full-height shell (page header + main must fit in viewport) ── */
+  body.yrg-view-browser {
+    overflow: hidden;
+    padding-top: 81px;
+    height: 100vh;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+  }
+  body.yrg-view-browser .hg-page-header {
+    flex-shrink: 0;
+    padding: 0.5rem 1rem;
+  }
+  body.yrg-view-browser main.container-fluid {
+    padding: 0 !important;
+    max-width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .yrg-browser-root {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+    position: relative;
+    overflow: hidden;
+    border-top: 1px solid var(--hg-border);
+  }
+
+  /* Graph-only panels hidden in table mode */
+  .yrg-mode-table .yrg-graph-only {
+    display: none !important;
+  }
+
+  .yrg-browser-nav {
+    width: 280px;
+    min-width: 280px;
+    flex-shrink: 0;
+    background: var(--hg-bg-subtle);
+    border-right: 1px solid var(--hg-border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: width 0.2s, min-width 0.2s;
+  }
+  .yrg-browser-nav.collapsed {
+    width: 0;
+    min-width: 0;
+    border-right: none;
+  }
+  .yrg-browser-nav-scroll {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.75rem;
+  }
+  .yrg-nav-model-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--hg-primary);
+    margin-bottom: 0.25rem;
+  }
+  .yrg-nav-search { margin: 0.5rem 0; }
+  .yrg-package-node { margin-bottom: 0.25rem; }
+  .yrg-package-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+    padding: 0.25rem 0.35rem;
+    border: none;
+    background: transparent;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--hg-ink);
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .yrg-package-toggle:hover { background: rgba(31, 58, 95, 0.06); }
+  .yrg-package-toggle .fa-chevron-right {
+    font-size: 0.6rem;
+    color: var(--hg-ink-muted);
+    transition: transform 0.15s;
+    width: 0.75rem;
+  }
+  .yrg-package-toggle[aria-expanded="true"] .fa-chevron-right { transform: rotate(90deg); }
+  .yrg-element-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.35rem 0.2rem 1.5rem;
+    font-size: 0.76rem;
+    border-radius: 4px;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    color: var(--hg-ink);
+  }
+  .yrg-element-item:hover { background: rgba(31, 58, 95, 0.06); }
+  .yrg-element-item.active {
+    background: var(--hg-primary-100);
+    font-weight: 600;
+  }
+  .yrg-element-item .st-icon {
+    width: 1rem;
+    text-align: center;
+    color: var(--hg-ink-muted);
+    font-size: 0.65rem;
+  }
+
+  .yrg-browser-canvas-wrap {
+    flex: 1 1 0%;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    background: var(--yrg-graph-bg);
+  }
+  .yrg-canvas-toolbar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.4rem 0.75rem;
+    background: #fff;
+    border-bottom: 1px solid var(--hg-border);
+    flex-wrap: wrap;
+  }
+  .yrg-canvas-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .yrg-mode-table .yrg-canvas-body {
+    overflow: auto;
+    background: #fff;
+  }
+
+  .yrg-browser-inspector {
+    width: 360px;
+    min-width: 360px;
+    flex-shrink: 0;
+    background: #fff;
+    border-left: 1px solid var(--hg-border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: width 0.2s, min-width 0.2s;
+  }
+  .yrg-browser-inspector.collapsed {
+    width: 0;
+    min-width: 0;
+    border-left: none;
+  }
+  .yrg-inspector-header {
+    flex-shrink: 0;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--hg-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .yrg-inspector-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 0.75rem;
+  }
+  .yrg-inspector-empty {
+    color: var(--hg-ink-muted);
+    font-size: 0.82rem;
+    text-align: center;
+    padding: 2rem 1rem;
+  }
+  .yrg-inspector-kind {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--hg-ink-muted);
+  }
+  .yrg-inspector-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0.15rem 0 0.5rem;
+  }
+  .yrg-prop-dl dt {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--hg-ink-muted);
+  }
+  .yrg-prop-dl dd {
+    font-size: 0.82rem;
+    margin-bottom: 0.5rem;
+  }
+  .yrg-rel-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.76rem;
+    border-radius: 4px;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+  }
+  .yrg-rel-row:hover { background: var(--hg-bg-subtle); }
+  .yrg-rel-row.active { background: var(--hg-primary-100); }
+
+  .yrg-panel-toggle {
+    position: absolute;
+    top: 50%;
+    z-index: 30;
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+    padding: 0;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid var(--hg-border);
+    box-shadow: 0 1px 4px rgba(31, 58, 95, 0.12);
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: left 0.2s ease, right 0.2s ease;
+  }
+  /* Left seam: anchor left edge on seam, shift back half width */
+  .yrg-panel-toggle-left {
+    transform: translate(-50%, -50%);
+  }
+  /* Right seam: anchor right edge on seam, shift forward half width */
+  .yrg-panel-toggle-right {
+    transform: translate(50%, -50%);
+  }
+  .yrg-mode-graph .yrg-panel-toggle-left { left: 280px; }
+  .yrg-mode-graph .yrg-panel-toggle-right { right: 360px; }
+  .yrg-browser-root.yrg-mode-graph.nav-collapsed .yrg-panel-toggle-left { left: 0; }
+  .yrg-browser-root.yrg-mode-graph.inspector-collapsed .yrg-panel-toggle-right { right: 0; }
+
+  .hg-filter-panel {
+    background: #fff;
+    border-bottom: 1px solid var(--hg-border);
+    padding: 1rem;
+  }
+
+  .yrg-view-toggle.btn-group .btn {
+    font-size: 0.72rem;
+    padding: 3px 10px;
+  }
+  .yrg-view-toggle.btn-group .btn.active {
+    background: var(--hg-accent);
+    border-color: var(--hg-accent);
+    color: var(--hg-ink);
+  }
+
+  /* Graph canvas — Mimir mm-browser-canvas-wrapper pattern */
+  .yrg-mode-graph #results-container {
+    position: absolute;
+    inset: 0;
+  }
+  .yrg-mode-graph #graphView.yrg-browser-canvas,
+  .yrg-mode-graph #cy {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Zoom toolbox — Mimir mm-browser-canvas-controls (sibling of canvas, not inside #cy) */
+  .yrg-canvas-controls {
+    z-index: 20;
+    pointer-events: auto;
+  }
+  .yrg-browser-btn-compact {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+  }
+
+  /* Table scrolls normally — no absolute overlay on toolbar */
+  .yrg-mode-table #tableView {
+    flex: 1 1 auto;
+  }
 </style>
 {% endblock %}
 
 {% block page_header %}
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
   <div>
-    <h1 class="hg-page-title">View Browser</h1>
-    <p class="text-muted small mb-0">VIEW-BROWSE-1 · {{ element_count }} elements visible</p>
+    <h1 class="hg-page-title mb-0" style="font-size:1.1rem;">View Browser</h1>
+    <p class="text-muted small mb-0">
+      VIEW-BROWSE-1 · {{ model_name }} · {{ element_count }} elements visible
+    </p>
   </div>
   <div class="d-flex gap-2 align-items-center">
     <div class="btn-group btn-group-sm" role="group" aria-label="View actions">
@@ -49,130 +348,176 @@
 {% endblock %}
 
 {% block content %}
-<div data-testid="view-browse-page">
+<div data-testid="view-browse-page"
+     class="yrg-browser-root yrg-mode-{{ view_mode }} flex-grow-1"
+     id="browserRoot"
+     data-initial-view="{{ view_mode }}"
+     data-graph-url="{% url 'web:view_browse_graph' %}"
+     data-inspector-element-url="{% url 'web:view_browse_inspector_element' pk=0 %}"
+     data-inspector-relationship-url="{% url 'web:view_browse_inspector_relationship' pk=0 %}">
 
-  <section aria-label="Filter panel">
-  <form method="get" action="{% url 'web:view_browse' %}" id="filterForm">
-  <div class="hg-filter-row mb-3">
-    <button class="btn btn-sm btn-outline-secondary" type="button"
-            data-bs-toggle="collapse" data-bs-target="#filterPanel"
-            aria-expanded="false" aria-controls="filterPanel"
-            data-testid="filters-toggle">
-      <i class="fa-solid fa-sliders me-1" aria-hidden="true"></i>Filters
-    </button>
-    <a href="{% url 'web:view_browse' %}" class="btn btn-sm btn-outline-danger"
-       data-testid="clear-filters-btn">Clear</a>
-  </div>
+  {% include "web/view/partials/navigator.html" %}
 
-  <div class="collapse mb-3" id="filterPanel">
-    <div class="hg-filter-panel">
-      <div class="row g-3 mb-3">
-        <div class="col-md-3">
-          <label class="form-label" style="font-size:0.78rem;font-weight:600;">Package</label>
-          <select name="package" class="form-select form-select-sm" data-testid="filter-package"
-                  aria-label="Filter by package">
-            <option value="">All packages</option>
-            {% for pkg in filter_options.packages %}
-            <option value="{{ pkg.slug }}" {% if active_filters.package == pkg.slug %}selected{% endif %}>
-              {{ pkg.name }}
-            </option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label" style="font-size:0.78rem;font-weight:600;">Stereotype</label>
-          <select name="stereotype" class="form-select form-select-sm" data-testid="filter-stereotype"
-                  aria-label="Filter by stereotype">
-            <option value="">All stereotypes</option>
-            {% for st in filter_options.stereotypes %}
-            <option value="{{ st.slug }}" {% if active_filters.stereotype == st.slug %}selected{% endif %}>
-              {{ st.name }}
-            </option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label" style="font-size:0.78rem;font-weight:600;">Health</label>
-          <select name="health" class="form-select form-select-sm" data-testid="filter-health"
-                  aria-label="Filter by health">
-            <option value="">All</option>
-            {% for h in filter_options.health %}
-            <option value="{{ h.value }}" {% if active_filters.health == h.value %}selected{% endif %}>
-              {{ h.label }}
-            </option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label" style="font-size:0.78rem;font-weight:600;">Time travel</label>
-          <input type="date" name="as_of" class="form-control form-control-sm" data-testid="filter-as-of"
-                 aria-label="View model as of date" value="{{ active_filters.as_of|default:'' }}">
-        </div>
+  <button type="button"
+          class="yrg-panel-toggle yrg-panel-toggle-left yrg-graph-only"
+          id="toggleNavBtn"
+          data-testid="browser-toggle-nav-panel"
+          title="Toggle navigator"
+          aria-label="Toggle navigator panel">‹</button>
+
+  <section class="yrg-browser-canvas-wrap flex-grow-1 min-h-0" aria-label="View canvas">
+    <div class="yrg-canvas-toolbar">
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <button class="btn btn-sm btn-outline-secondary" type="button"
+                data-bs-toggle="collapse" data-bs-target="#filterPanel"
+                aria-expanded="false" aria-controls="filterPanel"
+                data-testid="filters-toggle">
+          <i class="fa-solid fa-sliders me-1" aria-hidden="true"></i>Filters
+        </button>
+        <a href="{% url 'web:view_browse' %}" class="btn btn-sm btn-outline-danger"
+           data-testid="clear-filters-btn">Clear</a>
       </div>
-      <div class="d-flex gap-2">
-        <a href="{% url 'web:view_browse' %}" class="btn btn-outline-secondary btn-sm"
-           data-testid="filter-panel-clear-btn">Clear</a>
-        <button class="btn btn-outline-secondary btn-sm" type="button" disabled>Save View</button>
-        <button class="btn btn-primary btn-sm" type="submit" data-testid="apply-filters-btn">Apply Filters</button>
+      <div class="d-flex align-items-center gap-2">
+        <span style="font-size:0.82rem;color:var(--hg-ink-muted);">{{ element_count }} elements</span>
+        <div class="yrg-view-toggle btn-group btn-group-sm" role="group" aria-label="View mode">
+          <button class="btn btn-outline-secondary{% if view_mode == 'table' %} active{% endif %}"
+                  id="tableViewBtn"
+                  data-testid="toggle-table"
+                  type="button"
+                  onclick="setView('table')">
+            <i class="fa-solid fa-table me-1" aria-hidden="true"></i>Table
+          </button>
+          <button class="btn btn-outline-secondary{% if view_mode == 'graph' %} active{% endif %}"
+                  id="graphViewBtn"
+                  data-testid="toggle-graph"
+                  type="button"
+                  onclick="setView('graph')">
+            <i class="fa-solid fa-diagram-project me-1" aria-hidden="true"></i>Graph
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-  </form>
-  </section>
 
-  <div class="row g-3">
-    <div class="col-12" id="resultsCol">
+    <div class="collapse" id="filterPanel">
+      <form method="get" action="{% url 'web:view_browse' %}" id="filterForm">
+        <input type="hidden" name="view" id="filterViewMode" value="{{ view_mode }}">
+        <div class="hg-filter-panel">
+          <div class="row g-3 mb-3">
+            <div class="col-md-3">
+              <label class="form-label" style="font-size:0.78rem;font-weight:600;">Package</label>
+              <select name="package" class="form-select form-select-sm" data-testid="filter-package"
+                      aria-label="Filter by package">
+                <option value="">All packages</option>
+                {% for pkg in filter_options.packages %}
+                <option value="{{ pkg.slug }}" {% if active_filters.package == pkg.slug %}selected{% endif %}>
+                  {{ pkg.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" style="font-size:0.78rem;font-weight:600;">Stereotype</label>
+              <select name="stereotype" class="form-select form-select-sm" data-testid="filter-stereotype"
+                      aria-label="Filter by stereotype">
+                <option value="">All stereotypes</option>
+                {% for st in filter_options.stereotypes %}
+                <option value="{{ st.slug }}" {% if active_filters.stereotype == st.slug %}selected{% endif %}>
+                  {{ st.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" style="font-size:0.78rem;font-weight:600;">Health</label>
+              <select name="health" class="form-select form-select-sm" data-testid="filter-health"
+                      aria-label="Filter by health">
+                <option value="">All</option>
+                {% for h in filter_options.health %}
+                <option value="{{ h.value }}" {% if active_filters.health == h.value %}selected{% endif %}>
+                  {{ h.label }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" style="font-size:0.78rem;font-weight:600;">Time travel</label>
+              <input type="date" name="as_of" class="form-control form-control-sm" data-testid="filter-as-of"
+                     aria-label="View model as of date" value="{{ active_filters.as_of|default:'' }}">
+            </div>
+          </div>
+          <div class="d-flex gap-2">
+            <a href="{% url 'web:view_browse' %}" class="btn btn-outline-secondary btn-sm"
+               data-testid="filter-panel-clear-btn">Clear</a>
+            <button class="btn btn-outline-secondary btn-sm" type="button" disabled>Save View</button>
+            <button class="btn btn-primary btn-sm" type="submit" data-testid="apply-filters-btn">Apply Filters</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div class="yrg-canvas-body flex-grow-1 position-relative min-h-0 overflow-hidden">
       {% include "web/view/partials/results.html" %}
     </div>
-  </div>
+
+    <div class="yrg-canvas-controls position-absolute bottom-0 end-0 mb-3 me-3 z-3{% if view_mode != 'graph' %} d-none{% endif %}"
+         id="graphZoomControls"
+         data-testid="browser-canvas-controls"
+         aria-label="Graph zoom controls">
+      <div class="text-end mb-1">
+        <span class="badge bg-secondary" data-testid="graph-node-count">{{ element_count }} nodes</span>
+      </div>
+      <div class="d-flex gap-1">
+        <button class="yrg-browser-btn-compact btn btn-outline-secondary" type="button"
+                id="graphReplotBtn"
+                data-testid="graph-replot-btn"
+                title="Re-plot graph"
+                aria-label="Re-plot graph">↺</button>
+        <button class="yrg-browser-btn-compact btn btn-outline-secondary" type="button"
+                id="graphZoomInBtn"
+                data-testid="graph-zoom-in"
+                title="Zoom in"
+                aria-label="Zoom in">+</button>
+        <button class="yrg-browser-btn-compact btn btn-outline-secondary" type="button"
+                id="graphZoomOutBtn"
+                data-testid="graph-zoom-out"
+                title="Zoom out"
+                aria-label="Zoom out">−</button>
+        <button class="yrg-browser-btn-compact btn btn-outline-secondary" type="button"
+                id="graphZoomFitBtn"
+                data-testid="graph-zoom-fit"
+                title="Fit graph to viewport"
+                aria-label="Fit graph to viewport">⊡</button>
+      </div>
+    </div>
+  </section>
+
+  <button type="button"
+          class="yrg-panel-toggle yrg-panel-toggle-right yrg-graph-only"
+          id="toggleInspectorBtn"
+          data-testid="browser-toggle-inspector-panel"
+          title="Toggle inspector"
+          aria-label="Toggle inspector panel">›</button>
+
+  {% include "web/view/partials/inspector_shell.html" %}
+
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+<script src="{% static 'js/view-browser.js' %}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
-    console.log('[view-browse-1] page loaded, elements={{ element_count }}');
+    console.log('[view-browse-1] page loaded, elements={{ element_count }}, mode={{ view_mode }}');
     window.viewBrowseGraphUrl = "{% url 'web:view_browse_graph' %}?" + new URLSearchParams(window.location.search).toString();
-  });
 
-  function setView(mode) {
-    var table = document.getElementById('tableView');
-    var graph = document.getElementById('graphView');
+    var filterView = document.getElementById('filterViewMode');
     var tableBtn = document.getElementById('tableViewBtn');
     var graphBtn = document.getElementById('graphViewBtn');
-    if (mode === 'table') {
-      table.classList.remove('d-none');
-      graph.classList.add('d-none');
-      tableBtn.classList.add('active');
-      graphBtn.classList.remove('active');
-    } else {
-      graph.classList.remove('d-none');
-      table.classList.add('d-none');
-      graphBtn.classList.add('active');
-      tableBtn.classList.remove('active');
-      loadGraph();
+    if (filterView && tableBtn && graphBtn) {
+      tableBtn.addEventListener('click', function () { filterView.value = 'table'; });
+      graphBtn.addEventListener('click', function () { filterView.value = 'graph'; });
     }
-  }
-
-  function loadGraph() {
-    if (window.cyInstance) {
-      return;
-    }
-    fetch(window.viewBrowseGraphUrl, {headers: {'Accept': 'application/json'}})
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        document.getElementById('cy').setAttribute('data-testid', 'graph-json-loaded');
-        window.cyInstance = cytoscape({
-          container: document.getElementById('cy'),
-          elements: data.elements.concat(data.edges),
-          style: [
-            {selector: 'node', style: {'label': 'data(label)', 'font-size': 10}},
-            {selector: 'edge', style: {'width': 2, 'curve-style': 'bezier', 'target-arrow-shape': 'triangle'}}
-          ],
-          layout: {name: 'cose', animate: false}
-        });
-      });
-  }
+  });
 </script>
 {% endblock %}

@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, cast
 
 from django.conf import settings
 
-from yggdrasil.llm.base import LLMError, LLMMessage, LLMResponse
+from yggdrasil.llm.base import BaseLLM, LLMError, LLMMessage, LLMResponse
 from yggdrasil.munin.logging_utils import log_munin_entry, log_munin_exit, log_munin_structure
 
 logger = logging.getLogger("yggdrasil.munin.llm_factory")
@@ -76,14 +76,14 @@ class ScriptedMuninLLM:
         return LLMResponse(content="Munin grounded response", model=self.model_id)
 
 
-def build_munin_planning_llm(*, llm: Any | None = None) -> Any:
+def build_munin_planning_llm(*, llm: Any | None = None) -> BaseLLM:
     """
     Resolve Munin planning-tier LLM from Django settings and environment.
 
     Default production model: ``sonnet5`` → ``claude-sonnet-4-5-20250929``.
     Ratatosk ``BASE_MODEL`` is never used for Munin.
 
-    :param llm: Explicit injection for tests; returned unchanged when set.
+    :param llm: Explicit injection for tests; returned unchanged when set[Any].
     :return: LLM client implementing ``complete`` and ``model_id``.
     :raises LLMError: When anthropic provider lacks API key.
     :raises RuntimeError: When provider is unknown or client construction fails.
@@ -101,7 +101,7 @@ def build_munin_planning_llm(*, llm: Any | None = None) -> Any:
             branch="injected",
             llm_model=getattr(llm, "model_id", type(llm).__name__),
         )
-        return llm
+        return cast("BaseLLM", llm)
 
     provider = str(getattr(settings, "LLM_PROVIDER", "ollama")).strip().lower()
     munin_alias = str(getattr(settings, "MUNIN_PLANNING_MODEL", _DEFAULT_MUNIN_ALIAS)).strip()
@@ -129,40 +129,40 @@ def build_munin_planning_llm(*, llm: Any | None = None) -> Any:
             client_class=type(client).__name__,
             llm_model=client.model_id,
         )
-        return client
+        return cast("BaseLLM", client)
 
     if provider == "anthropic":
         api_key = str(getattr(settings, "ANTHROPIC_API_KEY", "") or "").strip()
         if not api_key:
-            msg = "LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set"
+            msg = "LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set[Any]"
             logger.error("build_munin_planning_llm | reason=missing_api_key")
             raise LLMError(msg)
         from yggdrasil.llm.adapters.anthropic import AnthropicClient
 
-        client = AnthropicClient(model=resolved_model, api_key=api_key)
+        anthropic_client = AnthropicClient(model=resolved_model, api_key=api_key)
         log_munin_exit(
             "build_munin_planning_llm",
             where="llm_factory.build_munin_planning_llm",
             success=True,
-            client_class=type(client).__name__,
+            client_class=type(anthropic_client).__name__,
             llm_model=resolved_model,
         )
-        return client
+        return cast("BaseLLM", anthropic_client)
 
     if provider == "ollama":
         try:
             from yggdrasil.llm.adapters.ollama import OllamaClient
 
             base_url = str(getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434"))
-            client = OllamaClient(model=resolved_model, base_url=base_url)
+            ollama_client = OllamaClient(model=resolved_model, base_url=base_url)
             log_munin_exit(
                 "build_munin_planning_llm",
                 where="llm_factory.build_munin_planning_llm",
                 success=True,
-                client_class=type(client).__name__,
+                client_class=type(ollama_client).__name__,
                 llm_model=resolved_model,
             )
-            return client
+            return cast("BaseLLM", ollama_client)
         except Exception as exc:
             msg = f"LLM_PROVIDER=ollama but Ollama client failed: {exc}"
             logger.error("build_munin_planning_llm | %s", msg)

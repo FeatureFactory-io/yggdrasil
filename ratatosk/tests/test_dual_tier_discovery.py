@@ -1,6 +1,8 @@
 """Unit tests for dual-tier discovery wiring in runner."""
 
 from __future__ import annotations
+from typing import Any
+
 
 import json
 from unittest.mock import MagicMock
@@ -74,10 +76,10 @@ def test_run_cli_discovery_records_llm_tiers_on_blackboard() -> None:
         "extract",
         '[{"name":"Payment API","stereotype":"container","package":"technology","confidence":0.9}]',
     )
-    recorded: dict = {}
+    recorded: dict[str, Any] = {}
 
     class _Client:
-        def call_tool(self, name: str, arguments: dict):
+        def call_tool(self, name: str, arguments: dict[str, Any]):
             if name == "ensure_model":
                 return {"slug": "yggdrasil", "metamodel": "c4", "created": False}
             if name == "list_elements":
@@ -135,10 +137,10 @@ def test_run_cli_discovery_passes_handoff_context_to_propose() -> None:
         "extract",
         '[{"name":"Payment API","stereotype":"container","package":"technology","confidence":0.9}]',
     )
-    propose_args: dict = {}
+    propose_args: dict[str, Any] = {}
 
     class _Client:
-        def call_tool(self, name: str, arguments: dict):
+        def call_tool(self, name: str, arguments: dict[str, Any]):
             if name == "ensure_model":
                 return {"slug": "yggdrasil", "metamodel": "c4", "created": False}
             if name == "list_elements":

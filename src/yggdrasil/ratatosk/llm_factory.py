@@ -11,8 +11,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+from typing import Any, cast
 
-from yggdrasil.llm.base import LLMMessage, LLMResponse
+from yggdrasil.llm.base import BaseLLM, LLMMessage, LLMResponse
 
 logger = logging.getLogger("yggdrasil.ratatosk.llm_factory")
 
@@ -60,7 +61,7 @@ class ScriptedDiscoveryLLM:
         *,
         responses: list[str] | None = None,
         empty_plan: bool = False,
-        extra_candidate: dict | None = None,
+        extra_candidate: dict[str, Any] | None = None,
         endpoint_noise: bool = False,
         readme_only_c4: bool = False,
     ) -> None:
@@ -167,18 +168,18 @@ def build_discovery_llm(
     llm: object | None = None,
     *,
     empty_plan: bool = False,
-    extra_candidate: dict | None = None,
-) -> object:
+    extra_candidate: dict[str, Any] | None = None,
+) -> BaseLLM:
     """
     Resolve the LLM client for a discovery run.
 
-    :param llm: Explicit injection (tests). When set, returned as-is.
+    :param llm: Explicit injection (tests). When set[Any], returned as-is.
     :param empty_plan: Scripted empty-plan mode (DISC-14).
     :param extra_candidate: Extra candidate for scripted extract (DISC-04).
     :return: LLM client implementing ``complete``.
     """
     if llm is not None:
-        return llm
+        return cast("BaseLLM", llm)
     provider = os.environ.get("LLM_PROVIDER", "").strip().lower()
     if not provider:
         try:
@@ -196,18 +197,18 @@ def build_discovery_llm(
     from ratatosk.config import build_extract_llm_from_config, load_bootstrap_config
 
     config = load_bootstrap_config(env=os.environ)
-    return build_extract_llm_from_config(config)
+    return cast("BaseLLM", build_extract_llm_from_config(config))
 
 
 def build_planning_discovery_llm(llm: object | None = None) -> object:
     """
     Resolve planning-tier LLM for project map steps.
 
-    :param llm: Explicit injection (tests). When set, returned as-is.
+    :param llm: Explicit injection (tests). When set[Any], returned as-is.
     :return: LLM client implementing ``complete``.
     """
     if llm is not None:
-        return llm
+        return cast("BaseLLM", llm)
     provider = os.environ.get("LLM_PROVIDER", "").strip().lower()
     if provider == "scripted" or not provider:
         return build_discovery_llm()

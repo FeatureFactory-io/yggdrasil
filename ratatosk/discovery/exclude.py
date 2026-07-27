@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 import fnmatch
 import logging
 
@@ -18,9 +19,9 @@ _BOOTSTRAP_IMPLICIT_EXCLUDES: tuple[str, ...] = (
 
 def normalize_exclude_patterns(raw: str | list[str] | None) -> list[str]:
     """
-    Parse comma-separated or list exclude patterns.
+    Parse comma-separated or list[Any] exclude patterns.
 
-    :param raw: CSV string or list from CLI/env/YAML.
+    :param raw: CSV string or list[Any] from CLI/env/YAML.
     :return: Non-empty stripped patterns.
     """
     if raw is None:
@@ -42,7 +43,7 @@ def merge_bootstrap_exclude_patterns(patterns: list[str]) -> list[str]:
     Cursor playbooks/rules are not fed to Ratatosk NER.
 
     :param patterns: Operator-provided exclude patterns.
-    :return: De-duplicated merged pattern list.
+    :return: De-duplicated merged pattern list[Any].
     """
     merged: list[str] = []
     for pattern in [*patterns, *_BOOTSTRAP_IMPLICIT_EXCLUDES]:

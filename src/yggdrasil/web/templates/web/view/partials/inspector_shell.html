@@ -1,0 +1,22 @@
+{# Right panel: property inspector shell #}
+<aside id="browserInspectorPanel"
+       class="yrg-browser-inspector yrg-graph-only"
+       data-testid="browser-inspector-panel"
+       aria-label="Property inspector">
+
+  <div class="yrg-inspector-header">
+    <span class="hg-section-label mb-0">Inspector</span>
+    <button type="button"
+            class="btn-close btn-close-sm"
+            aria-label="Clear selection"
+            onclick="clearSelection()"></button>
+  </div>
+
+  <div class="yrg-inspector-body" id="inspectorBody">
+    <div class="yrg-inspector-empty" id="inspectorEmpty" data-testid="inspector-empty">
+      <i class="fa-solid fa-hand-pointer fa-2x mb-2 d-block" style="color:var(--hg-border);"></i>
+      Select an element or relationship in the graph or navigator to inspect its properties.
+    </div>
+    <div id="inspectorContent" class="d-none" data-testid="inspector-content"></div>
+  </div>
+</aside>

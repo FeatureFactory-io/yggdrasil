@@ -23,3 +23,6 @@ Categories: `workflow-drift` | `tech-blocker` | `mockup-delta` | `decision`
 | 2026-07-24 | tech-blocker | ViewBrowse 500 when no `yggdrasil` model in DB | `build_view_browse_context` catches `ValueError`, empty state |
 | 2026-07-24 | mockup-delta | Nav links for Elements/Relationships still mock URLs | Prod navbar uses `/mockups/…` until those Acts ship; testids present |
 | 2026-07-24 | decision | Cytoscape loaded page-level only | CDN in `browse.html` `extra_js` per IA §5 |
+| 2026-07-27 | decision | W7 ships SSR navigator + empty inspector; selection bus deferred W8–W10 | Three-panel shell on `/views/`; `@wip` only on E2E scenarios 21+ |
+| 2026-07-27 | workflow-drift | Mockup `build_package_tree` duplicated in mockups | Shared helper in `browse_helpers.py`; mockup wraps adapter |
+| 2026-07-27 | decision | `element-row-{slug}` primary testid in v0.3; `{id}` on `data-element-id` | Keeps v0.2 name-based assertions green |

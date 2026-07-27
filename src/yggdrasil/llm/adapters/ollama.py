@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Any
 
 import httpx
 
@@ -145,7 +146,7 @@ class OllamaClient:
         system: str,
         max_tokens: int,
         temperature: float,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Build the JSON payload for /api/chat."""
         ollama_messages: list[dict[str, str]] = []
         if system:
@@ -162,7 +163,7 @@ class OllamaClient:
             },
         }
 
-    def _parse_response(self, raw: dict) -> LLMResponse:
+    def _parse_response(self, raw: dict[str, Any]) -> LLMResponse:
         """Parse Ollama /api/chat response JSON into LLMResponse."""
         message = raw.get("message") or {}
         thinking = str(message.get("thinking") or "")

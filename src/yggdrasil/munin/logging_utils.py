@@ -47,7 +47,7 @@ def log_munin_structure(label: str, payload: Any) -> None:
     Dump a structure to app.log using ``pformat`` (rule §Structures).
 
     :param label: Dataset name for grep (e.g. ``element_ops``).
-    :param payload: Dict/list/set to serialize.
+    :param payload: Dict/list[Any]/set[Any] to serialize.
     """
     logger.info(
         "Munin.structure | label=%s\n%s", label, pformat(payload, width=120, sort_dicts=True)
@@ -62,6 +62,7 @@ def log_munin_llm_request(
     system: str,
     prompt: str,
     element_count: int = 0,
+    split_pass: str | None = None,
 ) -> None:
     """
     Log complete Munin LLM request — system + user prompt at INFO.
@@ -74,12 +75,13 @@ def log_munin_llm_request(
     :param element_count: Number of elements in the request.
     """
     logger.info(
-        "Munin.llm_request | where=%s user_id=%s llm_model=%s element_count=%s "
+        "Munin.llm_request | where=%s user_id=%s llm_model=%s element_count=%s split_pass=%s "
         "system_chars=%s prompt_chars=%s",
         where,
         user_id,
         llm_model,
         element_count,
+        split_pass,
         len(system),
         len(prompt),
     )

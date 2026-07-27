@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from django.contrib.auth import authenticate, get_user_model, login
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.models import AbstractBaseUser, AnonymousUser, User
 from django.http import HttpResponseForbidden, HttpResponseNotFound
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -24,6 +25,15 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 logger = logging.getLogger("yggdrasil.auth")
+
+
+def _require_user(user: AbstractBaseUser | AnonymousUser) -> User:
+    """Narrow authenticated user for token service calls."""
+    if not user.is_authenticated:
+        msg = "Authenticated user required"
+        raise ValueError(msg)
+    return User.objects.get(pk=user.pk)
+
 
 _DEFAULT_REDIRECT = "/views/"
 
@@ -96,11 +106,13 @@ class LoginView(View):
                 self.template_name,
                 {"error": "Invalid email or password.", "field_email": email},
             )
-        login(request, user)
+        login(request, User.objects.get(pk=user.pk))
         logger.info("LoginView.post: login success | user_pk=%s", user.pk)
         return self._redirect_after_login(request)
 
-    def _authenticate_by_email(self, request: HttpRequest, email: str, password: str):
+    def _authenticate_by_email(
+        self, request: HttpRequest, email: str, password: str
+    ) -> AbstractBaseUser | None:
         """
         Resolve a user by email, then authenticate with their username.
 
@@ -165,7 +177,7 @@ class LogoutView(LoginRequiredMixin, View):
 
 class TokenListView(LoginRequiredMixin, View):
     """
-    GET /auth/tokens/ — list personal access tokens for the current user.
+    GET /auth/tokens/ — list[Any] personal access tokens for the current user.
 
     Screen: AUTH-TOKEN-1
     """
@@ -187,7 +199,7 @@ class TokenListView(LoginRequiredMixin, View):
 
         GET /auth/tokens/ (authenticated) → 200, renders auth/token.html
         """
-        tokens = TokenService().list_tokens(request.user)
+        tokens = TokenService().list_tokens(_require_user(request.user))
         logger.info(
             "TokenListView.get | user_pk=%s token_count=%d",
             request.user.pk,
@@ -229,7 +241,7 @@ class TokenCreateView(LoginRequiredMixin, View):
             scope,
         )
         try:
-            token, raw = TokenService().create_token(request.user, name, scope)
+            token, raw = TokenService().create_token(_require_user(request.user), name, scope)
         except ValueError as exc:
             logger.warning("TokenCreateView.post: validation error | %s", exc)
             return self._render_with_error(request, str(exc))
@@ -238,7 +250,7 @@ class TokenCreateView(LoginRequiredMixin, View):
 
     def _render_with_error(self, request: HttpRequest, error: str) -> HttpResponse:
         """Re-render the token page with a 400 status and validation error."""
-        tokens = TokenService().list_tokens(request.user)
+        tokens = TokenService().list_tokens(_require_user(request.user))
         return render(
             request,
             self.template_name,
@@ -250,7 +262,7 @@ class TokenCreateView(LoginRequiredMixin, View):
         self, request: HttpRequest, token_name: str, raw: str
     ) -> HttpResponse:
         """Re-render the token page including the one-time raw token value."""
-        tokens = TokenService().list_tokens(request.user)
+        tokens = TokenService().list_tokens(_require_user(request.user))
         return render(
             request,
             self.template_name,
@@ -270,7 +282,7 @@ class TokenRevokeView(LoginRequiredMixin, View):
 
         :param request: Authenticated POST request.
         :param token_id: PK of the token to revoke.
-        :return: 302 redirect to token list on success; 403/404 on error.
+        :return: 302 redirect to token list[Any] on success; 403/404 on error.
         :raises N/A: Errors are returned as HTTP responses, never raised.
 
         :Example:
@@ -286,7 +298,7 @@ class TokenRevokeView(LoginRequiredMixin, View):
             token_id,
         )
         try:
-            TokenService().revoke_token(request.user, token_id)
+            TokenService().revoke_token(_require_user(request.user), token_id)
         except PersonalAccessToken.DoesNotExist:
             logger.warning("TokenRevokeView.post: token not found | token_id=%s", token_id)
             return HttpResponseNotFound("Token not found")

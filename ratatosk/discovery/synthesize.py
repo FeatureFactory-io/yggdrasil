@@ -12,15 +12,15 @@ logger = logging.getLogger("ratatosk.discovery.synthesize")
 
 
 def apply_synthesis(
-    candidates: list[dict],
+    candidates: list[dict[str, Any]],
     synthesis: dict[str, Any],
-) -> tuple[list[dict], dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     Apply Sonnet synthesis JSON to pre-filtered candidates.
 
     :param candidates: Pre-filtered candidate dicts.
     :param synthesis: Parsed synthesis object with canonical/merges/rejects.
-    :return: Canonical candidate list and metadata for blackboard/handoff.
+    :return: Canonical candidate list[Any] and metadata for blackboard/handoff.
     """
     before = len(candidates)
     drop_names = {str(m.get("drop") or "") for m in (synthesis.get("merges") or [])}
@@ -54,8 +54,8 @@ def apply_synthesis(
         "apply_synthesis | before=%s after=%s merges=%s rejects=%s do_not_reference=%s",
         before,
         len(canonical),
-        len(meta["merges"]),
-        len(meta["rejects"]),
+        len(meta["merges"]) if isinstance(meta["merges"], list) else 0,
+        len(meta["rejects"]) if isinstance(meta["rejects"], list) else 0,
         len(do_not_reference),
     )
     return canonical, meta
@@ -63,7 +63,7 @@ def apply_synthesis(
 
 def _llm_synthesize_candidates(
     planning_llm: Any,
-    candidates: list[dict],
+    candidates: list[dict[str, Any]],
     ontology: str,
     cluster_hints: dict[str, list[str]],
     instructions: str = "",
@@ -76,7 +76,7 @@ def _llm_synthesize_candidates(
     :param ontology: Metamodel guidance text.
     :param cluster_hints: Normalized name clusters from D0.
     :param instructions: Optional operator instructions.
-    :return: Parsed synthesis dict (may be empty on failure).
+    :return: Parsed synthesis dict[str, Any] (may be empty on failure).
     """
     from ratatosk.discovery.scripted_llm import LLMMessage
 
@@ -107,7 +107,7 @@ def _llm_synthesize_candidates(
         "Rules:\n"
         "- Prefer names from docs/architecture/SAO.md and README when merging duplicates\n"
         "- Reject fixture/test/UI noise (sample_webapp names, screen IDs, test libraries)\n"
-        "- Do not invent new elements; only canonicalize from input list\n"
+        "- Do not invent new elements; only canonicalize from input list[Any]\n"
         "- Each canonical entry keeps best confidence and union of source_paths\n\n"
         f"Cluster hints (possible duplicates): {json.dumps(cluster_hints)}\n"
         f"Instructions: {instructions[:500] or '(none)'}\n\n"
@@ -135,11 +135,11 @@ def _llm_synthesize_candidates(
 
 def run_synthesis_phase(
     planning_llm: Any,
-    candidates: list[dict],
+    candidates: list[dict[str, Any]],
     ontology: str,
     cluster_hints: dict[str, list[str]],
     instructions: str = "",
-) -> tuple[list[dict], dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     Run D1 synthesize and D2 apply with fail-open fallback.
 

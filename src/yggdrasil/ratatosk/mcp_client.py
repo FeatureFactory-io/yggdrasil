@@ -48,7 +48,7 @@ class RatatoskMcpClient:
 
         :param name: Tool name. Example: ``"list_elements"``.
         :param arguments: Tool arguments.
-        :return: Tool result dict.
+        :return: Tool result dict[str, Any].
         :raises McpClientError: On HTTP or auth failure.
         """
         arguments = arguments or {}

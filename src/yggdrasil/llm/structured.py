@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from typing import Any, cast
 
 logger = logging.getLogger("yggdrasil.llm.structured")
 
@@ -70,7 +71,7 @@ def normalize_llm_text(raw: str) -> str:
     return strip_markdown_fence(text)
 
 
-def extract_json_array(raw: str) -> list[dict] | None:
+def extract_json_array(raw: str) -> list[dict[str, Any]] | None:
     """
     Parse a JSON array of dicts from LLM output.
 
@@ -94,7 +95,7 @@ def extract_json_array(raw: str) -> list[dict] | None:
     return items
 
 
-def extract_json_object(raw: str) -> dict | None:
+def extract_json_object(raw: str) -> dict[str, Any] | None:
     """
     Parse a JSON object from LLM output.
 
@@ -110,13 +111,14 @@ def extract_json_object(raw: str) -> dict | None:
         logger.info("extract_json_object | result=not_object type=%s", type(data).__name__)
         return None
     logger.info("extract_json_object | result=ok keys=%s raw_len=%s", len(data), len(raw or ""))
-    return data
+    return dict(data)
 
 
 def _load_json_or_slice(text: str, *, start_char: str, end_char: str) -> object | None:
     """Try full-text JSON parse, then bracket/brace slice fallback."""
     try:
-        return json.loads(text)
+        parsed: object = json.loads(text)
+        return parsed
     except json.JSONDecodeError:
         start = text.find(start_char)
         end = text.rfind(end_char)
@@ -128,7 +130,7 @@ def _load_json_or_slice(text: str, *, start_char: str, end_char: str) -> object 
             )
             return None
         try:
-            return json.loads(text[start : end + 1])
+            return cast("object | None", json.loads(text[start : end + 1]))
         except json.JSONDecodeError:
             logger.info("_load_json_or_slice | result=slice_parse_fail")
             return None

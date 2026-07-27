@@ -62,10 +62,10 @@ _README_SOURCE = README_SOURCE
 class DeltaBuckets:
     """Pre-bucketed NER deltas."""
 
-    to_add: list[dict] = field(default_factory=list)
-    to_update: list[dict] = field(default_factory=list)
-    to_delete: list[dict] = field(default_factory=list)
-    unchanged: list[dict] = field(default_factory=list)
+    to_add: list[dict[str, Any]] = field(default_factory=list[Any])
+    to_update: list[dict[str, Any]] = field(default_factory=list[Any])
+    to_delete: list[dict[str, Any]] = field(default_factory=list[Any])
+    unchanged: list[dict[str, Any]] = field(default_factory=list[Any])
 
     @property
     def total_ops(self) -> int:
@@ -91,7 +91,7 @@ def run_cli_discovery(
     """
     Run discovery and hand off via MCP. No Django.
 
-    :param client: Object with ``call_tool(name, arguments) -> dict``.
+    :param client: Object with ``call_tool(name, arguments) -> dict[str, Any]``.
     :param llm: Field-tier LLM (legacy param; use ``extract_llm`` when set).
     :param extract_llm: Haiku/fast model for per-file extract steps.
     :param planning_llm: Sonnet/planning model for ``_llm_project_map``.
@@ -211,7 +211,7 @@ def run_cli_discovery(
         blackboard["skipped_by_exclude_count"] = skipped_exclude
         blackboard["input_mode"] = "filesystem"
         if not tree:
-            candidates: list[dict] = []
+            candidates: list[dict[str, Any]] = []
             blackboard["extract"] = {"candidates": 0, "reason": "nothing to scan"}
             logger.warning(
                 "run_cli_discovery | scan_complete file_count=0 branch=nothing_to_scan "
@@ -512,7 +512,7 @@ def _classify_stdin(text: str) -> str:
 
 
 def _guidance_from_stereotypes(
-    items: list[dict],
+    items: list[dict[str, Any]],
 ) -> tuple[str, set[str], set[str]]:
     element_slugs = {
         str(st.get("slug") or "") for st in items if not st.get("is_edge") and st.get("slug")
@@ -653,7 +653,7 @@ def _llm_extract_files(
     ontology: str,
     instructions: str,
     limits: DiscoveryLimits | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Read each target file from disk and run LLM extract (paths-only map precedes this)."""
     effective = limits or DiscoveryLimits()
     bounded = targets[: effective.max_file_reads_per_run]
@@ -667,7 +667,7 @@ def _llm_extract_files(
         bounded,
     )
     root = Path(repo_path)
-    all_c: list[dict] = []
+    all_c: list[dict[str, Any]] = []
     read_count = 0
     skipped_missing = 0
     for index, rel in enumerate(bounded, start=1):
@@ -717,7 +717,7 @@ def _llm_extract_text(
     ontology: str,
     instructions: str,
     source_label: str,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     from ratatosk.discovery.scripted_llm import LLMMessage
 
     logger.info(
@@ -786,10 +786,10 @@ def _llm_extract_text(
 
 
 def _cleanup(
-    candidates: list[dict],
+    candidates: list[dict[str, Any]],
     element_slugs: set[str],
     package_slugs: set[str],
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     logger.info(
         "_cleanup | entry raw_count=%s allowed_stereotypes=%s allowed_packages=%s summary=%s",
         len(candidates),
@@ -797,8 +797,8 @@ def _cleanup(
         sorted(package_slugs),
         _summarize_candidates(candidates),
     )
-    accepted: list[dict] = []
-    seen: dict[str, dict] = {}
+    accepted: list[dict[str, Any]] = []
+    seen: dict[str, dict[str, Any]] = {}
     dropped_low_confidence = 0
     for raw in candidates:
         st = _slugify(str(raw.get("stereotype") or ""))
@@ -857,8 +857,8 @@ def _cleanup(
 
 
 def _reconcile(
-    candidates: list[dict],
-    by_slug: dict[str, dict],
+    candidates: list[dict[str, Any]],
+    by_slug: dict[str, dict[str, Any]],
     *,
     bootstrap_rescan: bool = False,
 ) -> DeltaBuckets:
@@ -892,15 +892,15 @@ _BOOTSTRAP_DELETE_CONFIDENCE = 1.0
 
 
 def _reconcile_bootstrap_rescan(
-    candidates: list[dict],
-    by_slug: dict[str, dict],
+    candidates: list[dict[str, Any]],
+    by_slug: dict[str, dict[str, Any]],
 ) -> DeltaBuckets:
     """Bootstrap: delete every existing element, add all fresh candidates."""
-    to_add: list[dict] = []
+    to_add: list[dict[str, Any]] = []
     for candidate in candidates:
         slug = _slugify(candidate["name"])
         to_add.append({**candidate, "slug": slug, "op": "add"})
-    to_delete: list[dict] = []
+    to_delete: list[dict[str, Any]] = []
     for slug, element in by_slug.items():
         to_delete.append(
             {
@@ -915,13 +915,13 @@ def _reconcile_bootstrap_rescan(
 
 
 def _reconcile_incremental(
-    candidates: list[dict],
-    by_slug: dict[str, dict],
+    candidates: list[dict[str, Any]],
+    by_slug: dict[str, dict[str, Any]],
 ) -> DeltaBuckets:
     """Update/scout: merge candidates; delete slugs absent from the scan."""
-    to_add: list[dict] = []
-    to_update: list[dict] = []
-    unchanged: list[dict] = []
+    to_add: list[dict[str, Any]] = []
+    to_update: list[dict[str, Any]] = []
+    unchanged: list[dict[str, Any]] = []
     seen_slugs: set[str] = set()
     for candidate in candidates:
         slug = _slugify(candidate["name"])
@@ -931,7 +931,7 @@ def _reconcile_incremental(
             to_add.append({**candidate, "slug": slug, "op": "add"})
         else:
             unchanged.append({**candidate, "slug": slug, "op": "unchanged"})
-    to_delete: list[dict] = []
+    to_delete: list[dict[str, Any]] = []
     for slug, element in by_slug.items():
         if slug in seen_slugs:
             continue
@@ -981,8 +981,10 @@ def _format_discovery_output_lines(
     return lines
 
 
-def _all_bucket_operations(buckets: DeltaBuckets, *, bootstrap_rescan: bool = False) -> list[dict]:
-    delete_ops: list[dict] = []
+def _all_bucket_operations(
+    buckets: DeltaBuckets, *, bootstrap_rescan: bool = False
+) -> list[dict[str, Any]]:
+    delete_ops: list[dict[str, Any]] = []
     for item in buckets.to_delete:
         delete_ops.append(
             {
@@ -998,7 +1000,7 @@ def _all_bucket_operations(buckets: DeltaBuckets, *, bootstrap_rescan: bool = Fa
                 ),
             }
         )
-    add_ops: list[dict] = []
+    add_ops: list[dict[str, Any]] = []
     for item in buckets.to_add:
         add_ops.append(
             {
@@ -1011,7 +1013,7 @@ def _all_bucket_operations(buckets: DeltaBuckets, *, bootstrap_rescan: bool = Fa
                 "confidence": float(item.get("confidence", 0.9)),
             }
         )
-    update_ops: list[dict] = []
+    update_ops: list[dict[str, Any]] = []
     for item in buckets.to_update:
         update_ops.append(
             {
@@ -1028,7 +1030,7 @@ def _all_bucket_operations(buckets: DeltaBuckets, *, bootstrap_rescan: bool = Fa
     return add_ops + update_ops + delete_ops
 
 
-def _buckets_to_operations(buckets: DeltaBuckets, threshold: float) -> list[dict]:
+def _buckets_to_operations(buckets: DeltaBuckets, threshold: float) -> list[dict[str, Any]]:
     """Kept for callers that want only above-threshold ops."""
     all_ops = _all_bucket_operations(buckets)
     return [op for op in all_ops if float(op.get("confidence", 0)) >= threshold]
@@ -1063,14 +1065,14 @@ def _humanize_element_name(name: str) -> str:
     return re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
 
 
-def _parse_readme_architecture_table(text: str) -> list[dict]:
+def _parse_readme_architecture_table(text: str) -> list[dict[str, Any]]:
     """
     Parse README markdown tables listing C4 elements (sample_webapp fixture shape).
 
     :param text: README body.
     :return: Candidate dicts with name, stereotype, package, confidence.
     """
-    candidates: list[dict] = []
+    candidates: list[dict[str, Any]] = []
     for line in text.splitlines():
         if "|" not in line:
             continue
@@ -1097,7 +1099,7 @@ def _parse_readme_architecture_table(text: str) -> list[dict]:
     return candidates
 
 
-def _summarize_candidates(candidates: list[dict]) -> dict[str, int]:
+def _summarize_candidates(candidates: list[dict[str, Any]]) -> dict[str, int]:
     """Count candidates by stereotype slug for log summaries."""
     counts: dict[str, int] = {}
     for item in candidates:
@@ -1106,7 +1108,7 @@ def _summarize_candidates(candidates: list[dict]) -> dict[str, int]:
     return counts
 
 
-def _summarize_op_types(operations: list[dict]) -> dict[str, int]:
+def _summarize_op_types(operations: list[dict[str, Any]]) -> dict[str, int]:
     """Count proposed ChangeSet operations by op_type."""
     counts: dict[str, int] = {}
     for op in operations:

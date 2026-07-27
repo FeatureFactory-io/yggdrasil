@@ -139,13 +139,41 @@ And the table "element-list" should contain "Payment API"
 |---------|--------|-------|
 | `Then the user should see "{text}"` | AT+E2E | AT: response body substring; E2E: visible text on page |
 | `Then the user should not see "{text}"` | AT+E2E | Inverse |
-| `Then the element "{test_id}" should be visible` | AT+E2E | AT: `data-testid="{test_id}"` in HTML; E2E: visible in Playwright |
+| `Then the element "{test_id}" should be visible` | AT+E2E | AT: `data-testid` present and not SSR-hidden (`d-none`, table-mode graph chrome) |
+| `Then the element "{test_id}" should not be visible` | AT | Inverse — absent or SSR-hidden |
 
 **Example:**
 ```gherkin
 Then the user should see "Payment API"
 And the element "element-list-page" should be visible
 ```
+
+---
+
+## Domain: View Browser
+
+**Files:** `view_browser_steps.py` (AT + E2E persona), `navigation_steps.py`, `assertion_steps.py`
+
+| Pattern | Runner | Notes |
+|---------|--------|-------|
+| `Given the model "{slug}" is loaded with the view browser fixture` | AT | 6-element payment preset |
+| `Given the model "{slug}" is loaded with the view browser explorer fixture` | AT | 19-element Yggdrasil self-model |
+| `Given Priya is on the View Browser` | AT+E2E | GET `/views/` (not mockup) |
+| `Given the user is on the "view-browse" page with query "{query}"` | AT | Query-string navigation |
+| `Then the page uses the full-height view browser layout` | AT | Asserts `yrg-view-browser` on `<body>` |
+| `Then the response is an embed partial` | AT | No navigator chrome (W9 routes pending) |
+| `Given Priya is on the View Browser in graph mode` | AT+E2E | AT: GET `/views/?view=graph`; E2E: Playwright |
+| `Then the view browser is in table mode` | AT | Asserts `yrg-mode-table` on `#browserRoot` |
+| `Then the view browser is in graph mode` | AT | Asserts `yrg-mode-graph` on `#browserRoot` |
+| `Then the graph-only panels are hidden` | AT | Navigator, inspector, panel toggles SSR-hidden |
+| `Then the graph canvas controls are visible` | AT | Replot, zoom, fit, node-count badge |
+| `Then the graph view is active` | AT | Graph container visible; `#tableView` has `d-none` |
+| `Then the table view is active` | AT | `#graphView` has `d-none`; table rows visible |
+| `When I GET the view browser inspector element partial for "{slug}"` | AT | `/views/inspector/element/<pk>/` |
+| `When I GET the view browser inspector relationship partial from "{source}" to "{target}"` | AT | `/views/inspector/relationship/<pk>/` |
+| `When she toggles the "{slug}" package in the navigator` | AT stub | `NotImplementedError` until W8 E2E |
+| `Then the inspector shows element "{name}"` | AT stub | E2E — `NotImplementedError` until W9 Playwright |
+| `Then the navigator row for "{name}" is highlighted` | AT stub | E2E — `NotImplementedError` until W10 |
 
 ---
 
@@ -267,8 +295,26 @@ assertions and in form step fields.
 | Graph toggle | `toggle-graph` |
 | Results container | `results-container` |
 | Graph Cytoscape container | `graph-cy-container` |
-| Element row | `element-row-{id}` |
+| Element row | `element-row-{id}` or `element-row-{slug}` (v0.3) |
 | View element link | `view-element-{id}` |
+| **v0.3 — Left navigator** | |
+| Navigator panel | `browser-nav-panel` |
+| Model name heading | `browser-model-name` |
+| Navigator search | `browser-search-input` |
+| Package tree root | `browser-package-tree` |
+| Package toggle | `package-toggle-{slug}` |
+| Navigator element row | `nav-element-{slug}` |
+| Navigator collapse toggle | `browser-toggle-nav-panel` |
+| **v0.3 — Right inspector** | |
+| Inspector panel | `browser-inspector-panel` |
+| Inspector empty state | `inspector-empty` |
+| Inspector content area | `inspector-content` |
+| Inspector collapse toggle | `browser-toggle-inspector-panel` |
+| **v0.3 — Canvas controls** | |
+| Graph zoom in | `graph-zoom-in` |
+| Graph zoom out | `graph-zoom-out` |
+| Graph zoom fit | `graph-zoom-fit` |
+| Visible node count badge | `graph-node-count` |
 
 ### EXPORT-BRIEFING-1 (`view/export.html`)
 
@@ -601,3 +647,14 @@ Gaps discovered during ESM-05 spec authoring. Implement via TFK-07 in BPE-04.
 | 4 | CLI subprocess steps do not exist | Narrative steps with exact command strings | Integration subprocess steps or `cli_steps.py` |
 | 5 | E2E auth (`the user is logged in as "{role}"`) is not implemented | Not blocking for ESM-05 specs (AT auth works) | Implement once AUTH-LOGIN-1 ships in BPE |
 | 6 | Delete modal confirm uses `confirm-delete-btn` not `dialog-confirm-btn` | Use `the element "confirm-delete-btn" should be visible` | Standardise delete modal testids or extend dialog steps with fallback (already partially done) |
+| 7 | View Browser fixture Given for behave AT | **Closed** — `docs/features/steps/view_browser_steps.py` | `Given the model "{slug}" is loaded with the view browser fixture` |
+| 8 | Explorer fixture (19-element Yggdrasil self-model) | **Closed** — `VIEW_BROWSER_EXPLORER_*` in `tests/fixtures/view_browser.py` | `Given the model "{slug}" is loaded with the view browser explorer fixture` |
+| 9 | Query-string navigation step | **Closed** — `navigation_steps.py` | `Given the user is on the "view-browse" page with query "{query}"` |
+| 10 | Embed partial assertion | **Closed** — stub in `assertion_steps.py` (W9 routes pending) | `Then the response is an embed partial` |
+| 11 | Layout class assertion | **Closed** — `assertion_steps.py` | `Then the page uses the full-height view browser layout` |
+| 12 | View Browser E2E persona steps | **Closed** (AT) / E2E stub — `view_browser_steps.py` | `Given Priya is on the View Browser` |
+| 13 | Navigator interaction steps | Stub `NotImplementedError` until W8 | `When she toggles the "{slug}" package in the navigator` |
+| 14 | Inspector interaction steps | Stub `NotImplementedError` until W9 | `Then the inspector shows element "{name}"` |
+| 15 | Graph interaction steps | Stub `NotImplementedError` until W10 | `Then the graph view is active` |
+| 16 | Cross-panel sync assertions | Stub `NotImplementedError` until W10 | `Then the navigator row for "{name}" is highlighted` |
+| 17 | PAGE_REGISTRY entry | **Closed** — `support/pages.py` | `"view-browse" → web:view_browse` |

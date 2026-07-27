@@ -19,7 +19,7 @@ JSONB columns (SAO.md §4):
 from __future__ import annotations
 
 import logging
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
@@ -30,7 +30,7 @@ logger = logging.getLogger("yggdrasil.graph")
 
 # Canonical C4 catalog seeded onto Metamodel slug=c4 (admin / data migration).
 # Each entry carries the guidance Ratatosk injects into the LLM — not just names.
-C4_ELEMENT_STEREOTYPE_SPECS: tuple[dict, ...] = (
+C4_ELEMENT_STEREOTYPE_SPECS: tuple[dict[str, Any], ...] = (
     {
         "name": "System",
         "description": (
@@ -99,7 +99,7 @@ C4_ELEMENT_STEREOTYPE_SPECS: tuple[dict, ...] = (
         "allowed_edge_rules": ["calls", "uses"],
     },
 )
-C4_EDGE_STEREOTYPE_SPECS: tuple[dict, ...] = (
+C4_EDGE_STEREOTYPE_SPECS: tuple[dict[str, Any], ...] = (
     {
         "name": "calls",
         "description": "Synchronous or request/response invocation from source to target.",
@@ -122,7 +122,7 @@ C4_EDGE_STEREOTYPE_SPECS: tuple[dict, ...] = (
         "property_schema": {"type": "object", "properties": {}},
     },
 )
-C4_PACKAGE_SPECS: tuple[dict, ...] = (
+C4_PACKAGE_SPECS: tuple[dict[str, Any], ...] = (
     {
         "name": "Context",
         "description": "System context view: people, systems, and external actors.",
@@ -168,7 +168,7 @@ class Metamodel(models.Model):
     def __str__(self) -> str:
         return self.name
 
-    def save(self, *args, **kwargs) -> None:
+    def save(self, *args: Any, **kwargs: Any) -> None:
         if not self.slug:
             self.slug = slugify(self.name)
         super().save(*args, **kwargs)
@@ -216,7 +216,7 @@ class YggdrasilModel(models.Model):
     def __str__(self) -> str:
         return self.name
 
-    def save(self, *args, **kwargs) -> None:
+    def save(self, *args: Any, **kwargs: Any) -> None:
         if not self.slug:
             self.slug = slugify(self.name)
         if self.pk:
@@ -247,7 +247,7 @@ class Stereotype(models.Model):
 
     ``property_schema`` (JSONB) holds a JSON Schema definition that
     validates ``Element.properties``. ``allowed_edge_rules`` (JSONB) is
-    a list of edge stereotype slugs permitted from this node type.
+    a list[Any] of edge stereotype slugs permitted from this node type.
 
     :Example:
 
@@ -267,8 +267,8 @@ class Stereotype(models.Model):
         help_text="Guidance for humans and Ratatosk LLM: when to use this stereotype.",
     )
     is_edge = models.BooleanField(default=False)
-    property_schema = models.JSONField(default=dict)
-    allowed_edge_rules = models.JSONField(default=list)
+    property_schema = models.JSONField(default=dict[str, Any])
+    allowed_edge_rules = models.JSONField(default=list[Any])
     color = models.CharField(max_length=30, blank=True)
     icon = models.CharField(max_length=50, blank=True)
 
@@ -353,7 +353,7 @@ class Diagram(models.Model):
     )
     name = models.CharField(max_length=200)
     diagram_type = models.CharField(max_length=30, choices=TYPE_CHOICES)
-    layout_data = models.JSONField(default=dict)
+    layout_data = models.JSONField(default=dict[str, Any])
 
     class Meta:
         ordering: ClassVar[list[str]] = ["name"]
@@ -370,7 +370,7 @@ class Element(models.Model):
     validated against ``Stereotype.property_schema`` at write time (via
     the ChangeSet pipeline — not at ORM level).
 
-    ``confidence`` is a 0.0-1.0 float set by Ratatosk during extraction.
+    ``confidence`` is a 0.0-1.0 float set[Any] by Ratatosk during extraction.
     Human-created elements default to 1.0.
 
     :Example:
@@ -415,7 +415,7 @@ class Element(models.Model):
         related_name="elements",
     )
     diagrams = models.ManyToManyField(Diagram, blank=True, related_name="elements")
-    properties = models.JSONField(default=dict)
+    properties = models.JSONField(default=dict[str, Any])
     owner = models.CharField(max_length=200, blank=True)
     health = models.CharField(max_length=20, choices=HEALTH_CHOICES, default=HEALTH_GREEN)
     source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default=SOURCE_HUMAN)
@@ -465,7 +465,7 @@ class Relationship(models.Model):
         related_name="relationships",
         limit_choices_to={"is_edge": True},
     )
-    properties = models.JSONField(default=dict)
+    properties = models.JSONField(default=dict[str, Any])
     confidence = models.FloatField(default=1.0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -514,7 +514,7 @@ def ensure_c4_metamodel() -> Metamodel:
     return mm
 
 
-def _upsert_stereotype(mm: Metamodel, spec: dict, *, is_edge: bool) -> Stereotype:
+def _upsert_stereotype(mm: Metamodel, spec: dict[str, Any], *, is_edge: bool) -> Stereotype:
     """Create or refresh a Stereotype from a C4 seed spec."""
     slug = slugify(spec["name"])
     st, _ = Stereotype.objects.get_or_create(
@@ -546,7 +546,7 @@ def _upsert_stereotype(mm: Metamodel, spec: dict, *, is_edge: bool) -> Stereotyp
     return st
 
 
-def _upsert_package(mm: Metamodel, spec: dict) -> Package:
+def _upsert_package(mm: Metamodel, spec: dict[str, Any]) -> Package:
     """Create or refresh a Package from a C4 seed spec."""
     slug = slugify(spec["name"])
     pkg, _ = Package.objects.get_or_create(

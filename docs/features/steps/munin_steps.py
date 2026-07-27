@@ -13,6 +13,7 @@ import logging
 import re
 
 from behave import given, then, when  # type: ignore[import]
+from django.urls import reverse
 from django.utils.text import slugify
 from steps.common_steps import get_client
 from tests.fixtures.factories import UserFactory
@@ -41,7 +42,7 @@ def step_marcus_on_view_browser(context):
     context.current_user = user
     client = get_client(context)
     client.force_login(user)
-    context.response = client.get("/mockups/view/browse/")
+    context.response = client.get(reverse("web:view_browse"))
     _ensure_chat_fixture(context)
     logger.info("step_marcus_on_view_browser | status=%s", context.response.status_code)
 

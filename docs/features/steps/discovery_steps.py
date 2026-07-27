@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from behave import given, then, when  # type: ignore[import]
+from behave import given, then, use_step_matcher, when  # type: ignore[import]
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
 from yggdrasil.graph.models import Element, Metamodel, YggdrasilModel, ensure_c4_metamodel
@@ -144,29 +144,35 @@ def step_priya_ro_token(context):
     context.cli_token_scope = "read-only"
 
 
-@when('Priya runs ratatosk bootstrap against the fixture repository "{name}"')
-def step_bootstrap_fixture(context, name):
-    """Bootstrap against a named fixture repo."""
-    _run_bootstrap(context, repo_name=name)
+use_step_matcher("re")
 
 
 @when(
-    'Priya runs ratatosk bootstrap against the fixture repository "{name}" '
-    "with a scripted discovery LLM"
+    r'Priya runs ratatosk bootstrap against the fixture repository "(?P<name>[^"]+)" '
+    r'with metamodel "(?P<metamodel>[^"]+)"'
 )
-def step_bootstrap_scripted(context, name):
+def step_bootstrap_metamodel(context, name: str, metamodel: str) -> None:
+    """Bootstrap with an explicit metamodel slug."""
+    _run_bootstrap(context, repo_name=name, metamodel=metamodel)
+
+
+@when(
+    r'Priya runs ratatosk bootstrap against the fixture repository "(?P<name>[^"]+)" '
+    r"with a scripted discovery LLM"
+)
+def step_bootstrap_scripted(context, name: str) -> None:
     """Bootstrap with explicit ScriptedDiscoveryLLM for call-count assertions."""
     context.discovery_llm = ScriptedDiscoveryLLM()
     _run_bootstrap(context, repo_name=name)
 
 
-@when(
-    'Priya runs ratatosk bootstrap against the fixture repository "{name}" '
-    'with metamodel "{metamodel}"'
-)
-def step_bootstrap_metamodel(context, name, metamodel):
-    """Bootstrap with an explicit metamodel slug."""
-    _run_bootstrap(context, repo_name=name, metamodel=metamodel)
+@when(r'Priya runs ratatosk bootstrap against the fixture repository "(?P<name>[^"]+)"')
+def step_bootstrap_fixture(context, name: str) -> None:
+    """Bootstrap against a named fixture repo."""
+    _run_bootstrap(context, repo_name=name)
+
+
+use_step_matcher("parse")
 
 
 @when("Marcus pipes the stdin fixture {name} into ratatosk update")
@@ -201,13 +207,6 @@ def step_pipe_oversize(context):
 
     context.stdin_text = "x" * (STDIN_SIZE_CAP_BYTES + 8)
     _run_update(context)
-
-
-@then('the output contains "{a}" or "{b}"')
-def step_output_contains_either(context, a, b):
-    """Assert stdout contains at least one of two phrases."""
-    output = getattr(context, "cli_output", "") or ""
-    assert a in output or b in output, f"Expected {a!r} or {b!r} in:\n{output}"
 
 
 @then('the run blackboard contains step "{step}"')
@@ -533,18 +532,26 @@ for _decorator, _phrase, _name in [
         'the Yggdrasil model "Yggdrasil" still has {n:d} elements',
         "update never wipes element count",
     ),
-    (
-        then,
-        'an MCP tool call to "{tool}" was recorded on the blackboard',
-        "MCP drill-down blackboard",
-    ),
-    (
-        then,
-        'an MCP tool call to "search" or "get_element" was recorded on the blackboard',
-        "scout MCP probe",
-    ),
 ]:
     _decorator(_phrase)(_wip_step(_name))
+
+
+use_step_matcher("re")
+
+
+@then(r'an MCP tool call to "search" or "get_element" was recorded on the blackboard')
+def step_mcp_search_or_get_element_wip(context) -> None:
+    """Scout MCP probe — TFK-07 stub."""
+    raise NotImplementedError("TFK-07: scout MCP probe")
+
+
+@then(r'an MCP tool call to "(?P<tool>[^"]+)" was recorded on the blackboard')
+def step_mcp_tool_blackboard_wip(context, tool: str) -> None:
+    """MCP drill-down blackboard — TFK-07 stub."""
+    raise NotImplementedError(f"TFK-07: MCP drill-down blackboard ({tool})")
+
+
+use_step_matcher("parse")
 
 
 def _run_update(context) -> None:

@@ -33,12 +33,12 @@ _BOOTSTRAP_EDGES: list[tuple[str, str, str]] = [
 def plan_bootstrap_changeset(
     *,
     model_id: int,
-    element_ops: list[dict],
+    element_ops: list[dict[str, Any]],
     user_id: int | None = None,
     llm: Any | None = None,
     confidence_threshold: float = 0.80,
     handoff_context: dict[str, Any] | None = None,
-) -> tuple[list[dict], str]:
+) -> tuple[list[dict[str, Any]], str]:
     """
     Append relationship ops to Ratatosk element-only bootstrap operations.
 
@@ -160,7 +160,7 @@ def _require_relationships_enabled() -> bool:
     return str(os.environ.get("MUNIN_BOOTSTRAP_REQUIRE_RELATIONSHIPS") or "").strip() == "1"
 
 
-def _applied_element_names(ops: list[dict], confidence_threshold: float) -> set[str]:
+def _applied_element_names(ops: list[dict[str, Any]], confidence_threshold: float) -> set[str]:
     """Element names from ops that will be auto-applied at the given threshold."""
     names: set[str] = set()
     for op in ops:
@@ -178,9 +178,11 @@ def _applied_element_names(ops: list[dict], confidence_threshold: float) -> set[
     return names
 
 
-def _element_ops_for_munin(ops: list[dict], applied_names: set[str]) -> list[dict]:
+def _element_ops_for_munin(
+    ops: list[dict[str, Any]], applied_names: set[str]
+) -> list[dict[str, Any]]:
     """Subset of element ops Munin may use for relationship inference."""
-    eligible: list[dict] = []
+    eligible: list[dict[str, Any]] = []
     for op in ops:
         if op.get("op_type") not in {
             ChangeSetItem.OP_ADD_ELEMENT,
@@ -195,11 +197,11 @@ def _element_ops_for_munin(ops: list[dict], applied_names: set[str]) -> list[dic
 
 
 def _filter_relationship_ops_for_applied_elements(
-    rel_ops: list[dict],
+    rel_ops: list[dict[str, Any]],
     applied_names: set[str],
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Drop relationship ops whose endpoints are not in the applied element set."""
-    kept: list[dict] = []
+    kept: list[dict[str, Any]] = []
     for op in rel_ops:
         detail = op.get("detail") or {}
         source = str(detail.get("source_name") or "").strip()
@@ -216,7 +218,7 @@ def _filter_relationship_ops_for_applied_elements(
     return kept
 
 
-def _element_names_from_ops(ops: list[dict]) -> set[str]:
+def _element_names_from_ops(ops: list[dict[str, Any]]) -> set[str]:
     """Collect element names from add/update element operations."""
     names: set[str] = set()
     for op in ops:
@@ -232,9 +234,9 @@ def _element_names_from_ops(ops: list[dict]) -> set[str]:
     return names
 
 
-def _infer_relationship_ops(names: set[str]) -> list[dict]:
+def _infer_relationship_ops(names: set[str]) -> list[dict[str, Any]]:
     """Rule-based relationship inference for scripted bootstrap manifest."""
-    ops: list[dict] = []
+    ops: list[dict[str, Any]] = []
     for source_name, target_name, edge_slug in _BOOTSTRAP_EDGES:
         if source_name in names and target_name in names:
             ops.append(
@@ -253,7 +255,7 @@ def _infer_relationship_ops(names: set[str]) -> list[dict]:
     return ops
 
 
-def should_enrich_ratatosk_ops(source: str, operations: list[dict]) -> bool:
+def should_enrich_ratatosk_ops(source: str, operations: list[dict[str, Any]]) -> bool:
     """True when Munin should append relationship ops for Ratatosk bootstrap."""
     if source != "ratatosk":
         return False

@@ -27,7 +27,7 @@ from yggdrasil.mcp.server import (
 
 logger = logging.getLogger("yggdrasil.mcp.http_bridge")
 
-ToolFn = Callable[..., dict]
+ToolFn = Callable[..., dict[str, Any]]
 
 
 def _tool_registry() -> dict[str, ToolFn]:

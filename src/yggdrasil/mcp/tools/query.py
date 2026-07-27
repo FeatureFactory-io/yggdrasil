@@ -14,6 +14,7 @@ Other helpers remain in this module until further extraction.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from django.db.models import Q
 
@@ -35,9 +36,9 @@ def list_elements(
     as_of: str | None = None,
     limit: int = 50,
     offset: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """
-    Return a paginated list of elements in the specified model.
+    Return a paginated list[Any] of elements in the specified model.
 
     :param model: Model slug. Example: "yggdrasil"
     :param stereotype: Filter by stereotype slug. Example: "container"
@@ -71,7 +72,7 @@ def list_elements(
         offset=page_offset,
         user_id=user_id,
     )
-    payload: dict = {
+    payload: dict[str, Any] = {
         "items": result.items,
         "total": result.total,
         "limit": result.limit,
@@ -92,7 +93,7 @@ def search(
     query: str,
     model: str,
     limit: int = 20,
-) -> dict:
+) -> dict[str, Any]:
     """
     Full-text search elements by name within a model.
 
@@ -118,13 +119,13 @@ def search(
 def get_element(
     id_or_name: str,
     model: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """
     Get a single element with all properties, relationships, and confidence score.
 
     :param id_or_name: Element PK (int string) or exact name. Example: "Payment API"
     :param model: Model slug to disambiguate name lookups. Example: "yggdrasil"
-    :return: Element dict with name, stereotype, package, owner, properties,
+    :return: Element dict[str, Any] with name, stereotype, package, owner, properties,
         confidence, incoming_relationships, outgoing_relationships.
     :raises ValueError: If element not found.
     :raises PermissionError: If current user has no read access.
@@ -142,7 +143,7 @@ def traverse(
     direction: str = "outgoing",
     depth: int = 1,
     model: str | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """
     Walk the graph from an element and return connected elements.
 
@@ -162,8 +163,8 @@ def traverse(
         user_id,
     )
     source = _resolve_element(from_, model)
-    edges: list[dict] = []
-    nodes: dict[int, dict] = {}
+    edges: list[dict[str, Any]] = []
+    nodes: dict[int, dict[str, Any]] = {}
     if direction in {"outgoing", "both"}:
         for rel in source.outgoing_relationships.select_related("target", "stereotype"):
             edges.append(_edge_dict(rel, "outgoing"))
@@ -186,7 +187,7 @@ def list_changesets(
     model: str | None = None,
     status: str | None = None,
     limit: int = 50,
-) -> dict:
+) -> dict[str, Any]:
     """
     List ChangeSets with optional status filter.
 
@@ -212,12 +213,12 @@ def list_changesets(
     return result
 
 
-def get_changeset(id: int) -> dict:
+def get_changeset(id: int) -> dict[str, Any]:
     """
     Get a ChangeSet with all operations and Munin reasoning.
 
     :param id: ChangeSet PK. Example: 1
-    :return: ChangeSet dict with status, operations list, munin_reasoning.
+    :return: ChangeSet dict[str, Any] with status, operations list[Any], munin_reasoning.
     :raises ValueError: If ChangeSet not found.
     :raises PermissionError: If current user has no read access.
     """
@@ -233,7 +234,7 @@ def get_changeset(id: int) -> dict:
     return result
 
 
-def list_stereotypes(model: str) -> dict:
+def list_stereotypes(model: str) -> dict[str, Any]:
     """
     Return all stereotype definitions for a model (including property_schema).
 
@@ -263,7 +264,7 @@ def list_stereotypes(model: str) -> dict:
 def list_packages(
     model: str,
     limit: int = 50,
-) -> dict:
+) -> dict[str, Any]:
     """
     Return packages defined on the model's metamodel.
 
@@ -292,9 +293,9 @@ def list_relationships(
     to_id: int | None = None,
     limit: int = 50,
     offset: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """
-    Return a paginated list of relationships in the specified model.
+    Return a paginated list[Any] of relationships in the specified model.
 
     :param model: Model slug. Example: "yggdrasil"
     :param stereotype: Filter by edge stereotype slug. Example: "depends_on"
@@ -355,7 +356,7 @@ def list_relationships(
     return result
 
 
-def list_ratatosk_runs(model: str, limit: int = 20) -> dict:
+def list_ratatosk_runs(model: str, limit: int = 20) -> dict[str, Any]:
     """
     Return the run history for a model (most recent first).
 
@@ -399,12 +400,12 @@ def _resolve_model(model: str) -> YggdrasilModel:
         raise ValueError(msg) from exc
 
 
-def _element_summary(element: Element) -> dict:
+def _element_summary(element: Element) -> dict[str, Any]:
     """Serialize an Element for list/search responses."""
     return browse_service.element_summary(element)
 
 
-def _element_detail(element: Element) -> dict:
+def _element_detail(element: Element) -> dict[str, Any]:
     """Serialize a full element including relationship lists."""
     detail = _element_summary(element)
     detail["incoming_relationships"] = [
@@ -440,7 +441,7 @@ def _resolve_element(id_or_name: str, model: str | None) -> Element:
         raise ValueError(msg) from exc
 
 
-def _edge_dict(rel, direction: str) -> dict:
+def _edge_dict(rel: Any, direction: str) -> dict[str, Any]:
     """Serialize a Relationship for traverse/get_element."""
     other = rel.target if direction == "outgoing" else rel.source
     return {
@@ -454,7 +455,7 @@ def _edge_dict(rel, direction: str) -> dict:
     }
 
 
-def _changeset_summary(changeset: ChangeSet) -> dict:
+def _changeset_summary(changeset: ChangeSet) -> dict[str, Any]:
     """Serialize a ChangeSet for list responses."""
     return {
         "id": changeset.pk,
@@ -466,7 +467,7 @@ def _changeset_summary(changeset: ChangeSet) -> dict:
     }
 
 
-def _changeset_detail(changeset: ChangeSet) -> dict:
+def _changeset_detail(changeset: ChangeSet) -> dict[str, Any]:
     """Serialize a ChangeSet with full operations list."""
     summary = _changeset_summary(changeset)
     summary["operations"] = [

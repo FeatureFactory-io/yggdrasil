@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from typing import ClassVar
+from typing import Any
 
 from django.core.management.base import BaseCommand
 
@@ -28,9 +28,9 @@ class Command(BaseCommand):
 
     help = "Launch the FastMCP MCP server (stdio or HTTP+SSE)"
     # Keep stdio JSON-RPC clean — no Django system-check chatter (SAO.md §18.6).
-    requires_system_checks: ClassVar[list[str]] = []
+    requires_system_checks = ()
 
-    def add_arguments(self, parser) -> None:
+    def add_arguments(self, parser: Any) -> None:
         """
         :param parser: Django management command argument parser.
         """
@@ -52,7 +52,7 @@ class Command(BaseCommand):
             help="Port for HTTP+SSE transport. Default: 8001",
         )
 
-    def handle(self, *args, **options) -> None:
+    def handle(self, *args: Any, **options: Any) -> None:
         """
         Start the FastMCP server.
 
@@ -94,7 +94,7 @@ class Command(BaseCommand):
 
     def _bind_user_from_env_token(self) -> None:
         """
-        If ``YGGDRASIL_TOKEN`` is set, authenticate and set MCP user context.
+        If ``YGGDRASIL_TOKEN`` is set[Any], authenticate and set[Any] MCP user context.
 
         Case A (local stdio) uses the PAT from the environment so tool calls
         run as the token owner (SAO.md §18.5).
@@ -126,7 +126,7 @@ class Command(BaseCommand):
             scope,
         )
 
-    def _initialize(self):
+    def _initialize(self) -> Any:
         """Create FastMCP singleton and return it."""
         from yggdrasil.mcp.server import get_mcp, initialize_mcp
 
@@ -135,7 +135,7 @@ class Command(BaseCommand):
         logger.info("mcp_server: FastMCP ready")
         return mcp
 
-    def _run(self, mcp, *, transport: str, host: str, port: int) -> None:
+    def _run(self, mcp: Any, *, transport: str, host: str, port: int) -> None:
         """Block on ``mcp.run`` until the process is terminated."""
         logger.info("mcp_server: calling mcp.run | transport=%s", transport)
         if transport == "stdio":

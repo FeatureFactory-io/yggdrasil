@@ -1,27 +1,40 @@
 # Act 2 View Browser — Plan Index
 
-**Branch:** `feature/act-2-view-browser`
-**Feature:** `VIEW-BROWSE-1` — [`docs/features/act-2-view/view-browse.feature`](../../features/act-2-view/view-browse.feature)
-**Posture:** Dr. Dobbs v2 — test-first, mockup graduation, `lessons_learned.md` after each wave.
+**Branch:** `feature/act-2-view-browser-v03` (proposed)
+**Feature:** `VIEW-BROWSE-1` — [`docs/features/act-2-view/`](../../features/act-2-view/)
+**Posture:** Dr. Dobbs v2 — mockup → feature specs → TFK-07 → BPE waves
 
-## Initial setup (BPE-01)
+## Feature file map (v0.3)
 
-1. `git checkout main && git pull`
-2. `git checkout -b feature/act-2-view-browser`
-3. Implement waves F0→W6; append to [`lessons_learned.md`](lessons_learned.md) after each checkpoint.
+| File | Scenarios | Component |
+|------|-----------|-----------|
+| [`view-browse.feature`](../../features/act-2-view/view-browse.feature) | 01–16 | Shell, filters, navbar, three-panel chrome |
+| [`view-browse-navigator.feature`](../../features/act-2-view/view-browse-navigator.feature) | 17–24 | Left package/element tree |
+| [`view-browse-inspector.feature`](../../features/act-2-view/view-browse-inspector.feature) | 25–34 | Right property panel + embed partials |
+| [`view-browse-canvas.feature`](../../features/act-2-view/view-browse-canvas.feature) | 35–44 | Graph/table canvas + filter sync |
+| [`_implementation_notes.md`](../../features/act-2-view/_implementation_notes.md) | — | Component map, waves, embed contract |
 
-## Wave order
+## v0.2 status (shipped)
 
-| Wave | Deliverable | Checkpoint |
-|------|-------------|------------|
-| F0 | `graph/browse_service.py` + MCP delegate | `pytest src/yggdrasil/graph/tests/test_browse_service.py -x` |
-| W1–W5 | `/views/` shell, table, filters, graph JSON | `pytest src/yggdrasil/web/tests/test_view_browse.py -x` |
-| W6 | Navbar, Gherkin `/views/` URLs | `pytest src/yggdrasil/web/tests/ -x` |
+F0 + W1–W6: `browse_service`, `/views/` table, filters, graph JSON, navbar.
+Scenarios **01–15** (except 11 @wip) covered by `test_view_browse.py`.
 
-## Deferred (stub in prod)
+## v0.3 wave order
 
-VIEW-BROWSE-1-07, 09, 10, 11 — saved views, export/history, Munin wiring, time travel replay.
+| Wave | Deliverable | Scenarios | Checkpoint |
+|------|-------------|-----------|------------|
+| W7 | Three-panel template + `yrg-view-browser` CSS | 16 | AT shell testids |
+| W8 | Navigator SSR/HTMX + slug testids | 17–24 | AT 17–20; E2E 21–24 |
+| W9 | Inspector + `?embed=1` on Element/Relationship views | 25–34 | AT 27–28; E2E 29–34 |
+| W10 | Cytoscape full-height + selection bus JS | 38–42 | E2E |
+| W11 | Filter ↔ navigator ↔ graph URL sync | 43–44 | AT + E2E |
 
-## v0.2 status
+**TFK-07 before W8:** gaps #7–17 in [`docs/features/CATALOG.md`](../../features/CATALOG.md#known-gaps--tfk-07).
 
-Implemented in tag `0.2`: F0 + W1–W6 core (list, filters, graph JSON, navbar).
+## Mockup reference
+
+[`src/yggdrasil/web/templates/mockups/view/browse.html`](../../../src/yggdrasil/web/templates/mockups/view/browse.html) — three-panel layout with Yggdrasil self-model data.
+
+## Deferred (unchanged)
+
+VIEW-BROWSE-1-07 saved views · 09 export/history prod wiring · 11 time travel banner.

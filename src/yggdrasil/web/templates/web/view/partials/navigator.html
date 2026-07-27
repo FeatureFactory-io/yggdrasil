@@ -1,0 +1,63 @@
+{# Left panel: package + element navigator (SSR, W7) #}
+<aside id="browserNavPanel"
+       class="yrg-browser-nav yrg-graph-only"
+       data-testid="browser-nav-panel"
+       aria-label="Package and element navigator">
+
+  <div class="yrg-browser-nav-scroll">
+    <div class="yrg-nav-model-title" data-testid="browser-model-name">
+      <i class="fa-solid fa-diagram-project me-1" aria-hidden="true"></i>{{ model_name }}
+    </div>
+
+    <div class="yrg-nav-search">
+      <input type="search"
+             class="form-control form-control-sm"
+             placeholder="Search elements…"
+             aria-label="Search elements"
+             data-testid="browser-search-input"
+             id="navSearchInput"
+             disabled
+             title="Search — coming in W8">
+    </div>
+
+    <div class="hg-section-label mb-1">Packages</div>
+    <nav aria-label="Package tree" data-testid="browser-package-tree" id="packageTree">
+      {% for pkg in packages %}
+      <div class="yrg-package-node" data-package="{{ pkg.slug }}">
+        <button type="button"
+                class="yrg-package-toggle"
+                data-bs-toggle="collapse"
+                data-bs-target="#pkg-{{ pkg.slug }}"
+                aria-expanded="{% if pkg.slug == 'application' %}true{% else %}false{% endif %}"
+                data-testid="package-toggle-{{ pkg.slug }}">
+          <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+          <i class="fa-solid fa-folder text-warning" aria-hidden="true"></i>
+          <span>{{ pkg.name }}</span>
+          <span class="badge bg-secondary ms-auto" style="font-size:0.6rem;">{{ pkg.elements|length }}</span>
+        </button>
+        <div class="collapse {% if pkg.slug == 'application' %}show{% endif %}" id="pkg-{{ pkg.slug }}">
+          {% for el in pkg.elements %}
+          <button type="button"
+                  class="yrg-element-item"
+                  data-element-id="{{ el.id }}"
+                  data-element-slug="{{ el.slug }}"
+                  data-testid="nav-element-{{ el.slug }}">
+            <span class="st-icon" aria-hidden="true">
+              {% if el.stereotype == 'System' %}<i class="fa-solid fa-cube"></i>
+              {% elif el.stereotype == 'Container' %}<i class="fa-solid fa-box"></i>
+              {% elif el.stereotype == 'Component' %}<i class="fa-solid fa-puzzle-piece"></i>
+              {% elif el.stereotype == 'Person' %}<i class="fa-solid fa-user"></i>
+              {% else %}<i class="fa-solid fa-circle"></i>{% endif %}
+            </span>
+            <span class="text-truncate">{{ el.name }}</span>
+            <span class="hg-dot hg-dot-{{ el.health }} ms-auto flex-shrink-0" aria-hidden="true"></span>
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+      {% empty %}
+      <p class="text-muted small mb-0">No packages in current filter.</p>
+      {% endfor %}
+    </nav>
+  </div>
+</aside>

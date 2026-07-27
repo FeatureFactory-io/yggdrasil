@@ -10,7 +10,7 @@ def stereotype_guidance_block(st: Any) -> list[str]:
     """
     Format one Stereotype as LLM guidance lines.
 
-    :param st: Stereotype model or dict with slug, name, description, etc.
+    :param st: Stereotype model or dict[str, Any] with slug, name, description, etc.
     :return: Markdown lines for prompt injection.
     """
     if isinstance(st, dict):
@@ -67,8 +67,8 @@ def build_metamodel_guidance(metamodel: Any) -> str:
 
 
 def build_metamodel_guidance_from_stereotypes(
-    items: list[dict],
-    packages: list[dict] | None = None,
+    items: list[dict[str, Any]],
+    packages: list[dict[str, Any]] | None = None,
     *,
     metamodel_slug: str = "c4",
     metamodel_name: str = "C4",

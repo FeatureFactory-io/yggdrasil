@@ -1,6 +1,8 @@
 """Deterministic pre-filter for bootstrap candidates (Phase D0)."""
 
 from __future__ import annotations
+from typing import Any
+
 
 import logging
 from dataclasses import dataclass, field
@@ -39,9 +41,9 @@ _TEST_SOURCE_GLOBS: tuple[str, ...] = (
 class PrefilterResult:
     """Outcome of deterministic candidate pre-filtering."""
 
-    kept: list[dict] = field(default_factory=list)
-    rejected: list[dict] = field(default_factory=list)
-    cluster_hints: dict[str, list[str]] = field(default_factory=dict)
+    kept: list[dict[str, Any]] = field(default_factory=list[Any])
+    rejected: list[dict[str, Any]] = field(default_factory=list[Any])
+    cluster_hints: dict[str, list[str]] = field(default_factory=dict[str, Any])
 
 
 def _normalize_cluster_key(name: str) -> str:
@@ -68,7 +70,7 @@ def _only_noise_sources(source_paths: list[str]) -> bool:
     return all(_path_matches_any(path, _NOISE_SOURCE_GLOBS) for path in source_paths)
 
 
-def _is_test_lib_noise(candidate: dict) -> bool:
+def _is_test_lib_noise(candidate: dict[str, Any]) -> bool:
     name = str(candidate.get("name") or "").strip().lower()
     if name not in _TEST_LIB_NAMES and name.replace("_", " ") not in _TEST_LIB_NAMES:
         return False
@@ -76,7 +78,7 @@ def _is_test_lib_noise(candidate: dict) -> bool:
     return not paths or all(_path_matches_any(p, _TEST_SOURCE_GLOBS) for p in paths)
 
 
-def prefilter_candidates(candidates: list[dict]) -> PrefilterResult:
+def prefilter_candidates(candidates: list[dict[str, Any]]) -> PrefilterResult:
     """
     Apply path-class and test-lib rejection rules before Sonnet synthesize.
 
@@ -84,8 +86,8 @@ def prefilter_candidates(candidates: list[dict]) -> PrefilterResult:
     :return: Kept rows, rejected rows, and cluster hints for D1.
     """
     logger.info("prefilter_candidates | entry input_count=%s", len(candidates))
-    kept: list[dict] = []
-    rejected: list[dict] = []
+    kept: list[dict[str, Any]] = []
+    rejected: list[dict[str, Any]] = []
     clusters: dict[str, list[str]] = {}
 
     for candidate in candidates:

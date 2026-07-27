@@ -36,6 +36,7 @@ Modules and steps:
   - Then the user should see "{text}"
   - Then the user should not see "{text}"
   - Then the element "{test_id}" should be visible
+  - Then the element "{test_id}" should not be visible
 
 **dialog_steps**
   - When the user confirms the dialog

@@ -54,7 +54,7 @@ class RatatoskMcpClient:
 
         :param name: Tool name. Example: ``"list_elements"``.
         :param arguments: Tool arguments. Example: ``{"model": "yggdrasil"}``.
-        :return: Tool result as a dict (unwraps ``{"result": ...}`` when present).
+        :return: Tool result as a dict[str, Any] (unwraps ``{"result": ...}`` when present).
         :raises McpClientError: On HTTP or auth failure.
         """
         arguments = arguments or {}
@@ -96,13 +96,13 @@ class RatatoskMcpClient:
             msg = f"MCP tool {name!r} returned non-JSON body"
             raise McpClientError(msg) from exc
 
-        if isinstance(payload, dict) and "result" in payload:
+        if isinstance(payload, dict[str, Any]) and "result" in payload:
             result = payload["result"]
-            if isinstance(result, dict):
+            if isinstance(result, dict[str, Any]):
                 self._log_tool_result(name, result)
                 return result
             return {"value": result}
-        if isinstance(payload, dict):
+        if isinstance(payload, dict[str, Any]):
             self._log_tool_result(name, payload)
             return payload
         return {"value": payload}

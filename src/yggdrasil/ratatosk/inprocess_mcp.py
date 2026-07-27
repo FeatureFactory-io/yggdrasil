@@ -19,7 +19,7 @@ from yggdrasil.mcp.tools import query as query_tools
 
 logger = logging.getLogger("yggdrasil.ratatosk.inprocess_mcp")
 
-_TOOL_MAP: dict[str, Callable[..., dict]] = {
+_TOOL_MAP: dict[str, Callable[..., dict[str, Any]]] = {
     "list_elements": query_tools.list_elements,
     "list_relationships": query_tools.list_relationships,
     "list_stereotypes": query_tools.list_stereotypes,
@@ -33,7 +33,7 @@ class InProcessMcpToolClient:
     """
     Sync ``call_tool`` facade over registered MCP tool callables.
 
-    Used by Journey L1 so discovery uses the real propose/list paths.
+    Used by Journey L1 so discovery uses the real propose/list[Any] paths.
     """
 
     def __init__(self, *, user_id: int | None, token_scope: str = "read-write") -> None:
@@ -50,7 +50,7 @@ class InProcessMcpToolClient:
 
         :param name: Tool name. Example: ``"list_elements"``.
         :param arguments: Keyword args for the tool.
-        :return: Tool result dict.
+        :return: Tool result dict[str, Any].
         :raises KeyError: If tool is not in the in-process map.
         """
         arguments = arguments or {}

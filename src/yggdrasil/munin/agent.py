@@ -19,7 +19,7 @@ from __future__ import annotations
 import ast
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlencode
 
 from django.contrib.auth.models import User
@@ -71,10 +71,10 @@ class MuninResponse:
     """
 
     text: str
-    cited_elements: list[dict] = field(default_factory=list)
+    cited_elements: list[dict[str, Any]] = field(default_factory=list[Any])
     navigation_url: str | None = None
     changeset_id: int | None = None
-    tool_calls: list[dict] = field(default_factory=list)
+    tool_calls: list[dict[str, Any]] = field(default_factory=list[Any])
 
 
 class MuninAgent:
@@ -115,7 +115,7 @@ class MuninAgent:
     def chat(
         self,
         message: str,
-        history: list[dict],
+        history: list[dict[str, Any]],
         instructions: str = "",
     ) -> MuninResponse:
         """
@@ -125,7 +125,7 @@ class MuninAgent:
         Write operations are always routed through ChangeSetService.propose().
 
         :param message: User's natural-language input. Example: "Who owns Payment API?"
-        :param history: Prior conversation turns (list of {role, content} dicts).
+        :param history: Prior conversation turns (list[Any] of {role, content} dicts).
         :param instructions: Optional extra instructions (e.g. from do_other).
         :return: MuninResponse with text, cited elements, navigation URL.
         :raises LLMError: If the LLM call fails.
@@ -457,9 +457,9 @@ graph LR
     def _run_agent_loop(
         self,
         system: str,
-        messages: list[dict],
+        messages: list[dict[str, Any]],
         max_steps: int = 10,
-    ) -> tuple[str, list[dict]]:
+    ) -> tuple[str, list[dict[str, Any]]]:
         """
         Execute the Plan & Steps loop until no more tool calls are needed.
 
@@ -467,17 +467,17 @@ graph LR
         """
         raise NotImplementedError()
 
-    def _dispatch_tool(self, tool_name: str, tool_args: dict) -> dict:
+    def _dispatch_tool(self, tool_name: str, tool_args: dict[str, Any]) -> dict[str, Any]:
         """Route a tool call to the appropriate service method."""
         raise NotImplementedError()
 
-    def _parse_tool_calls(self, llm_text: str) -> list[dict]:
+    def _parse_tool_calls(self, llm_text: str) -> list[dict[str, Any]]:
         """Extract structured tool call requests from LLM output."""
         raise NotImplementedError()
 
     def _synthesise_response(
         self,
-        tool_results: list[dict],
+        tool_results: list[dict[str, Any]],
         user_message: str,
     ) -> MuninResponse:
         """Build a structured MuninResponse from tool results and the LLM answer."""
@@ -546,7 +546,7 @@ graph LR
         except Element.DoesNotExist as exc:
             msg = f"Element id={element_id} not found in model_id={self._model_id}"
             raise ValueError(msg) from exc
-        field_diffs: dict[str, list] = {}
+        field_diffs: dict[str, list[Any]] = {}
         summaries: list[str] = []
         for field_name, new_value in params.items():
             if not hasattr(element, field_name):
@@ -735,9 +735,9 @@ graph LR
             msg = "update_relationships_batch operations payload is invalid"
             raise ValueError(msg) from exc
         if not isinstance(operations, list) or not operations:
-            msg = "update_relationships_batch requires a non-empty operations list"
+            msg = "update_relationships_batch requires a non-empty operations list[Any]"
             raise ValueError(msg)
-        propose_ops: list[dict] = []
+        propose_ops: list[dict[str, Any]] = []
         for op in operations:
             from_id = int(op.get("from_id") or op.get("source_id"))
             to_id = int(op.get("to_id") or op.get("target_id"))

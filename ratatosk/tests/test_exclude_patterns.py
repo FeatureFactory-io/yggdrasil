@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 from pathlib import Path
 
 from ratatosk.discovery.exclude import (
@@ -13,7 +14,7 @@ from ratatosk.discovery.runner import _build_file_tree
 
 
 def test_normalize_exclude_patterns_splits_csv() -> None:
-    """Comma-separated exclude env values become a list."""
+    """Comma-separated exclude env values become a list[Any]."""
     assert normalize_exclude_patterns("src/payment_api/,docs/") == [
         "src/payment_api/",
         "docs/",

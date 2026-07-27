@@ -28,6 +28,6 @@ class TokenAuthentication(BaseAuthentication):
     :return: ``None`` (defer to next authenticator).
     """
 
-    def authenticate(self, request: Request) -> None:  # type: ignore[override]
+    def authenticate(self, request: Request) -> tuple[None, None] | None:
         logger.debug("TokenAuthentication.authenticate called (placeholder)")
         return None

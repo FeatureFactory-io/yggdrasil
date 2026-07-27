@@ -9,7 +9,7 @@ Web views for Yggdrasil.
 import logging
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
@@ -17,7 +17,12 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET
 
 from yggdrasil.graph import browse_service
-from yggdrasil.web.browse_helpers import build_view_browse_context, parse_view_browse_params
+from yggdrasil.graph.models import Element, Relationship
+from yggdrasil.web.browse_helpers import (
+    build_view_browse_context,
+    enrich_confidence_fields,
+    parse_view_browse_params,
+)
 
 logger = logging.getLogger("yggdrasil.web")
 
@@ -115,3 +120,62 @@ class ViewBrowseGraphJsonView(LoginRequiredMixin, View):
             len(payload["edges"]),
         )
         return JsonResponse(payload)
+
+
+class ViewBrowseInspectorElementView(LoginRequiredMixin, View):
+    """GET /views/inspector/element/<pk>/ — element embed partial for inspector."""
+
+    template_name = "web/view/partials/inspector_element.html"
+
+    def get(self, request: HttpRequest, pk: int) -> HttpResponse:
+        """
+        Render element properties for the View Browser inspector panel.
+
+        :param request: Authenticated GET request.
+        :param pk: Element primary key.
+        :return: HTML partial without page chrome.
+        """
+        try:
+            payload = browse_service.get_element_for_inspector(pk, user_id=request.user.pk)
+        except Element.DoesNotExist as exc:
+            raise Http404("Element not found") from exc
+        element = enrich_confidence_fields(payload["element"])
+        context = {
+            "element": element,
+            "relationships": payload["relationships"],
+            "relationships_in": payload["relationships_in"],
+            "relationships_out": payload["relationships_out"],
+        }
+        logger.info(
+            "ViewBrowseInspectorElementView.get | user_pk=%s element_id=%s rel_count=%s",
+            request.user.pk,
+            pk,
+            len(payload["relationships"]),
+        )
+        return render(request, self.template_name, context)
+
+
+class ViewBrowseInspectorRelationshipView(LoginRequiredMixin, View):
+    """GET /views/inspector/relationship/<pk>/ — relationship embed partial for inspector."""
+
+    template_name = "web/view/partials/inspector_relationship.html"
+
+    def get(self, request: HttpRequest, pk: int) -> HttpResponse:
+        """
+        Render relationship properties for the View Browser inspector panel.
+
+        :param request: Authenticated GET request.
+        :param pk: Relationship primary key.
+        :return: HTML partial without page chrome.
+        """
+        try:
+            detail = browse_service.get_relationship_for_inspector(pk, user_id=request.user.pk)
+        except Relationship.DoesNotExist as exc:
+            raise Http404("Relationship not found") from exc
+        relationship = enrich_confidence_fields(detail)
+        logger.info(
+            "ViewBrowseInspectorRelationshipView.get | user_pk=%s relationship_id=%s",
+            request.user.pk,
+            pk,
+        )
+        return render(request, self.template_name, {"relationship": relationship})

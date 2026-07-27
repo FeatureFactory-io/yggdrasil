@@ -62,10 +62,10 @@ def resolve_model(model_slug: str) -> YggdrasilModel:
 
 def element_summary(element: Element) -> dict[str, Any]:
     """
-    Serialize an element for API/list responses.
+    Serialize an element for API/list[Any] responses.
 
     :param element: ORM element with stereotype/package loaded.
-    :return: Summary dict including health and source.
+    :return: Summary dict[str, Any] including health and source.
     """
     return {
         "id": element.pk,
@@ -73,8 +73,8 @@ def element_summary(element: Element) -> dict[str, Any]:
         "slug": element.slug,
         "stereotype": element.stereotype.name if element.stereotype_id else "",
         "stereotype_slug": element.stereotype.slug if element.stereotype_id else "",
-        "package": element.package.name if element.package_id else "",
-        "package_slug": element.package.slug if element.package_id else "",
+        "package": (element.package.name if element.package else ""),
+        "package_slug": (element.package.slug if element.package else ""),
         "owner": element.owner,
         "health": element.health,
         "source": element.source,
@@ -88,7 +88,7 @@ def element_row(element: Element) -> dict[str, Any]:
     Serialize an element for View Browser table rows.
 
     :param element: ORM element.
-    :return: Template-friendly row dict.
+    :return: Template-friendly row dict[str, Any].
     """
     summary = element_summary(element)
     return {
@@ -114,7 +114,7 @@ def list_elements(
     user_id: int | None = None,
 ) -> BrowseResult:
     """
-    Return a paginated, filterable element list for a model.
+    Return a paginated, filterable element list[Any] for a model.
 
     :param model_slug: Model slug. Example: ``"yggdrasil"``
     :param stereotype: Stereotype slug or name filter. Example: ``"container"``
@@ -197,7 +197,7 @@ def subgraph_for_elements(
     :param stereotype: Optional stereotype filter.
     :param package: Optional package filter.
     :param health: Optional health filter.
-    :param element_ids: Restrict to these PKs when set.
+    :param element_ids: Restrict to these PKs when set[Any].
     :param user_id: Authenticated user PK for audit logs.
     :return: ``{"elements": [node data...], "edges": [edge data...]}``
     :raises ValueError: If model not found.
@@ -239,6 +239,95 @@ def subgraph_for_elements(
         user_id,
     )
     return {"elements": nodes, "edges": edges}
+
+
+def get_element_for_inspector(element_id: int, *, user_id: int | None = None) -> dict[str, Any]:
+    """
+    Build inspector context for a single element and its connected relationships.
+
+    :param element_id: Element primary key.
+    :param user_id: Authenticated user PK for audit logs.
+    :return: ``{"element": {...}, "relationships": [...]}``.
+    :raises Element.DoesNotExist: If the element is missing.
+    """
+    element = Element.objects.select_related("stereotype", "package", "model").get(pk=element_id)
+    outgoing = Relationship.objects.filter(source=element).select_related(
+        "target", "stereotype", "source"
+    )
+    incoming = Relationship.objects.filter(target=element).select_related(
+        "source", "stereotype", "target"
+    )
+    relationships: list[dict[str, Any]] = []
+    for rel in outgoing:
+        relationships.append(_connected_relationship_row(rel, element.pk, outbound=True))
+    for rel in incoming:
+        relationships.append(_connected_relationship_row(rel, element.pk, outbound=False))
+    relationships.sort(key=lambda row: (row["edge_stereotype"], row["other_name"]))
+    logger.info(
+        "browse_service.get_element_for_inspector | exit element_id=%s rel_count=%s user_id=%s",
+        element_id,
+        len(relationships),
+        user_id,
+    )
+    return {
+        "element": element_summary(element),
+        "relationships": relationships,
+        "relationships_in": incoming.count(),
+        "relationships_out": outgoing.count(),
+    }
+
+
+def get_relationship_for_inspector(
+    relationship_id: int, *, user_id: int | None = None
+) -> dict[str, Any]:
+    """
+    Build inspector context for a single relationship.
+
+    :param relationship_id: Relationship primary key.
+    :param user_id: Authenticated user PK for audit logs.
+    :return: Relationship detail dict[str, Any] with endpoint element names.
+    :raises Relationship.DoesNotExist: If the relationship is missing.
+    """
+    rel = Relationship.objects.select_related(
+        "stereotype", "source", "target", "source__stereotype", "target__stereotype"
+    ).get(pk=relationship_id)
+    logger.info(
+        "browse_service.get_relationship_for_inspector | exit relationship_id=%s user_id=%s",
+        relationship_id,
+        user_id,
+    )
+    return _relationship_inspector_detail(rel)
+
+
+def _connected_relationship_row(
+    rel: Relationship,
+    element_id: int,
+    *,
+    outbound: bool,
+) -> dict[str, Any]:
+    """Map a relationship to an inspector connected-row dict."""
+    other = rel.target if outbound else rel.source
+    return {
+        "id": rel.pk,
+        "edge_stereotype": rel.stereotype.slug if rel.stereotype_id else "rel",
+        "other_id": other.pk,
+        "other_name": other.name,
+        "outbound": outbound,
+    }
+
+
+def _relationship_inspector_detail(rel: Relationship) -> dict[str, Any]:
+    """Serialize a relationship for the inspector partial."""
+    return {
+        "id": rel.pk,
+        "from_id": rel.source_id,
+        "to_id": rel.target_id,
+        "from_element": rel.source.name,
+        "to_element": rel.target.name,
+        "edge_stereotype": rel.stereotype.slug if rel.stereotype_id else "rel",
+        "confidence": rel.confidence,
+        "properties": rel.properties,
+    }
 
 
 def _filtered_queryset(ymodel: YggdrasilModel, filters: BrowseFilters) -> QuerySet[Element]:

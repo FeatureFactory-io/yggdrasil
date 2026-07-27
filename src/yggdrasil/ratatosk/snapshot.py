@@ -9,7 +9,7 @@ existing-model reads.
 from __future__ import annotations
 
 import logging
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
 from yggdrasil.graph.models import Element, Relationship, YggdrasilModel
 
@@ -41,7 +41,7 @@ def normalize_snapshot(
 
     :param elements: Element summary dicts (must include ``slug`` when present).
     :param relationships: Relationship summary dicts.
-    :return: Snapshot dict with counts and ``by_slug`` index.
+    :return: Snapshot dict[str, Any] with counts and ``by_slug`` index.
     """
     by_slug = {item["slug"]: item for item in elements if item.get("slug")}
     return {
@@ -87,7 +87,10 @@ class LocalOrmSnapshotPort:
             len(elements),
             len(relationships),
         )
-        return normalize_snapshot(elements, relationships)
+        return normalize_snapshot(
+            cast("list[dict[str, Any]]", elements),
+            cast("list[dict[str, Any]]", relationships),
+        )
 
 
 class McpSnapshotPort:
@@ -95,7 +98,7 @@ class McpSnapshotPort:
 
     def __init__(self, client: Any) -> None:
         """
-        :param client: Object with ``call_tool(name, arguments) -> dict``.
+        :param client: Object with ``call_tool(name, arguments) -> dict[str, Any]``.
         """
         self._client = client
 

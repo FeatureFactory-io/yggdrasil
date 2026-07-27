@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Any
 
 from yggdrasil.llm.base import LLMError, LLMMessage, LLMResponse
 from yggdrasil.llm.structured import normalize_llm_text
@@ -33,12 +34,12 @@ class AnthropicClient:
         """
         :param model: Claude model string. Defaults to LLM_ANTHROPIC_MODEL env.
         :param api_key: Anthropic API key. Defaults to ANTHROPIC_API_KEY env.
-        :raises LLMError: If api_key is not set.
+        :raises LLMError: If api_key is not set[Any].
         """
         self.model_id = model or os.getenv("LLM_ANTHROPIC_MODEL", _DEFAULT_MODEL)
         self._api_key = api_key or os.getenv("ANTHROPIC_API_KEY", "")
         if not self._api_key:
-            raise LLMError("ANTHROPIC_API_KEY is not set — cannot initialise AnthropicClient")
+            raise LLMError("ANTHROPIC_API_KEY is not set[Any] — cannot initialise AnthropicClient")
         logger.info("AnthropicClient: initialised | model=%s", self.model_id)
 
     def complete(
@@ -86,13 +87,14 @@ class AnthropicClient:
         )
         return result
 
-    def _call_sdk(self, payload: dict) -> dict:
+    def _call_sdk(self, payload: dict[str, Any]) -> dict[str, Any]:
         import anthropic
 
         client = anthropic.Anthropic(api_key=self._api_key)
         response = client.messages.create(**payload)
         if hasattr(response, "model_dump"):
-            return response.model_dump()
+            dumped = response.model_dump()
+            return dict(dumped)
         return dict(response)
 
     def _build_payload(
@@ -101,9 +103,9 @@ class AnthropicClient:
         system: str,
         max_tokens: int,
         temperature: float,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Build the JSON payload for /v1/messages."""
-        payload: dict = {
+        payload: dict[str, Any] = {
             "model": self.model_id,
             "max_tokens": max_tokens,
             "temperature": temperature,
@@ -113,7 +115,7 @@ class AnthropicClient:
             payload["system"] = system
         return payload
 
-    def _parse_response(self, raw: dict) -> LLMResponse:
+    def _parse_response(self, raw: dict[str, Any]) -> LLMResponse:
         """Parse Anthropic Messages API response into LLMResponse."""
         thinking, text = self._extract_text_blocks(raw.get("content") or [])
         content = normalize_llm_text(text)
@@ -137,7 +139,7 @@ class AnthropicClient:
         )
 
     @staticmethod
-    def _extract_text_blocks(blocks: list) -> tuple[str, str]:
+    def _extract_text_blocks(blocks: list[Any]) -> tuple[str, str]:
         """Return (thinking_text, answer_text) from Anthropic content blocks."""
         thinking_parts: list[str] = []
         text_parts: list[str] = []

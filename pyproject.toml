@@ -124,9 +124,21 @@ python_version = "3.13"
 strict = true
 plugins = ["mypy_django_plugin.main"]
 mypy_path = "src"
+exclude = [
+    ".*/migrations/.*",
+    ".*/tests/.*",
+]
 
 [[tool.mypy.overrides]]
 module = ["*.migrations.*", "*.tests.*", "tests.*", "conftest"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["celery", "celery.*", "environ"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["*.admin"]
 ignore_errors = true
 
 [tool.django-stubs]

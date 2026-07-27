@@ -36,7 +36,7 @@ SYSTEM_EXTRACT = (
     f"{_RATATOSK_FOUNDATION} "
     "Your job now: extract architecture candidates as a JSON array "
     "(name, stereotype, package, confidence, optional properties). "
-    "Ideal outcome: a small, high-precision list where every item uses valid slugs "
+    "Ideal outcome: a small, high-precision list[Any] where every item uses valid slugs "
     "and honest confidence scores."
 )
 

@@ -11,5 +11,15 @@ urlpatterns = [
     path("", views.index, name="index"),
     path("views/", views.ViewBrowseView.as_view(), name="view_browse"),
     path("views/graph.json", views.ViewBrowseGraphJsonView.as_view(), name="view_browse_graph"),
+    path(
+        "views/inspector/element/<int:pk>/",
+        views.ViewBrowseInspectorElementView.as_view(),
+        name="view_browse_inspector_element",
+    ),
+    path(
+        "views/inspector/relationship/<int:pk>/",
+        views.ViewBrowseInspectorRelationshipView.as_view(),
+        name="view_browse_inspector_relationship",
+    ),
     path("chat/munin/", MuninChatView.as_view(), name="munin_chat"),
 ]

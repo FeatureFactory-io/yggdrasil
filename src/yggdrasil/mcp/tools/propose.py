@@ -29,7 +29,7 @@ _service = ChangeSetService()
 DEFAULT_CONFIDENCE_THRESHOLD = 0.80
 
 
-def ensure_model(model: str, metamodel: str = "c4") -> dict:
+def ensure_model(model: str, metamodel: str = "c4") -> dict[str, Any]:
     """
     Resolve or create a YggdrasilModel bound to a Metamodel slug.
 
@@ -80,7 +80,7 @@ def propose_changeset(
     allow_empty: bool = False,
     confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD,
     handoff_context: dict[str, Any] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """
     Propose a ChangeSet from structured operations (Ratatosk CLI handoff).
 
@@ -225,7 +225,7 @@ def record_ratatosk_run(
     status: str = RataskRun.STATUS_COMPLETE,
     trigger: str = "bootstrap",
     delta_summary: dict[str, Any] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """
     Create or update a RataskRun record with blackboard state.
 
@@ -237,7 +237,7 @@ def record_ratatosk_run(
     :param changeset_id: Linked ChangeSet PK when handoff succeeded.
     :param status: running|complete|failed.
     :param trigger: bootstrap|update (stored on blackboard).
-    :param delta_summary: Bucket counts dict.
+    :param delta_summary: Bucket counts dict[str, Any].
     :return: {"run_id": ..., "changeset_id": ..., "status": ...}
     :raises PermissionError: If token is read-only.
     :raises ValueError: If model not found.

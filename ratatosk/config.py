@@ -68,13 +68,13 @@ class BootstrapConfig:
     ollama_base_url: str = _DEFAULT_OLLAMA_URL
     metamodel: str = _DEFAULT_METAMODEL
     model_summary_token_budget: int = _DEFAULT_BUDGET
-    exclude_patterns: list[str] = field(default_factory=list)
+    exclude_patterns: list[str] = field(default_factory=list[Any])
     instructions: str = ""
     planning_model: str = ""
     resolved_planning_model: str = ""
     max_extract_targets: int = DEFAULT_MAX_EXTRACT_TARGETS
     max_file_reads_per_run: int = DEFAULT_MAX_FILE_READS_PER_RUN
-    extra_env: dict[str, str] = field(default_factory=dict)
+    extra_env: dict[str, str] = field(default_factory=dict[str, Any])
 
     @property
     def discovery_limits(self) -> DiscoveryLimits:
@@ -307,7 +307,7 @@ def load_bootstrap_config(
     return config
 
 
-def build_llm_from_config(config: BootstrapConfig, *, model: str | None = None):
+def build_llm_from_config(config: BootstrapConfig, *, model: str | None = None) -> Any:
     """
     Instantiate field-tier (extract) discovery LLM from config.
 
@@ -320,7 +320,7 @@ def build_llm_from_config(config: BootstrapConfig, *, model: str | None = None):
     return _build_llm_client(config, model or config.resolved_model, tier="extract")
 
 
-def build_extract_llm_from_config(config: BootstrapConfig):
+def build_extract_llm_from_config(config: BootstrapConfig) -> Any:
     """
     Alias for field-tier extract LLM (Haiku / fast model).
 
@@ -330,7 +330,7 @@ def build_extract_llm_from_config(config: BootstrapConfig):
     return build_llm_from_config(config)
 
 
-def build_planning_llm_from_config(config: BootstrapConfig):
+def build_planning_llm_from_config(config: BootstrapConfig) -> Any:
     """
     Instantiate planning-tier LLM for ``_llm_project_map``.
 
@@ -340,7 +340,7 @@ def build_planning_llm_from_config(config: BootstrapConfig):
     return _build_llm_client(config, config.resolved_planning_model, tier="planning")
 
 
-def _build_llm_client(config: BootstrapConfig, model_id: str, *, tier: str):
+def _build_llm_client(config: BootstrapConfig, model_id: str, *, tier: str) -> Any:
     from ratatosk.discovery.scripted_llm import ScriptedDiscoveryLLM
     from yggdrasil.llm.base import LLMError
 
@@ -352,16 +352,20 @@ def _build_llm_client(config: BootstrapConfig, model_id: str, *, tier: str):
         model_id,
     )
     if provider == "scripted":
-        client = ScriptedDiscoveryLLM()
-        logger.info("_build_llm_client | tier=%s client=%s", tier, type(client).__name__)
-        return client
+        scripted = ScriptedDiscoveryLLM()
+        logger.info("_build_llm_client | tier=%s client=%s", tier, type(scripted).__name__)
+        return scripted
     if provider == "ollama":
         try:
             from yggdrasil.llm.adapters.ollama import OllamaClient
 
-            client = OllamaClient(model=model_id, base_url=config.ollama_base_url)
-            logger.info("_build_llm_client | tier=%s client=%s", tier, type(client).__name__)
-            return client
+            ollama_client = OllamaClient(model=model_id, base_url=config.ollama_base_url)
+            logger.info(
+                "_build_llm_client | tier=%s client=%s",
+                tier,
+                type(ollama_client).__name__,
+            )
+            return ollama_client
         except Exception as exc:
             msg = f"LLM_PROVIDER=ollama but Ollama client failed: {exc}"
             logger.error("_build_llm_client | tier=%s %s", tier, msg)
@@ -374,8 +378,12 @@ def _build_llm_client(config: BootstrapConfig, model_id: str, *, tier: str):
             raise LLMError(msg)
         from yggdrasil.llm.adapters.anthropic import AnthropicClient
 
-        client = AnthropicClient(model=model_id, api_key=api_key)
-        logger.info("_build_llm_client | tier=%s client=%s", tier, type(client).__name__)
-        return client
+        anthropic_client = AnthropicClient(model=model_id, api_key=api_key)
+        logger.info(
+            "_build_llm_client | tier=%s client=%s",
+            tier,
+            type(anthropic_client).__name__,
+        )
+        return anthropic_client
     msg = f"Unknown LLM_PROVIDER={provider!r}; use scripted, ollama, or anthropic"
     raise RuntimeError(msg)

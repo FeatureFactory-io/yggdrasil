@@ -1,6 +1,8 @@
 """Candidate merge helpers with file provenance."""
 
 from __future__ import annotations
+from typing import Any
+
 
 import logging
 import re
@@ -8,17 +10,19 @@ import re
 logger = logging.getLogger("ratatosk.discovery.candidates")
 
 
-def attach_source_paths(candidates: list[dict], source_label: str) -> list[dict]:
+def attach_source_paths(
+    candidates: list[dict[str, Any]], source_label: str
+) -> list[dict[str, Any]]:
     """
     Tag each candidate with the file path it was extracted from.
 
     :param candidates: Raw LLM extract rows.
     :param source_label: Relative path or stdin label.
-    :return: Candidates with ``source_paths`` list populated.
+    :return: Candidates with ``source_paths`` list[Any] populated.
     """
     if not source_label:
         return candidates
-    tagged: list[dict] = []
+    tagged: list[dict[str, Any]] = []
     for raw in candidates:
         item = dict(raw)
         paths = list(item.get("source_paths") or [])
@@ -39,14 +43,14 @@ def _slugify(name: str) -> str:
     return text.strip("-") or "unknown"
 
 
-def merge_candidates_by_slug(candidates: list[dict]) -> list[dict]:
+def merge_candidates_by_slug(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Merge candidates sharing the same name slug; union source_paths, keep max confidence.
 
     :param candidates: Tagged candidate dicts.
-    :return: De-duplicated list by slug.
+    :return: De-duplicated list[Any] by slug.
     """
-    by_slug: dict[str, dict] = {}
+    by_slug: dict[str, dict[str, Any]] = {}
     for raw in candidates:
         name = str(raw.get("name") or "").strip()
         if not name:
@@ -58,7 +62,7 @@ def merge_candidates_by_slug(candidates: list[dict]) -> list[dict]:
         if prior is None:
             by_slug[slug] = {**raw, "name": name, "source_paths": paths}
             continue
-        merged_paths = list(dict.fromkeys([*(prior.get("source_paths") or []), *paths]))
+        merged_paths = list(dict[str, Any].fromkeys([*(prior.get("source_paths") or []), *paths]))
         if conf > float(prior.get("confidence", 0)):
             by_slug[slug] = {**raw, "name": name, "source_paths": merged_paths}
         else:

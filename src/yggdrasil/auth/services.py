@@ -12,6 +12,8 @@ import logging
 import secrets
 from typing import TYPE_CHECKING
 
+from django.contrib.auth.models import User
+
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractBaseUser
     from django.db.models import QuerySet
@@ -25,7 +27,7 @@ _TOKEN_BYTES = 32  # 256 bits of entropy
 
 class TokenService:
     """
-    Create, list, revoke, and authenticate personal access tokens.
+    Create, list[Any], revoke, and authenticate personal access tokens.
 
     :Example:
 
@@ -72,7 +74,7 @@ class TokenService:
             scope,
         )
         token = PersonalAccessToken.objects.create(
-            user=user,
+            user=User.objects.get(pk=user.pk),
             name=name.strip(),
             token_hash=token_hash,
             scope=scope,
@@ -142,7 +144,7 @@ class TokenService:
         from yggdrasil.auth.models import PersonalAccessToken  # avoid circular at module level
 
         logger.info("TokenService.list_tokens | user_pk=%s", user.pk)
-        return PersonalAccessToken.objects.filter(user=user).order_by("-created_at")
+        return PersonalAccessToken.objects.filter(user_id=user.pk).order_by("-created_at")
 
     def authenticate(self, raw_token: str) -> AbstractBaseUser | None:
         """

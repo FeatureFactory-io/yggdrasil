@@ -37,12 +37,12 @@ _EDGE_TYPES = ("depends_on", "uses", "communicates_with", "calls")
 
 def infer_bootstrap_relationship_ops(
     *,
-    element_ops: list[dict],
+    element_ops: list[dict[str, Any]],
     llm: Any | None = None,
     user_id: int | None = None,
     model_id: int | None = None,
     handoff_context: dict[str, Any] | None = None,
-) -> tuple[list[dict], str, str]:
+) -> tuple[list[dict[str, Any]], str, str]:
     """
     Infer relationship operations from bootstrap element operations via LLM.
 
@@ -161,7 +161,7 @@ def _infer_single_call(
     names: set[str],
     do_not_reference: set[str],
     elements: list[dict[str, str]],
-) -> tuple[list[dict], str]:
+) -> tuple[list[dict[str, Any]], str]:
     log_munin_llm_request(
         where=_WHERE,
         user_id=user_id,
@@ -194,9 +194,9 @@ def _infer_split_calls(
     ctx: dict[str, Any],
     user_id: int | None,
     llm_model: str,
-) -> tuple[list[dict], str]:
+) -> tuple[list[dict[str, Any]], str]:
     strategies: list[str] = []
-    all_rels: list[dict] = []
+    all_rels: list[dict[str, Any]] = []
     for label, builder in (
         ("structure", build_structure_plan_prompt),
         ("crosscutting", build_crosscutting_plan_prompt),
@@ -232,7 +232,7 @@ def _infer_split_calls(
     return deduped, " | ".join(s for s in strategies if s)
 
 
-def _parse_plan_response(raw: str) -> tuple[list[dict], str]:
+def _parse_plan_response(raw: str) -> tuple[list[dict[str, Any]], str]:
     text = normalize_llm_text(raw)
     obj = extract_json_object(text) if text else {}
     if isinstance(obj, dict) and obj.get("relationships") is not None:
@@ -243,9 +243,9 @@ def _parse_plan_response(raw: str) -> tuple[list[dict], str]:
     return _parse_relationship_array(raw), ""
 
 
-def _dedupe_relationships(rels: list[dict]) -> list[dict]:
+def _dedupe_relationships(rels: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen: set[tuple[str, str, str]] = set()
-    out: list[dict] = []
+    out: list[dict[str, Any]] = []
     for item in rels:
         key = (
             str(item.get("source_name") or ""),
@@ -259,7 +259,9 @@ def _dedupe_relationships(rels: list[dict]) -> list[dict]:
     return out
 
 
-def _apply_anti_star(ops: list[dict], elements: list[dict[str, str]]) -> list[dict]:
+def _apply_anti_star(
+    ops: list[dict[str, Any]], elements: list[dict[str, str]]
+) -> list[dict[str, Any]]:
     """Cap inbound depends_on per non-infra target."""
     max_inbound = _max_inbound_depends()
     infra_names = {
@@ -272,7 +274,7 @@ def _apply_anti_star(ops: list[dict], elements: list[dict[str, str]]) -> list[di
         )
     }
     inbound: dict[str, int] = {}
-    kept: list[dict] = []
+    kept: list[dict[str, Any]] = []
     dropped = 0
     for op in ops:
         detail = op.get("detail") or {}
@@ -296,7 +298,7 @@ def _apply_anti_star(ops: list[dict], elements: list[dict[str, str]]) -> list[di
     return kept
 
 
-def _elements_from_ops(ops: list[dict]) -> list[dict[str, str]]:
+def _elements_from_ops(ops: list[dict[str, Any]]) -> list[dict[str, str]]:
     """Collect element metadata from add/update element operations."""
     elements: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -321,7 +323,7 @@ def _elements_from_ops(ops: list[dict]) -> list[dict[str, str]]:
     return sorted(elements, key=lambda item: item["name"])
 
 
-def _parse_relationship_array(raw: str) -> list[dict]:
+def _parse_relationship_array(raw: str) -> list[dict[str, Any]]:
     """Parse relationship JSON array (legacy shape)."""
     text = normalize_llm_text(raw)
     if not text:
@@ -351,9 +353,9 @@ def _ops_from_llm_payload(
     do_not_reference: set[str],
     elements: list[dict[str, str]],
     user_id: int | None = None,
-) -> tuple[list[dict], int]:
+) -> tuple[list[dict[str, Any]], int]:
     """Convert LLM JSON array into add-relationship ChangeSet ops."""
-    ops: list[dict] = []
+    ops: list[dict[str, Any]] = []
     rejected = 0
     for item in payload:
         if not isinstance(item, dict):

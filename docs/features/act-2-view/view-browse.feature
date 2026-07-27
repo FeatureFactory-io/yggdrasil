@@ -1,20 +1,25 @@
-@wip
 Feature: VIEW-BROWSE-1 View Browser
   As a Software Architect (Priya)
   I want to filter and explore the architecture graph
   So that I can find elements by stereotype, package, health, and time
 
   # Screen: VIEW-BROWSE-1 (central hub after login)
-  # Production: /views/ · Mockup reference: /mockups/view/browse/
-  # Testids: view-browse-page, filters-toggle, filter-package, filter-stereotype,
-  #          filter-health, filter-as-of, apply-filters-btn, clear-filters-btn,
-  #          toggle-table, toggle-graph, element-row-{id}, view-element-{id},
-  #          export-btn, history-btn, open-munin-btn, saved-views-dropdown
-  # Fixture: seed.json (priya@example.com / test-pass-only-1234)
-  # Mock data: 6 elements across Context/Technology/Application packages
+  # v0.2 (shipped): table + filters + graph JSON — single-column layout
+  # v0.3 (@wip): three-panel explorer — navigator + canvas + inspector
+  #   See also: view-browse-navigator.feature, view-browse-inspector.feature,
+  #             view-browse-canvas.feature
+  # Production: /views/ · Mockup reference: /mockups/view/browse/ (DEBUG only)
+  # Testids (v0.2): view-browse-page, filters-toggle, filter-*, toggle-table,
+  #          toggle-graph, element-row-{id}, export-btn, history-btn, open-munin-btn
+  # Testids (v0.3): browser-nav-panel, browser-inspector-panel, browser-package-tree,
+  #          browser-search-input, graph-cy-container, browser-toggle-*-panel
+  # Fixture: view_browser_model (pytest, 6 payment-system elements)
+  # Fixture (v0.3): view_browser_explorer_fixture — TFK-07
 
   Background:
     Given the user is logged in as "architect"
+
+  # ── v0.2 shell (implemented) ──────────────────────────────────────────────
 
   Scenario: VIEW-BROWSE-1-01 View Browser renders with filter panel and element table
     When I GET "/views/"
@@ -25,7 +30,8 @@ Feature: VIEW-BROWSE-1 View Browser
     And the element "toggle-table" should be visible
     And the element "toggle-graph" should be visible
 
-  Scenario: VIEW-BROWSE-1-02 Default view shows all 6 mock elements in table
+  Scenario: VIEW-BROWSE-1-02 Default view shows all seeded elements in table
+    Given the model "yggdrasil" is loaded with the view browser fixture
     When I GET "/views/"
     Then the response status is 200
     And the user should see "Payment API"
@@ -36,6 +42,7 @@ Feature: VIEW-BROWSE-1 View Browser
     And the user should see "Mobile App"
 
   Scenario: VIEW-BROWSE-1-03 Each element row shows Name, Stereotype, Owner, Health, Package columns
+    Given the model "yggdrasil" is loaded with the view browser fixture
     When I GET "/views/"
     Then the response status is 200
     And the user should see "Container"
@@ -66,11 +73,11 @@ Feature: VIEW-BROWSE-1 View Browser
     And the element "saved-views-dropdown" should be visible
 
   Scenario: VIEW-BROWSE-1-08 View Browser has clickable links to each element's detail view
+    Given the model "yggdrasil" is loaded with the view browser fixture
     When I GET "/views/"
     Then the response status is 200
-    And the element "view-element-1" should be visible
-    And the element "view-element-2" should be visible
-    And the element "view-element-6" should be visible
+    # TFK-07: resolve element PKs dynamically — step `Then element detail links exist for:`
+    And the user should see "view-element-"
 
   Scenario: VIEW-BROWSE-1-09 Export and History actions are available from View Browser
     When I GET "/views/"
@@ -83,15 +90,13 @@ Feature: VIEW-BROWSE-1 View Browser
     Then the response status is 200
     And the element "open-munin-btn" should be visible
 
+  @wip
   Scenario: VIEW-BROWSE-1-11 Time travel shows "Viewing model as of" banner when date is selected
-    # Selecting a past date in filter-as-of appends ?as_of=YYYY-MM-DD to URL
-    # and renders "Viewing model as of 2026-01-15" banner with [Compare with now] link
-    # TFK-07: add step "When the user sets the time travel date to '{date}'"
+    # TFK-07: step `Given the user is on the "view-browse" page with query "{query}"`
     Given the user is on the "view-browse" page with ?as_of=2026-01-15
     Then the user should see "Viewing model as of"
     # And the user should see "Compare with now"
 
-  # ── Viewer permissions ────────────────────────────────────────────────────
   Scenario: VIEW-BROWSE-1-12 Viewer can browse elements but has no create button
     Given the user is logged in as "viewer"
     When I GET "/views/"
@@ -99,7 +104,6 @@ Feature: VIEW-BROWSE-1 View Browser
     And the element "view-browse-page" should be visible
     And the user should not see "Create Element"
 
-  # ── Navbar integration ────────────────────────────────────────────────────
   Scenario: VIEW-BROWSE-1-13 Navbar shows all primary navigation links
     When I GET "/views/"
     Then the response status is 200
@@ -110,14 +114,27 @@ Feature: VIEW-BROWSE-1 View Browser
     And the element "nav-runs" should be visible
 
   Scenario: VIEW-BROWSE-1-14 Apply package filter returns matching rows only
-    # TFK-07: Given the model contains 6 elements across Technology and Application
+    Given the model "yggdrasil" is loaded with the view browser fixture
     When I GET "/views/?package=technology"
     Then the response status is 200
     And the user should see "Payment API"
     And the user should not see "Mobile App"
 
   Scenario: VIEW-BROWSE-1-15 Graph JSON endpoint returns elements and edges
+    Given the model "yggdrasil" is loaded with the view browser fixture
     When I GET "/views/graph.json?package=technology"
     Then the response status is 200
     And the user should see "elements"
     And the user should see "edges"
+
+  # ── v0.3 three-panel shell ─────────────────────────────────────────
+
+  Scenario: VIEW-BROWSE-1-16 Three-panel explorer layout renders below page header
+    When I GET "/views/?view=graph"
+    Then the response status is 200
+    And the element "browser-nav-panel" should be visible
+    And the element "graph-cy-container" should be visible
+    And the element "browser-inspector-panel" should be visible
+    And the element "browser-toggle-nav-panel" should be visible
+    And the element "browser-toggle-inspector-panel" should be visible
+    And the page uses the full-height view browser layout

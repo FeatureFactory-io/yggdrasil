@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 import logging
 from dataclasses import dataclass
 
@@ -51,7 +52,7 @@ def clamp_int_limit(
     :return: Clamped integer in ``[1, ceiling]``.
     """
     try:
-        value = int(raw)  # type: ignore[arg-type]
+        value = int(str(raw))
     except (TypeError, ValueError):
         logger.info(
             "clamp_int_limit | name=%s branch=invalid_input raw=%r using_default=%s",
@@ -75,16 +76,16 @@ def clamp_int_limit(
             ceiling,
         )
         return ceiling
-    return value
+    return int(value)
 
 
 def cap_extract_targets(targets: list[str], limits: DiscoveryLimits) -> list[str]:
     """
-    Apply effective scout cap to an ordered target list.
+    Apply effective scout cap to an ordered target list[Any].
 
     :param targets: Prioritized relative paths.
     :param limits: Discovery limits from config.
-    :return: Target list truncated to ``limits.effective_cap``.
+    :return: Target list[Any] truncated to ``limits.effective_cap``.
     """
     cap = limits.effective_cap
     capped = targets[:cap]

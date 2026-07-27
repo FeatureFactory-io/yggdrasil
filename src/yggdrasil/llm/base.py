@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 logger = logging.getLogger("yggdrasil.llm")
 
@@ -35,14 +35,14 @@ class LLMResponse:
 
     :param content: Answer text for downstream parsing (thinking stripped).
     :param model: Model identifier string. Example: "qwen2.5-coder:7b"
-    :param usage: Token counts dict. Example: {"input": 120, "output": 45}
+    :param usage: Token counts dict[str, Any]. Example: {"input": 120, "output": 45}
     :param stop_reason: Why generation stopped. Example: "end_turn"
     :param thinking: Optional reasoning trace when provider exposes it separately.
     """
 
     content: str
     model: str = ""
-    usage: dict = field(default_factory=dict)
+    usage: dict[str, Any] = field(default_factory=dict[str, Any])
     stop_reason: str = "end_turn"
     thinking: str = ""
 
@@ -95,7 +95,7 @@ class ScriptedLLM:
     """
     Replays pre-recorded responses in order — for integration tests only.
 
-    Tests construct a ScriptedLLM with a list of response strings.
+    Tests construct a ScriptedLLM with a list[Any] of response strings.
     Each call to ``complete`` pops the next response; raises if exhausted.
 
     Never use in production — inject via LLM_PROVIDER=scripted in test settings.
@@ -114,7 +114,7 @@ class ScriptedLLM:
     def __init__(self, responses: list[str]) -> None:
         """
         :param responses: Pre-recorded response strings in call order.
-        :raises ValueError: If responses list is empty.
+        :raises ValueError: If responses list[Any] is empty.
         """
         if not responses:
             raise ValueError("ScriptedLLM requires at least one response")

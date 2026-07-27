@@ -1,0 +1,50 @@
+{# Embed partial: relationship inspector content (no page chrome) #}
+<div data-testid="inspector-relationship-{{ relationship.id }}">
+  <div class="yrg-inspector-kind">Relationship · {{ relationship.edge_stereotype }}</div>
+  <div class="yrg-inspector-title">
+    {{ relationship.from_element }} → {{ relationship.to_element }}
+  </div>
+
+  <div class="hg-section-label">Endpoints</div>
+  <dl class="yrg-prop-dl row mb-3">
+    <dt class="col-5">From</dt>
+    <dd class="col-7">
+      <button type="button"
+              class="btn btn-link btn-sm p-0"
+              data-element-id="{{ relationship.from_id }}"
+              data-testid="inspector-endpoint-{{ relationship.from_id }}">
+        {{ relationship.from_element }}
+      </button>
+    </dd>
+    <dt class="col-5">Stereotype</dt>
+    <dd class="col-7"><code>{{ relationship.edge_stereotype }}</code></dd>
+    <dt class="col-5">To</dt>
+    <dd class="col-7">
+      <button type="button"
+              class="btn btn-link btn-sm p-0"
+              data-element-id="{{ relationship.to_id }}"
+              data-testid="inspector-endpoint-{{ relationship.to_id }}">
+        {{ relationship.to_element }}
+      </button>
+    </dd>
+    {% for key, value in relationship.properties.items %}
+    <dt class="col-5">{{ key }}</dt>
+    <dd class="col-7">{{ value }}</dd>
+    {% endfor %}
+  </dl>
+
+  <div class="hg-section-label">Provenance</div>
+  <dl class="yrg-prop-dl row mb-3">
+    <dt class="col-5">Confidence</dt>
+    <dd class="col-7">
+      <div class="yrg-confidence" title="Confidence: {{ relationship.confidence }}"
+           aria-label="Confidence {{ relationship.conf_pct }}%">
+        <div class="yrg-confidence-track">
+          <div class="yrg-confidence-fill"
+               style="width:{{ relationship.conf_pct }}%;background:var(--yrg-conf-{{ relationship.conf_band }});"></div>
+        </div>
+        <span class="yrg-confidence-label">{{ relationship.confidence }}</span>
+      </div>
+    </dd>
+  </dl>
+</div>

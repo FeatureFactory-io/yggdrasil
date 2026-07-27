@@ -3,6 +3,7 @@ Navigation AT steps (Django test client).
 
 Steps:
   - Given the user is on the "{page_name}" page
+  - Given the user is on the "{page_name}" page with query "{query}"
   - When the user navigates to the "{page_name}" page
   - Then the user should see the "{page_name}" page
 """
@@ -25,6 +26,18 @@ def step_user_is_on_page(context, page_name: str) -> None:
     context.response = get_client(context).get(path)
     context.current_page = page_name
     logger.info("User on page %s (%s) -> %s", page_name, path, context.response.status_code)
+
+
+@given('the user is on the "{page_name}" page with query "{query}"')
+def step_user_is_on_page_with_query(context, page_name: str, query: str) -> None:
+    """GET the registered page with a query string appended."""
+    path = resolve_page_path(page_name)
+    if not query.startswith("?"):
+        query = "?" + query
+    full_path = path + query
+    context.response = get_client(context).get(full_path)
+    context.current_page = page_name
+    logger.info("User on page %s (%s) -> %s", page_name, full_path, context.response.status_code)
 
 
 @when('the user navigates to the "{page_name}" page')

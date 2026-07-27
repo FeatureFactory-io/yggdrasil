@@ -13,7 +13,7 @@ Never import from munin, ratatosk, or mcp here.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 from django.utils import timezone
@@ -30,6 +30,8 @@ from yggdrasil.graph.models import (
 )
 
 if TYPE_CHECKING:
+    import builtins
+
     from django.contrib.auth.models import User
     from django.db.models import QuerySet
 
@@ -63,7 +65,7 @@ class ChangeSetService:
         self,
         model_id: int,
         source: str,
-        operations: list[dict],
+        operations: builtins.list[dict[str, Any]],
         munin_reasoning: str = "",
         run_id: str = "",
         review_mode: str = ChangeSet.REVIEW_MANUAL,
@@ -143,7 +145,7 @@ class ChangeSetService:
     def approve(
         self,
         changeset_id: int,
-        item_ids: list[int] | None = None,
+        item_ids: builtins.list[int] | None = None,
         user: User | None = None,
     ) -> ChangeSet:
         """
@@ -154,7 +156,7 @@ class ChangeSetService:
         others remain pending for a subsequent call.
 
         :param changeset_id: ChangeSet PK. Example: 1
-        :param item_ids: Optional list of ChangeSetItem PKs to apply.
+        :param item_ids: Optional list[Any] of ChangeSetItem PKs to apply.
             None = apply all pending items. Example: [1, 2]
         :param user: Actor applying the changeset.
         :return: Updated ChangeSet (status="applied" if all items resolved).
@@ -195,7 +197,7 @@ class ChangeSetService:
     def reject(
         self,
         changeset_id: int,
-        item_ids: list[int] | None = None,
+        item_ids: builtins.list[int] | None = None,
         reason: str = "",
         user: User | None = None,
         learn: bool = True,
@@ -207,7 +209,7 @@ class ChangeSetService:
         so Munin avoids the same operation in future runs.
 
         :param changeset_id: ChangeSet PK. Example: 1
-        :param item_ids: Optional list of ChangeSetItem PKs to reject.
+        :param item_ids: Optional list[Any] of ChangeSetItem PKs to reject.
             None = reject all pending. Example: [3]
         :param reason: Human-readable reason for rejection. Example:
             "Code diagram is for repository structure, not runtime services"
@@ -252,7 +254,7 @@ class ChangeSetService:
     def do_other(
         self,
         changeset_id: int,
-        item_ids: list[int],
+        item_ids: builtins.list[int],
         instructions: str,
         user: User | None = None,
     ) -> ChangeSet:
@@ -305,7 +307,7 @@ class ChangeSetService:
             model_id=changeset.model_id,
             user_id=getattr(user, "pk", None),
         )
-        replacement_ids: list[int] = []
+        replacement_ids: builtins.list[int] = []
         for item_id in item_ids:
             resp = agent.replan_operation(
                 rejected_item_id=item_id,
@@ -381,7 +383,7 @@ class ChangeSetService:
         status: str | None = None,
         source: str | None = None,
         limit: int = 50,
-    ) -> QuerySet:
+    ) -> QuerySet[ChangeSet]:
         """
         List ChangeSets for a model with optional filters.
 
@@ -421,9 +423,9 @@ class ChangeSetService:
             msg = f"Unsupported op_type={item.op_type!r} on item={item.pk}"
             raise ValueError(msg)
 
-    def _invert_item(self, item: ChangeSetItem) -> dict:
+    def _invert_item(self, item: ChangeSetItem) -> dict[str, Any]:
         """
-        Produce the inverse operation dict for a rollback.
+        Produce the inverse operation dict[str, Any] for a rollback.
 
         :param item: Accepted ChangeSetItem to invert.
         :return: Dict with ``op_type``, ``detail``, ``confidence``.
@@ -482,7 +484,7 @@ class ChangeSetService:
             raise ValueError(msg)
         return changeset
 
-    def _accepted_items(self, changeset: ChangeSet) -> list[ChangeSetItem]:
+    def _accepted_items(self, changeset: ChangeSet) -> builtins.list[ChangeSetItem]:
         """Return accepted items in apply order (order ascending)."""
         return [
             item
@@ -493,7 +495,7 @@ class ChangeSetService:
     def _create_rollback_changeset(
         self,
         source_cs: ChangeSet,
-        accepted: list[ChangeSetItem],
+        accepted: builtins.list[ChangeSetItem],
     ) -> ChangeSet:
         """Create pending rollback ChangeSet with inverse ops (reverse apply order)."""
         rollback_cs = ChangeSet.objects.create(
@@ -517,13 +519,13 @@ class ChangeSetService:
             )
         return rollback_cs
 
-    def _invert_detail(self, op_type: str, detail: dict) -> dict:
+    def _invert_detail(self, op_type: str, detail: dict[str, Any]) -> dict[str, Any]:
         """Return a copy of detail with update_element field pairs swapped."""
         inverted = dict(detail)
         if op_type != ChangeSetItem.OP_UPDATE_ELEMENT:
             return inverted
         fields = detail.get("fields", {})
-        swapped: dict = {}
+        swapped: dict[str, Any] = {}
         for field_name, pair in fields.items():
             if isinstance(pair, list | tuple) and len(pair) == 2:
                 swapped[field_name] = [pair[1], pair[0]]
@@ -551,8 +553,8 @@ class ChangeSetService:
     def _select_pending_items(
         self,
         changeset: ChangeSet,
-        item_ids: list[int] | None,
-    ) -> list[ChangeSetItem]:
+        item_ids: builtins.list[int] | None,
+    ) -> builtins.list[ChangeSetItem]:
         """Return pending items to process; optionally filter by PK list."""
         pending = [
             item
@@ -589,7 +591,9 @@ class ChangeSetService:
             changeset.status = ChangeSet.STATUS_REJECTED
             changeset.save(update_fields=["status"])
 
-    def _apply_add_element(self, model, item: ChangeSetItem, detail: dict) -> None:
+    def _apply_add_element(
+        self, model: YggdrasilModel, item: ChangeSetItem, detail: dict[str, Any]
+    ) -> None:
         """Create an Element from an add_element detail payload."""
         name = detail.get("name")
         if not name:
@@ -620,21 +624,27 @@ class ChangeSetService:
             created,
         )
 
-    def _apply_update_element(self, detail: dict) -> None:
+    def _apply_update_element(self, detail: dict[str, Any]) -> None:
         """Apply field updates from update_element detail."""
         element_id = detail.get("element_id")
+        if element_id is None:
+            msg = "update_element missing element_id"
+            raise ValueError(msg)
         element = Element.objects.get(pk=element_id)
         for field_name, pair in (detail.get("fields") or {}).items():
             if isinstance(pair, list | tuple) and len(pair) == 2:
                 setattr(element, field_name, pair[1])
         element.save()
 
-    def _apply_delete_element(self, detail: dict) -> None:
+    def _apply_delete_element(self, detail: dict[str, Any]) -> None:
         """Delete element referenced by delete_element detail."""
         element_id = detail.get("element_id")
+        if element_id is None:
+            msg = "delete_element missing element_id"
+            raise ValueError(msg)
         Element.objects.filter(pk=element_id).delete()
 
-    def _apply_add_relationship(self, model, detail: dict) -> None:
+    def _apply_add_relationship(self, model: YggdrasilModel, detail: dict[str, Any]) -> None:
         """Create a Relationship from add_relationship detail."""
         source_id = detail.get("source_id")
         target_id = detail.get("target_id")
@@ -663,7 +673,7 @@ class ChangeSetService:
 
     def _resolve_element_id(
         self,
-        model,
+        model: YggdrasilModel,
         name: str | None,
         slug: str | None,
     ) -> int:
@@ -680,17 +690,23 @@ class ChangeSetService:
         msg = f"Element not found for relationship: name={name!r} slug={slug!r}"
         raise ValueError(msg)
 
-    def _apply_delete_relationship(self, detail: dict) -> None:
+    def _apply_delete_relationship(self, detail: dict[str, Any]) -> None:
         """Delete relationship referenced by delete_relationship detail."""
-        Relationship.objects.filter(pk=detail.get("relationship_id")).delete()
+        rel_id = detail.get("relationship_id")
+        if rel_id is None:
+            msg = "delete_relationship missing relationship_id"
+            raise ValueError(msg)
+        Relationship.objects.filter(pk=rel_id).delete()
 
-    def _apply_add_to_diagram(self, detail: dict) -> None:
+    def _apply_add_to_diagram(self, detail: dict[str, Any]) -> None:
         """Attach element to diagram via M2M."""
         element = Element.objects.get(pk=detail["element_id"])
         diagram = Diagram.objects.get(pk=detail["diagram_id"])
         element.diagrams.add(diagram)
 
-    def _get_or_create_stereotype(self, model, slug: str, *, is_edge: bool) -> Stereotype:
+    def _get_or_create_stereotype(
+        self, model: YggdrasilModel, slug: str, *, is_edge: bool
+    ) -> Stereotype:
         """
         Resolve stereotype from the Model's Metamodel catalog.
 
@@ -711,7 +727,7 @@ class ChangeSetService:
             logger.warning("_get_or_create_stereotype | %s", msg)
             raise ValueError(msg) from exc
 
-    def _get_or_create_package(self, model, slug: str) -> Package:
+    def _get_or_create_package(self, model: YggdrasilModel, slug: str) -> Package:
         """
         Resolve package from the Model's Metamodel catalog.
 

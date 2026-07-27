@@ -84,7 +84,7 @@ class DiscoveryInput:
     stdin_text: str = ""
     source_label: str = ""
     stdin_kind: str = ""  # diff | prose | unknown
-    exclude_patterns: list[str] = field(default_factory=list)
+    exclude_patterns: list[str] = field(default_factory=list[Any])
 
 
 @dataclass
@@ -97,10 +97,10 @@ class DeltaBuckets:
     >>> buckets = DeltaBuckets(to_add=[...], to_update=[...], to_delete=[...])
     """
 
-    to_add: list[dict] = field(default_factory=list)
-    to_update: list[dict] = field(default_factory=list)
-    to_delete: list[dict] = field(default_factory=list)
-    unchanged: list[dict] = field(default_factory=list)
+    to_add: list[dict[str, Any]] = field(default_factory=list[Any])
+    to_update: list[dict[str, Any]] = field(default_factory=list[Any])
+    to_delete: list[dict[str, Any]] = field(default_factory=list[Any])
+    unchanged: list[dict[str, Any]] = field(default_factory=list[Any])
 
     @property
     def total_ops(self) -> int:
@@ -270,7 +270,7 @@ class RataskAgent:
         d_input: DiscoveryInput,
         ontology: str,
         snapshot_ctx: str,
-    ) -> list[dict] | None:
+    ) -> list[dict[str, Any]] | None:
         """Steps 3-5: build tree/stdin, LLM map, LLM extract. None = empty input."""
         if d_input.mode == "filesystem":
             return self._extract_from_filesystem(
@@ -287,7 +287,7 @@ class RataskAgent:
         ontology: str,
         snapshot_ctx: str,
         exclude_patterns: list[str] | None = None,
-    ) -> list[dict] | None:
+    ) -> list[dict[str, Any]] | None:
         """Filesystem mode: tree → project map → file extracts."""
         tree, skipped_exclude = self._build_file_tree(repo_path, exclude_patterns)
         self._update_blackboard(
@@ -332,7 +332,7 @@ class RataskAgent:
         d_input: DiscoveryInput,
         ontology: str,
         snapshot_ctx: str,
-    ) -> list[dict] | None:
+    ) -> list[dict[str, Any]] | None:
         """Stdin mode: classify blob → map focus → extract candidates."""
         blob = d_input.stdin_text
         kind = d_input.stdin_kind or _classify_stdin(blob)
@@ -491,10 +491,10 @@ class RataskAgent:
         targets: list[str],
         ontology: str,
         snapshot_ctx: str = "",
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Step 5 (filesystem): read targets and extract candidates via LLM."""
         root = Path(repo_path)
-        all_candidates: list[dict] = []
+        all_candidates: list[dict[str, Any]] = []
         bounded = targets[: self._limits.max_file_reads_per_run]
         for index, rel in enumerate(bounded, start=1):
             path = root / rel
@@ -528,7 +528,7 @@ class RataskAgent:
         ontology: str,
         source_label: str = "",
         snapshot_ctx: str = "",
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Step 5: one LLM extract turn over a text blob."""
         preview = text[:_MAX_FILE_CHARS]
         label = source_label or kind
@@ -570,10 +570,12 @@ class RataskAgent:
             return []
         return attach_source_paths(candidates, label)
 
-    def _cleanup_candidates(self, candidates: list[dict], metamodel: Metamodel) -> list[dict]:
+    def _cleanup_candidates(
+        self, candidates: list[dict[str, Any]], metamodel: Metamodel
+    ) -> list[dict[str, Any]]:
         """Step 6: dedupe by slug, confidence floor, constrain to metamodel."""
         constrained = _constrain_candidates_to_metamodel(candidates, metamodel)
-        by_slug: dict[str, dict] = {}
+        by_slug: dict[str, dict[str, Any]] = {}
         for item in constrained:
             conf = float(item.get("confidence", 0))
             if conf < 0.4:
@@ -587,8 +589,8 @@ class RataskAgent:
 
     def _reconcile(
         self,
-        candidates: list[dict],
-        existing: dict,
+        candidates: list[dict[str, Any]],
+        existing: dict[str, Any],
         *,
         bootstrap_rescan: bool = False,
     ) -> DeltaBuckets:
@@ -600,15 +602,15 @@ class RataskAgent:
 
     def _reconcile_bootstrap_rescan(
         self,
-        candidates: list[dict],
-        by_slug: dict[str, dict],
+        candidates: list[dict[str, Any]],
+        by_slug: dict[str, dict[str, Any]],
     ) -> DeltaBuckets:
         """Bootstrap: delete every existing element, add all fresh candidates."""
-        to_add: list[dict] = []
+        to_add: list[dict[str, Any]] = []
         for candidate in candidates:
             slug = slugify(candidate["name"])
             to_add.append({**candidate, "slug": slug, "op": "add"})
-        to_delete: list[dict] = []
+        to_delete: list[dict[str, Any]] = []
         for slug, element in by_slug.items():
             to_delete.append(
                 {
@@ -628,13 +630,13 @@ class RataskAgent:
 
     def _reconcile_incremental(
         self,
-        candidates: list[dict],
-        by_slug: dict[str, dict],
+        candidates: list[dict[str, Any]],
+        by_slug: dict[str, dict[str, Any]],
     ) -> DeltaBuckets:
         """Update/scout: merge candidates; delete slugs absent from the scan."""
-        to_add: list[dict] = []
-        to_update: list[dict] = []
-        unchanged: list[dict] = []
+        to_add: list[dict[str, Any]] = []
+        to_update: list[dict[str, Any]] = []
+        unchanged: list[dict[str, Any]] = []
         seen_slugs: set[str] = set()
         for candidate in candidates:
             slug = slugify(candidate["name"])
@@ -654,7 +656,7 @@ class RataskAgent:
                 )
             else:
                 unchanged.append({**candidate, "slug": slug, "op": "unchanged"})
-        to_delete: list[dict] = []
+        to_delete: list[dict[str, Any]] = []
         for slug, element in by_slug.items():
             if slug in seen_slugs:
                 continue
@@ -675,7 +677,7 @@ class RataskAgent:
             unchanged=unchanged,
         )
 
-    def _update_blackboard(self, step: str, data: dict) -> None:
+    def _update_blackboard(self, step: str, data: dict[str, Any]) -> None:
         """Persist agent state to RataskRun.blackboard JSONB."""
         board = dict(self._run.blackboard or {})
         board[step] = data
@@ -694,7 +696,9 @@ class RataskAgent:
     ) -> tuple[DeltaBuckets, DeltaBuckets]:
         """Split buckets into above-threshold and below-threshold pairs."""
 
-        def _split(items: list[dict]) -> tuple[list[dict], list[dict]]:
+        def _split(
+            items: list[dict[str, Any]],
+        ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
             above = [item for item in items if float(item.get("confidence", 0)) >= threshold]
             below = [item for item in items if float(item.get("confidence", 0)) < threshold]
             return above, below
@@ -999,9 +1003,11 @@ def _munin_summary(buckets: DeltaBuckets) -> str:
     )
 
 
-def _buckets_to_operations(buckets: DeltaBuckets, *, bootstrap_rescan: bool = False) -> list[dict]:
+def _buckets_to_operations(
+    buckets: DeltaBuckets, *, bootstrap_rescan: bool = False
+) -> list[dict[str, Any]]:
     """Convert delta buckets into ChangeSetService.propose operation dicts."""
-    delete_ops: list[dict] = []
+    delete_ops: list[dict[str, Any]] = []
     for item in buckets.to_delete:
         delete_ops.append(
             {
@@ -1017,7 +1023,7 @@ def _buckets_to_operations(buckets: DeltaBuckets, *, bootstrap_rescan: bool = Fa
                 ),
             }
         )
-    add_ops: list[dict] = []
+    add_ops: list[dict[str, Any]] = []
     for item in buckets.to_add:
         add_ops.append(
             {
@@ -1030,7 +1036,7 @@ def _buckets_to_operations(buckets: DeltaBuckets, *, bootstrap_rescan: bool = Fa
                 "confidence": float(item.get("confidence", 0.9)),
             }
         )
-    update_ops: list[dict] = []
+    update_ops: list[dict[str, Any]] = []
     for item in buckets.to_update:
         update_ops.append(
             {
@@ -1103,9 +1109,9 @@ def _metamodel_guidance(metamodel: Metamodel) -> str:
 
 
 def _constrain_candidates_to_metamodel(
-    candidates: list[dict],
+    candidates: list[dict[str, Any]],
     metamodel: Metamodel,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """
     Keep only candidates whose stereotype/package slugs exist on the Metamodel.
 
@@ -1113,7 +1119,7 @@ def _constrain_candidates_to_metamodel(
     """
     element_slugs = {st.slug for st in metamodel.stereotypes.filter(is_edge=False)}
     package_slugs = {pkg.slug for pkg in metamodel.packages.all()}
-    accepted: list[dict] = []
+    accepted: list[dict[str, Any]] = []
     for raw in candidates:
         st_slug = slugify(str(raw.get("stereotype") or ""))
         pkg_slug = slugify(str(raw.get("package") or ""))

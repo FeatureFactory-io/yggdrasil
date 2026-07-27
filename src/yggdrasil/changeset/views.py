@@ -1,5 +1,5 @@
 """
-ChangeSet views: list, detail, approve/reject/do-other/rollback actions.
+ChangeSet views: list[Any], detail, approve/reject/do-other/rollback actions.
 
 All mutating actions delegate to ChangeSetService (SAO.md §3 — layer separation).
 Views never call ORM directly.
@@ -14,7 +14,7 @@ HTMX partials returned for approve/reject/do-other/rollback actions.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404, HttpResponse
@@ -33,22 +33,22 @@ _service = ChangeSetService()
 
 class ChangeSetListView(LoginRequiredMixin, View):
     """
-    GET /changesets/  — list all ChangeSets with status/source filters.
+    GET /changesets/  — list[Any] all ChangeSets with status/source filters.
 
     Query params: ?status=pending|applied|rejected, ?source=ratatosk|human|mcp
-    :Example: GET /changesets/?status=pending → 200 with filtered list
+    :Example: GET /changesets/?status=pending → 200 with filtered list[Any]
     """
 
-    template_name = "changeset/list.html"
+    template_name = "changeset/list[Any].html"
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """
         :param request: GET request with optional ?status and ?source params.
-        :return: 200 rendered list page.
+        :return: 200 rendered list[Any] page.
         """
         raise NotImplementedError()
 
-    def _get_filter_params(self, request: HttpRequest) -> dict:
+    def _get_filter_params(self, request: HttpRequest) -> dict[str, Any]:
         """Extract and validate status/source query parameters."""
         raise NotImplementedError()
 
@@ -76,7 +76,7 @@ class ChangeSetApproveView(LoginRequiredMixin, View):
     """
     POST /changesets/<id>/approve/  — apply pending operations.
 
-    Body: item_ids (optional JSON list) — omit to approve all.
+    Body: item_ids (optional JSON list[Any]) — omit to approve all.
     Returns HTMX partial updating the operation rows.
     """
 
@@ -115,7 +115,7 @@ class ChangeSetDoOtherView(LoginRequiredMixin, View):
     """
     POST /changesets/<id>/do-other/  — redirect ops to Munin for re-planning.
 
-    Body: item_ids (list), instructions (string).
+    Body: item_ids (list[Any]), instructions (string).
     Queues Munin async re-plan; returns immediate response with task ID.
     """
 
@@ -150,7 +150,9 @@ class ChangeSetRollbackView(LoginRequiredMixin, View):
             request.user.pk,
         )
         try:
-            rollback_cs = _service.rollback(changeset_id=changeset_id, user=request.user)
+            user = request.user
+            rollback_user = user if user.is_authenticated else None
+            rollback_cs = _service.rollback(changeset_id=changeset_id, user=rollback_user)
         except ValueError as exc:
             logger.info(
                 "ChangeSetRollbackView.post | rejected changeset_id=%s reason=%s",

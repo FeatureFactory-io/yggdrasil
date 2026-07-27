@@ -1,0 +1,65 @@
+{# Embed partial: element inspector content (no page chrome) #}
+<div data-testid="inspector-element-{{ element.id }}">
+  <div class="yrg-inspector-kind">Element · {{ element.stereotype }}</div>
+  <div class="yrg-inspector-title d-flex align-items-center gap-2">
+    <span class="hg-dot hg-dot-{{ element.health }}" aria-hidden="true"></span>
+    {{ element.name }}
+  </div>
+  <div class="mb-3">
+    <span class="hg-badge-source hg-badge-{{ element.source }}">{{ element.source }}</span>
+    <span class="text-muted small ms-1">{{ element.package }}</span>
+  </div>
+
+  <div class="hg-section-label">Properties</div>
+  <dl class="yrg-prop-dl row mb-3">
+    <dt class="col-5">Owner</dt>
+    <dd class="col-7">{{ element.owner|default:"—" }}</dd>
+    <dt class="col-5">Package</dt>
+    <dd class="col-7">{{ element.package|default:"—" }}</dd>
+    <dt class="col-5">Stereotype</dt>
+    <dd class="col-7">{{ element.stereotype }}</dd>
+    {% for key, value in element.properties.items %}
+    <dt class="col-5">{{ key }}</dt>
+    <dd class="col-7">{{ value }}</dd>
+    {% endfor %}
+  </dl>
+
+  <div class="hg-section-label">Provenance</div>
+  <dl class="yrg-prop-dl row mb-3">
+    <dt class="col-5">Confidence</dt>
+    <dd class="col-7">
+      <div class="yrg-confidence" title="Confidence: {{ element.confidence }}"
+           aria-label="Confidence {{ element.conf_pct }}%">
+        <div class="yrg-confidence-track">
+          <div class="yrg-confidence-fill"
+               style="width:{{ element.conf_pct }}%;background:var(--yrg-conf-{{ element.conf_band }});"></div>
+        </div>
+        <span class="yrg-confidence-label">{{ element.confidence }}</span>
+      </div>
+    </dd>
+    <dt class="col-5">Relationships</dt>
+    <dd class="col-7">{{ relationships_in }} in · {{ relationships_out }} out</dd>
+  </dl>
+
+  <div class="hg-section-label">Connected ({{ relationships|length }})</div>
+  <div class="mb-3">
+    {% for rel in relationships %}
+    <button type="button"
+            class="yrg-rel-row"
+            data-relationship-id="{{ rel.id }}"
+            data-testid="inspector-rel-row-{{ rel.id }}">
+      <span class="text-muted">{% if rel.outbound %}→{% else %}←{% endif %}</span>
+      <code style="font-size:0.68rem;">{{ rel.edge_stereotype }}</code>
+      <span class="text-truncate">{{ rel.other_name }}</span>
+    </button>
+    {% empty %}
+    <div class="text-muted small">No relationships.</div>
+    {% endfor %}
+  </div>
+
+  <div class="d-flex gap-2">
+    <a href="/elements/{{ element.id }}/"
+       class="btn btn-primary btn-sm"
+       data-testid="inspector-open-full-{{ element.id }}">Open full view</a>
+  </div>
+</div>

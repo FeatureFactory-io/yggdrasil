@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 import sys
 from contextvars import ContextVar
+from typing import Any
 
 logger = logging.getLogger("yggdrasil.mcp")
 
@@ -33,7 +34,7 @@ _mcp_instance = None
 _initialized = False
 
 
-def get_mcp():
+def get_mcp() -> Any:
     """
     Return the FastMCP server singleton; raise if not initialised.
 
@@ -86,7 +87,7 @@ def _ensure_stderr_logging() -> None:
     logger.debug("_ensure_stderr_logging | StreamHandlers pointing at stdout redirected")
 
 
-def _register_tools(mcp) -> None:
+def _register_tools(mcp: Any) -> None:
     """
     Import and register each tool module against the FastMCP instance.
 
@@ -153,7 +154,7 @@ def set_current_user_id(user_id: int | None) -> None:
     :param user_id: Authenticated user PK. Example: 42
     """
     _current_user_id.set(user_id)
-    logger.debug("mcp.server: user context set | user_id=%s", user_id)
+    logger.debug("mcp.server: user context set[Any] | user_id=%s", user_id)
 
 
 def get_token_scope() -> str:
@@ -168,7 +169,7 @@ def set_token_scope(scope: str | None) -> None:
     :param scope: ``read-write`` or ``read-only``. None resets to read-write.
     """
     _current_token_scope.set(scope or "read-write")
-    logger.debug("mcp.server: token scope set | scope=%s", scope)
+    logger.debug("mcp.server: token scope set[Any] | scope=%s", scope)
 
 
 def redirect_print_to_stderr() -> None:
@@ -182,9 +183,9 @@ def redirect_print_to_stderr() -> None:
 
     _original_print = builtins.print
 
-    def _safe_print(*args, **kwargs) -> None:
+    def _safe_print(*args: Any, **kwargs: Any) -> None:
         kwargs.setdefault("file", sys.stderr)
         _original_print(*args, **kwargs)
 
-    builtins.print = _safe_print  # type: ignore[assignment]
+    builtins.print = _safe_print
     logger.debug("mcp.server: print() redirected to stderr for stdio transport")

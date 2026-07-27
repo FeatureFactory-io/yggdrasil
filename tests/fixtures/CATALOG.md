@@ -155,6 +155,37 @@ reference priya/elena/admin by username.
 
 ---
 
+## View Browser presets — `tests/fixtures/view_browser.py`
+
+### `view_browser_model` (pytest, v0.2)
+
+Six payment-system elements (Payment API, Mobile App, …) + 2 relationships.
+Used by `test_view_browse.py` and `test_browse_service.py`.
+
+### `view_browser_explorer_model` (pytest + behave, v0.3)
+
+Nineteen Yggdrasil self-model elements across Context / Application / Technology + 11 relationships.
+Used by navigator AT scenarios 17–20 and `test_view_browse.py` v0.3 tests.
+
+| Package | Elements (examples) |
+|---------|---------------------|
+| Context | Yggdrasil, Browser (HTMX), AI agents |
+| Application | Backend, auth, graph, munin, web, api, … |
+| Technology | PostgreSQL, Redis, Ollama |
+
+Source data: `VIEW_BROWSER_EXPLORER_ELEMENTS` / `VIEW_BROWSER_EXPLORER_RELATIONSHIPS` in this module (mirrors `mockups/views.py`).
+
+**Behave bridge steps (TFK-07):**
+
+| Step | Loads |
+|------|-------|
+| `Given the model "yggdrasil" is loaded with the view browser fixture` | 6-element payment preset |
+| `Given the model "yggdrasil" is loaded with the view browser explorer fixture` | 19-element self-model |
+
+**View Browser assertion steps (TFK-07):** see `docs/features/CATALOG.md` Domain: View Browser — includes SSR visibility (`should not be visible`), table/graph mode, canvas controls, inspector partial GET by slug.
+
+---
+
 ## ESM-05 feature file guidance
 
 When writing `.feature` files:

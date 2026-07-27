@@ -18,7 +18,7 @@ import tempfile
 from pathlib import Path
 
 import yaml
-from behave import given, then, when  # type: ignore[import]
+from behave import given, then, use_step_matcher, when  # type: ignore[import]
 from tests.fixtures.factories import UserFactory
 from tests.fixtures.factories.model_factories import (
     EdgeStereotypeFactory,
@@ -395,11 +395,24 @@ def step_exit_code_nonzero(context):
     assert context.cli_exit_code != 0, "Expected non-zero exit code"
 
 
-@then('the output contains "{text}"')
-def step_output_contains(context, text):
+use_step_matcher("re")
+
+
+@then(r'the output contains "(?P<a>[^"]+)" or "(?P<b>[^"]+)"')
+def step_output_contains_either(context, a: str, b: str) -> None:
+    """Assert the CLI stdout contains at least one of two phrases."""
+    output = getattr(context, "cli_output", "") or ""
+    assert a in output or b in output, f"Expected {a!r} or {b!r} in output:\n{output}"
+
+
+@then(r'the output contains "(?P<text>[^"]+)"')
+def step_output_contains(context, text: str) -> None:
     """Assert the CLI stdout contains the expected text."""
     output = getattr(context, "cli_output", "") or ""
     assert text in output, f"Expected {text!r} in output:\n{output}"
+
+
+use_step_matcher("parse")
 
 
 @then("a link to the run result is printed")
@@ -613,12 +626,13 @@ def step_load_config_bootstrap(context):
 
 
 @then('the effective config key "{key}" is {value}')
-def step_effective_config_key(context, key, value):
-    """CFG effective config assertion."""
+def step_effective_config_key(context, key: str, value: str) -> None:
+    """CFG effective config assertion (includes ``resolved_model``)."""
     config = getattr(context, "bootstrap_config", None)
     assert config is not None, "load configuration step must run first"
     actual = getattr(config, key, None)
-    assert str(actual) == value.strip('"'), f"{key}: expected {value!r}, got {actual!r}"
+    expected = value.strip('"')
+    assert str(actual) == expected, f"{key}: expected {expected!r}, got {actual!r}"
 
 
 @given('a repo config file "ratatosk.yaml" with model_summary_token_budget {n:d}')
@@ -687,17 +701,8 @@ def step_load_config_bootstrap_with_repo(context, path):
     )
 
 
-@then('the effective config key "resolved_model" is "{value}"')
-def step_effective_config_resolved_model_is(context, value):
-    """CFG-11/12: exact resolved_model assertion."""
-    config = getattr(context, "bootstrap_config", None)
-    assert config is not None, "load configuration step must run first"
-    actual = getattr(config, "resolved_model", None)
-    assert str(actual) == value, f"resolved_model: expected {value!r}, got {actual!r}"
-
-
 @then('the effective config key "resolved_model" contains "{substring}"')
-def step_effective_config_resolved_model_contains(context, substring):
+def step_effective_config_resolved_model_contains(context, substring: str) -> None:
     """CFG-11: substring match on resolved_model."""
     config = getattr(context, "bootstrap_config", None)
     assert config is not None, "load configuration step must run first"

@@ -8,7 +8,7 @@ Production CLI uses ``McpHandoffPort``. Pytest / AT may inject
 from __future__ import annotations
 
 import logging
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, cast, runtime_checkable
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
 from yggdrasil.changeset.services import ChangeSetService
@@ -150,7 +150,7 @@ class McpHandoffPort:
 
     def __init__(self, client: Any) -> None:
         """
-        :param client: Object with ``call_tool(name, arguments) -> dict``.
+        :param client: Object with ``call_tool(name, arguments) -> dict[str, Any]``.
         """
         self._client = client
 
@@ -185,9 +185,12 @@ class McpHandoffPort:
         }
         if handoff_context:
             payload["handoff_context"] = handoff_context
-        return self._client.call_tool(
-            "propose_changeset",
-            payload,
+        return cast(
+            "dict[str, Any]",
+            self._client.call_tool(
+                "propose_changeset",
+                payload,
+            ),
         )
 
     def record_run(
@@ -211,17 +214,20 @@ class McpHandoffPort:
             run_id,
             changeset_id,
         )
-        return self._client.call_tool(
-            "record_ratatosk_run",
-            {
-                "model": model_slug,
-                "run_id": run_id,
-                "repo_path": repo_path,
-                "instructions": instructions,
-                "blackboard": blackboard,
-                "changeset_id": changeset_id,
-                "status": status,
-                "trigger": trigger,
-                "delta_summary": delta_summary,
-            },
+        return cast(
+            "dict[str, Any]",
+            self._client.call_tool(
+                "record_ratatosk_run",
+                {
+                    "model": model_slug,
+                    "run_id": run_id,
+                    "repo_path": repo_path,
+                    "instructions": instructions,
+                    "blackboard": blackboard,
+                    "changeset_id": changeset_id,
+                    "status": status,
+                    "trigger": trigger,
+                    "delta_summary": delta_summary,
+                },
+            ),
         )

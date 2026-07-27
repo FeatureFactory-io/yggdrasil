@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse, HttpResponseBadRequest
@@ -18,11 +18,13 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from yggdrasil.graph.models import YggdrasilModel, ensure_c4_metamodel
-from yggdrasil.munin.agent import MuninAgent
+from yggdrasil.munin.agent import MuninAgent, MuninResponse
 from yggdrasil.munin.llm_factory import build_munin_planning_llm
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
+
+    from yggdrasil.llm.base import BaseLLM
 
 logger = logging.getLogger("yggdrasil.munin")
 
@@ -32,7 +34,7 @@ class MuninChatView(LoginRequiredMixin, View):
     """
     POST /chat/munin/  — process a Munin message and return HTMX partial.
 
-    Body: message (str), history (JSON list of {role, content} dicts).
+    Body: message (str), history (JSON list[Any] of {role, content} dicts).
     Returns: HTMX partial rendering the Munin response bubble.
 
     :Example:
@@ -41,7 +43,7 @@ class MuninChatView(LoginRequiredMixin, View):
     → 200 HTMX partial with response text + cited element links
     """
 
-    def post(self, request: HttpRequest) -> HttpResponse:
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """
         :param request: POST with message and history JSON.
         :return: 200 HTMX partial or 400 on validation error.
@@ -75,7 +77,7 @@ class MuninChatView(LoginRequiredMixin, View):
             http["X-Munin-Changeset-Id"] = str(response.changeset_id)
         return http
 
-    def _get_llm_client(self):
+    def _get_llm_client(self) -> BaseLLM:
         """Instantiate the Munin planning-tier LLM client from settings."""
         return build_munin_planning_llm()
 
@@ -96,7 +98,7 @@ class MuninChatView(LoginRequiredMixin, View):
             )
         return model.pk
 
-    def _parse_history(self, request: HttpRequest) -> list[dict]:
+    def _parse_history(self, request: HttpRequest) -> list[dict[str, Any]]:
         """Parse conversation history from POST body."""
         raw = request.POST.get("history") or "[]"
         try:
@@ -107,7 +109,7 @@ class MuninChatView(LoginRequiredMixin, View):
             return []
         return history
 
-    def _render_partial(self, response) -> str:
+    def _render_partial(self, response: MuninResponse) -> str:
         """Render a minimal HTMX chat bubble for the Munin response."""
         cites = "".join(
             f'<li><a href="/elements/{item.get("name", "").lower().replace(" ", "-")}">'

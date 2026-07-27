@@ -11,7 +11,7 @@ Dependency rules: ratatosk → graph, changeset, llm.
 from __future__ import annotations
 
 import logging
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from django.contrib.auth.models import User
 from django.db import models
@@ -55,8 +55,8 @@ class RataskRun(models.Model):
     repo_path = models.CharField(max_length=500)
     instructions = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_RUNNING)
-    blackboard = models.JSONField(default=dict)
-    delta_summary = models.JSONField(default=dict)
+    blackboard = models.JSONField(default=dict[str, Any])
+    delta_summary = models.JSONField(default=dict[str, Any])
     triggered_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,

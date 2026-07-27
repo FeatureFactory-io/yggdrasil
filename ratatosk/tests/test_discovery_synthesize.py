@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+
 from unittest.mock import MagicMock
 
 from ratatosk.discovery.synthesize import _llm_synthesize_candidates, apply_synthesis
 
 
 def test_synthesize_apply_merges_backend_aliases() -> None:
-    """Backend dropped; Backend container kept in canonical list."""
+    """Backend dropped; Backend container kept in canonical list[Any]."""
     candidates = [
         {
             "name": "Backend",

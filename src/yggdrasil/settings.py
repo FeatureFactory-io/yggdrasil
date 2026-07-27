@@ -18,7 +18,8 @@ env = environ.Env(
     LOG_LEVEL=(str, "INFO"),
     LLM_PROVIDER=(str, "ollama"),
     OLLAMA_BASE_URL=(str, "http://ollama:11434"),
-    MUNIN_PLANNING_MODEL=(str, "sonnet5"),
+    MUNIN_PLANNING_MODEL=(str, ""),
+    OPENAI_BASE_URL=(str, ""),
 )
 
 # Load .env file when present (local dev)
@@ -174,6 +175,7 @@ OLLAMA_BASE_URL = env("OLLAMA_BASE_URL")
 MUNIN_PLANNING_MODEL = env("MUNIN_PLANNING_MODEL")
 ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
 OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
+OPENAI_BASE_URL = env("OPENAI_BASE_URL")
 
 # ---------------------------------------------------------------------------
 # Logging — see BSP-08; structlog configured in logging module

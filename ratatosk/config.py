@@ -19,13 +19,19 @@ from ratatosk.discovery.limits import (
     DiscoveryLimits,
     clamp_int_limit,
 )
+from yggdrasil.llm.provider_config import (
+    DEFAULT_ANTHROPIC_MODEL,
+    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_OPENAI_MODEL,
+    MODEL_ALIASES,
+    build_openai_client,
+    resolve_model_id,
+)
 
 logger = logging.getLogger("ratatosk.config")
 
 _DEFAULT_SERVER = "https://yggdrasil.featurefactory.io"
 _DEFAULT_OLLAMA_URL = "http://localhost:11434"
-_DEFAULT_OLLAMA_MODEL = "qwen3:14b"
-_DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 _DEFAULT_METAMODEL = "c4"
 _DEFAULT_BUDGET = 8000
 _DEFAULT_PROVIDER = "ollama"
@@ -46,15 +52,6 @@ _YAML_ALLOWLIST = frozenset(
     }
 )
 
-_MODEL_ALIASES: dict[str, dict[str, str]] = {
-    "anthropic": {
-        "haiku": _DEFAULT_ANTHROPIC_MODEL,
-        "sonnet5": "claude-sonnet-4-5-20250929",
-    },
-    "ollama": {},
-}
-
-
 @dataclass(frozen=True)
 class BootstrapConfig:
     """Effective configuration for bootstrap/update CLI runs."""
@@ -63,9 +60,10 @@ class BootstrapConfig:
     yggdrasil_server_url: str = _DEFAULT_SERVER
     yggdrasil_token: str = ""
     base_model: str = ""
-    resolved_model: str = _DEFAULT_OLLAMA_MODEL
-    llm_ollama_model: str = _DEFAULT_OLLAMA_MODEL
+    resolved_model: str = DEFAULT_OLLAMA_MODEL
+    llm_ollama_model: str = DEFAULT_OLLAMA_MODEL
     ollama_base_url: str = _DEFAULT_OLLAMA_URL
+    openai_base_url: str | None = None
     metamodel: str = _DEFAULT_METAMODEL
     model_summary_token_budget: int = _DEFAULT_BUDGET
     exclude_patterns: list[str] = field(default_factory=list[Any])
@@ -95,8 +93,8 @@ def _resolve_base_model(provider: str, raw: str, env: Mapping[str, str]) -> str:
     :return: Concrete model id string.
     :raises ValueError: When alias is unknown for the provider.
     """
-    if provider == "anthropic":
-        legacy = str(env.get("LLM_ANTHROPIC_MODEL") or "").strip()
+    if provider == "openai":
+        legacy = str(env.get("LLM_OPENAI_MODEL") or "").strip()
         if legacy:
             logger.info(
                 "_resolve_base_model | provider=%s input=%r branch=legacy_env resolved_id=%s",
@@ -104,51 +102,32 @@ def _resolve_base_model(provider: str, raw: str, env: Mapping[str, str]) -> str:
                 raw,
                 legacy,
             )
+            return resolve_model_id(provider, legacy, default_model=DEFAULT_OPENAI_MODEL)
+    if provider == "anthropic":
+        legacy = str(env.get("LLM_ANTHROPIC_MODEL") or "").strip()
+        if legacy:
             return legacy
     if provider == "ollama":
         legacy = str(env.get("LLM_OLLAMA_MODEL") or "").strip()
         if legacy:
-            logger.info(
-                "_resolve_base_model | provider=%s input=%r branch=legacy_env resolved_id=%s",
-                provider,
-                raw,
-                legacy,
-            )
             return legacy
 
     cleaned = str(raw or "").strip()
-    if not cleaned:
-        resolved = _DEFAULT_ANTHROPIC_MODEL if provider == "anthropic" else _DEFAULT_OLLAMA_MODEL
-        logger.info(
-            "_resolve_base_model | provider=%s input=(unset) branch=default resolved_id=%s",
-            provider,
-            resolved,
-        )
-        return resolved
-
-    aliases = _MODEL_ALIASES.get(provider, {})
-    if cleaned in aliases:
-        resolved = aliases[cleaned]
-        logger.info(
-            "_resolve_base_model | provider=%s input=%s branch=alias resolved_id=%s",
-            provider,
-            cleaned,
-            resolved,
-        )
-        return resolved
-
-    if provider == "anthropic" and not cleaned.startswith("claude"):
-        msg = f"Unknown BASE_MODEL alias {cleaned!r} for provider anthropic"
-        logger.error("_resolve_base_model | %s", msg)
-        raise ValueError(msg)
+    default_model = {
+        "anthropic": DEFAULT_ANTHROPIC_MODEL,
+        "openai": DEFAULT_OPENAI_MODEL,
+    }.get(provider, DEFAULT_OLLAMA_MODEL)
+    resolved = resolve_model_id(provider, cleaned, default_model=default_model)
+    branch = "default" if not cleaned else "alias" if cleaned in MODEL_ALIASES.get(provider, {}) else "passthrough"
 
     logger.info(
-        "_resolve_base_model | provider=%s input=%s branch=passthrough resolved_id=%s",
+        "_resolve_base_model | provider=%s input=%s branch=%s resolved_id=%s",
         provider,
-        cleaned,
-        cleaned,
+        cleaned or "(unset)",
+        branch,
+        resolved,
     )
-    return cleaned
+    return resolved
 
 
 def _load_yaml_file(path: Path) -> dict[str, Any]:
@@ -219,11 +198,12 @@ def load_bootstrap_config(
         or yaml_layer.get("ollama_base_url")
         or _DEFAULT_OLLAMA_URL
     ).strip()
+    openai_url = str(raw.get("OPENAI_BASE_URL") or "").strip() or None
     resolved = _resolve_base_model(provider, base_model, raw)
     ollama_model = (
         resolved
         if provider == "ollama"
-        else str(raw.get("LLM_OLLAMA_MODEL") or _DEFAULT_OLLAMA_MODEL).strip()
+        else str(raw.get("LLM_OLLAMA_MODEL") or DEFAULT_OLLAMA_MODEL).strip()
     )
     metamodel = str(flags.get("metamodel") or raw.get("RATATOSK_METAMODEL") or _DEFAULT_METAMODEL)
     budget_raw = (
@@ -255,11 +235,8 @@ def load_bootstrap_config(
             _resolve_base_model(provider, planning_raw, raw) if planning_raw else resolved
         )
     else:
-        resolved_planning = _resolve_base_model(
-            provider,
-            planning_raw or _DEFAULT_PLANNING_ALIAS,
-            raw,
-        )
+        planning_default = "" if provider == "openai" else _DEFAULT_PLANNING_ALIAS
+        resolved_planning = _resolve_base_model(provider, planning_raw or planning_default, raw)
 
     max_extract = clamp_int_limit(
         raw.get("RATATOSK_MAX_EXTRACT_TARGETS") or yaml_layer.get("max_extract_targets"),
@@ -282,6 +259,7 @@ def load_bootstrap_config(
         resolved_model=resolved,
         llm_ollama_model=ollama_model,
         ollama_base_url=ollama_url,
+        openai_base_url=openai_url,
         metamodel=metamodel.strip().lower(),
         model_summary_token_budget=budget,
         exclude_patterns=exclude_patterns,
@@ -294,7 +272,7 @@ def load_bootstrap_config(
     logger.info(
         "load_bootstrap_config | llm_provider=%s base_model=%r resolved_model=%s "
         "planning_model=%r resolved_planning_model=%s max_extract_targets=%s "
-        "max_file_reads_per_run=%s ollama_base_url=%s",
+        "max_file_reads_per_run=%s ollama_base_url=%s openai_endpoint_configured=%s",
         config.llm_provider,
         config.base_model,
         config.resolved_model,
@@ -303,6 +281,7 @@ def load_bootstrap_config(
         config.max_extract_targets,
         config.max_file_reads_per_run,
         config.ollama_base_url,
+        config.openai_base_url is not None,
     )
     return config
 
@@ -385,5 +364,18 @@ def _build_llm_client(config: BootstrapConfig, model_id: str, *, tier: str) -> A
             type(anthropic_client).__name__,
         )
         return anthropic_client
-    msg = f"Unknown LLM_PROVIDER={provider!r}; use scripted, ollama, or anthropic"
+    if provider == "openai":
+        api_key = str(os.environ.get("OPENAI_API_KEY") or "").strip()
+        if not api_key:
+            msg = "LLM_PROVIDER=openai but OPENAI_API_KEY is not set"
+            logger.error("_build_llm_client | tier=%s reason=missing_api_key", tier)
+            raise LLMError(msg)
+        openai_client = build_openai_client(model_id, api_key, config.openai_base_url)
+        logger.info(
+            "_build_llm_client | tier=%s client=%s",
+            tier,
+            type(openai_client).__name__,
+        )
+        return openai_client
+    msg = f"Unknown LLM_PROVIDER={provider!r}; use scripted, ollama, anthropic, or openai"
     raise RuntimeError(msg)

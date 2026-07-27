@@ -84,24 +84,41 @@ The MCP facade (`Dockerfile.mcp`) is intentionally minimal: FastMCP + httpx only
 
 **Contract:** Code-first. `drf-spectacular` generates OpenAPI 3.0 from DRF serializers and views. Swagger UI served at `/api/docs/` in non-production environments only.
 
-**LLM abstraction:**
+**LLM abstraction:** The provider-neutral `BaseLLM.complete` port returns
+`LLMResponse` and accepts immutable optional `LLMRequestOptions` for structured
+JSON schema output and reasoning effort. `LLMResponse.content` is normalized
+text; hidden reasoning is never exposed. The current provider set is
+`AnthropicClient`, `OllamaClient`, `OpenAIClient`, and scripted test clients.
+Providers are selected through `LLM_PROVIDER`; the existing default and
+provider-specific behavior remain unchanged. The implemented OpenAI boundary
+is synchronous Responses API text only: no streaming method, tools, provider
+fallback, or other OpenAI products. OPENAI_BASE_URL may explicitly select a
+Responses-compatible endpoint; the adapter never discovers endpoints or changes
+protocols after configuration.
 
-```python
-class LLMClient(Protocol):
-    def complete(self, messages: list[Message], *, model: str, max_tokens: int) -> str: ...
-    def stream(self, messages: list[Message], *, model: str) -> Iterator[str]: ...
-```
-
-Concrete implementations: `AnthropicClient` (default), `OpenAIClient`, `OllamaClient`. Selected via `LLM_PROVIDER` env var. Ratatosk CLI bootstrap subprocess resolves config via `ratatosk.config.load_bootstrap_config` (no Django): **flags → env → repo `.ratatosk/config.yaml` or `ratatosk.yaml` → `~/.ratatosk/config.yaml`**. `ANTHROPIC_API_KEY` is **env-only** (never YAML).
+Ratatosk CLI bootstrap subprocess resolves config via
+`ratatosk.config.load_bootstrap_config` (no Django): **flags → env → repo
+`.ratatosk/config.yaml` or `ratatosk.yaml` → `~/.ratatosk/config.yaml`**.
+`ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are **env-only** (never YAML).
+OPENAI_BASE_URL is also env-only and is never loaded from Ratatosk YAML.
 
 **Ratatosk CLI defaults:** `LLM_PROVIDER=ollama`, `BASE_MODEL` unset → `qwen3:14b` (Ollama) or `claude-3-5-haiku-20241022` (Anthropic). Alias `BASE_MODEL=haiku|sonnet5` maps to concrete API ids. Legacy `LLM_OLLAMA_MODEL` / `LLM_ANTHROPIC_MODEL` override `BASE_MODEL` when set. Tests use explicit `LLM_PROVIDER=scripted`.
 
 Ratatosk and Munin each specify their preferred model tier via config; the abstraction routes the call.
 
+OpenAI is an additional direct Responses API provider, not a replacement for
+Anthropic, Ollama, or scripted tests. It supports synchronous text, strict JSON
+schema output, usage metadata, bounded transient retries, and an explicitly
+configured Responses-compatible base URL. Streaming, tools, Azure-specific
+configuration, endpoint discovery, Chat Completions fallback, and non-text
+OpenAI products are outside this boundary. OpenAI defaults to `gpt-5.6-terra`;
+`openai_fast` and `openai_quality` select explicit OpenAI tiers, while any other
+non-empty explicit model ID passes through unchanged.
+
 **Thinking models:** Providers increasingly return reasoning separately from the answer (Qwen3 `message.thinking`, Claude extended thinking, OpenAI reasoning). Adapters normalize at the boundary:
 
 - `LLMResponse.content` — machine-consumable answer only (JSON for Ratatosk map/extract steps)
-- `LLMResponse.thinking` — optional reasoning trace for blackboard/audit (DEBUG logs only)
+- `LLMResponse.thinking` — provider-specific sanitized field; OpenAI exposes no raw reasoning (counts remain in usage metadata)
 - `yggdrasil.llm.structured` — shared JSON extraction (strips `` / fences before parse)
 
 Field-tier default `max_tokens` is **8000** (`RATATOSK_LLM_MAX_TOKENS`) so thinking headroom does not truncate JSON arrays.
@@ -549,6 +566,8 @@ SECRET_KEY=dev-only-insecure-key
 LLM_PROVIDER=ollama          # or anthropic, openai (scripted for tests only)
 BASE_MODEL=                  # unified alias: haiku, sonnet5, qwen3:14b
 ANTHROPIC_API_KEY=           # env only; required if LLM_PROVIDER=anthropic
+OPENAI_API_KEY=              # env only; required if LLM_PROVIDER=openai
+OPENAI_BASE_URL=             # optional Responses-compatible endpoint, never YAML
 OLLAMA_BASE_URL=http://ollama:11434
 ```
 
@@ -565,6 +584,8 @@ OLLAMA_BASE_URL=http://ollama:11434
 | `REDIS_URL` | `/yggdrasil/REDIS_URL` | Always |
 | `ANTHROPIC_API_KEY` | `/yggdrasil/ANTHROPIC_API_KEY` | If `LLM_PROVIDER=anthropic` |
 | `OPENAI_API_KEY` | `/yggdrasil/OPENAI_API_KEY` | If `LLM_PROVIDER=openai` |
+| `OPENAI_BASE_URL` | deployment environment | Optional Responses-compatible endpoint; no credential material |
+| `OPENAI_TIMEOUT_SECONDS` | `/yggdrasil/OPENAI_TIMEOUT_SECONDS` | Optional OpenAI request timeout |
 
 **Feature flags:** config-based (env var boolean) in MVP. No external flag service.
 
@@ -754,7 +775,7 @@ def apply_changeset(changeset_id: str, *, applied_by: str) -> ChangeSet:
 
 | Domain | Covered by Huginn/Mimir patterns | Gaps |
 |---|---|---|
-| Application Blocks | Django modular monolith (Huginn) ✅ | LLM abstraction protocol — custom ❌ |
+| Application Blocks | Django modular monolith (Huginn) ✅ | LLM provider port and Responses boundary — custom ❌ |
 | Integration & API | DRF REST + FastMCP (Mimir) ✅ | drf-spectacular setup — custom ❌ |
 | Code Organization | Huginn repo structure ✅ | ratatosk/ standalone package layout — custom ❌ |
 | Data Architecture | Django ORM + PostgreSQL (Huginn) ✅ | JSONB property schema validation — custom ❌ |
@@ -782,7 +803,7 @@ def apply_changeset(changeset_id: str, *, applied_by: str) -> ChangeSet:
 | Architectural pattern | Modular monolith | Team size and scope don't justify microservices; bounded contexts provide clear growth path |
 | Web rendering | Server-rendered + HTMX | Testability (Django test client, no browser for most tests); avoids SPA complexity |
 | Graph visualisation | Cytoscape.js (client-rendered) | Interactive graph exploration requires client-side rendering; server-generated SVG too static |
-| LLM abstraction | `LLMClient` protocol | Enables local Ollama for dev/offline, swap to cheaper model for Ratatosk, upgrade Munin independently |
+| LLM abstraction | `BaseLLM` + normalized `LLMResponse` | Enables local Ollama for dev/offline, swap to cheaper model for Ratatosk, upgrade Munin independently |
 | Async broker | Redis (not SQS) | Dev/prod parity; local docker-compose works without AWS; Redis doubles as Django cache |
 | Infrastructure | AWS EB + Aurora | Proven in Huginn/Mimir; blue/green swap at zero cost; Aurora PITR covers RPO |
 | IaC | CDK (Python) | Consistent language with Django codebase; Huginn's CDK stacks are a direct reference implementation |

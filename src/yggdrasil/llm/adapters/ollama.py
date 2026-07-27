@@ -15,7 +15,13 @@ from typing import Any
 
 import httpx
 
-from yggdrasil.llm.base import LLMError, LLMMessage, LLMResponse
+from yggdrasil.llm.base import (
+    LLMError,
+    LLMMessage,
+    LLMRequestOptions,
+    LLMResponse,
+    reject_unsupported_options,
+)
 from yggdrasil.llm.structured import normalize_llm_text
 
 logger = logging.getLogger("yggdrasil.llm.ollama")
@@ -67,6 +73,8 @@ class OllamaClient:
         system: str = "",
         max_tokens: int = _DEFAULT_MAX_TOKENS,
         temperature: float = 0.2,
+        *,
+        options: LLMRequestOptions | None = None,
     ) -> LLMResponse:
         """
         Call Ollama /api/chat and return a structured response.
@@ -78,6 +86,7 @@ class OllamaClient:
         :return: LLMResponse with content, model, usage.
         :raises LLMError: On connection failure, timeout, or non-200 response.
         """
+        reject_unsupported_options(options, provider="Ollama")
         payload = self._build_payload(messages, system, max_tokens, temperature)
         url = f"{self._base_url}/api/chat"
         user_content = str(messages[-1].content if messages else "")

@@ -67,6 +67,36 @@ make up                 # starts Postgres + Redis in Docker
 make up-desktop         # also starts Ollama (set LLM_PROVIDER=ollama in .env)
 ```
 
+### LLM providers
+
+Yggdrasil supports Anthropic, Ollama/local, scripted test doubles, and OpenAI
+through the Responses API. OpenAI is opt-in and can target either OpenAI Platform
+or an explicitly configured Responses-compatible server:
+
+```bash
+LLM_PROVIDER=openai
+OPENAI_API_KEY=<provided-through-your-environment-or-secret-manager>
+BASE_MODEL=gpt-5.6-terra
+```
+
+For a local LM Studio server that exposes POST /v1/responses, configure
+OPENAI_BASE_URL=http://127.0.0.1:1234/v1,
+OPENAI_API_KEY=local-test
+BASE_MODEL=gemma-4-e4b
+Set the same opaque
+model ID in RATATOSK_PLANNING_MODEL and MUNIN_PLANNING_MODEL when those tiers
+should use the local model.
+
+The OpenAI adapter supports synchronous text, strict structured JSON outputs,
+usage metadata, and bounded transient retries. It never probes models or falls
+back to Chat Completions, /api/v1/chat, another endpoint, or another provider.
+The local server must implement the Responses request shape used by this adapter;
+unsupported structured output or reasoning options remain explicit provider
+errors. Azure-specific configuration and non-text OpenAI products are outside
+this boundary. A timeout after server acceptance may duplicate provider usage;
+exactly-once generation is not guaranteed. Never commit or log API keys, prompts,
+or response content.
+
 ### 3. Migrate and run
 
 ```bash
@@ -154,7 +184,7 @@ yggdrasil/
 │   ├── ratatosk/           # RataskRun model, CLI integration models
 │   ├── mcp/                # FastMCP server exposing the service layer
 │   ├── api/                # DRF routers and serializers
-│   ├── llm/                # LLMClient protocol + Anthropic/OpenAI/Ollama adapters
+│   ├── llm/                # provider-neutral LLM port + Anthropic/OpenAI/Ollama adapters
 │   └── web/                # Django views, HTMX partials, templates, Cytoscape.js
 ├── ratatosk/               # Ratatosk CLI package (published to PyPI)
 ├── infra/                  # AWS CDK stacks (Python)

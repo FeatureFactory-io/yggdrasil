@@ -35,6 +35,13 @@ Ratatosk discovery calls `llm.complete()` and parses JSON via [`yggdrasil.llm.st
 
 **Backward compat:** `LLM_OLLAMA_MODEL` / `LLM_ANTHROPIC_MODEL` override `base_model` when set (document in `.env.example`).
 
+OpenAI is an additional direct Responses API provider. It uses
+`OPENAI_API_KEY` from the environment, defaults to `gpt-5.6-terra`, and accepts
+`openai_fast`, `openai_quality`, or any other explicit non-empty model ID.
+`OPENAI_BASE_URL` may explicitly select a Responses-compatible endpoint such as
+LM Studio; it never probes endpoints or falls back to another protocol. Its boundary is
+recorded in [`docs/contracts/openai-llm-provider.boundary.json`](../../../contracts/openai-llm-provider.boundary.json).
+
 **Alias registry** (`ratatosk/config.py` — pure function, unit-tested):
 
 | `base_model` input | Provider | Resolved model id |
@@ -44,6 +51,9 @@ Ratatosk discovery calls `llm.complete()` and parses JSON via [`yggdrasil.llm.st
 | `sonnet5` | anthropic | confirm at impl; log resolved id |
 | *(unset)* | ollama | `qwen3:14b` |
 | `qwen3:14b` | ollama | passthrough |
+| *(unset)* | openai | `gpt-5.6-terra` |
+| `openai_fast` | openai | `gpt-5.6-luna` |
+| `openai_quality` | openai | `gpt-5.6-sol` |
 
 **Tests / CI:** `LLM_PROVIDER=scripted` remains explicit in [`test_settings.py`](../../../../src/yggdrasil/test_settings.py) and unit tests — never rely on empty env for scripted.
 
@@ -156,8 +166,10 @@ Inherit [`SHARED-CONTRACT.md`](../00-foundation/SHARED-CONTRACT.md), plus:
 - Do NOT silently fall back to `ScriptedDiscoveryLLM` when `LLM_PROVIDER=anthropic` or `ollama` — fail fast with clear error.
 - Do NOT enable Anthropic extended thinking for Ratatosk field tier in this slice (JSON latency); parse thinking blocks if model returns them, but do not request thinking budget.
 - Do NOT add Anthropic to default CI (`make test`) — manual `@anthropic` / optional job only.
+- Do NOT make OpenAI live calls part of default CI — use deterministic SDK doubles and an explicit credential-gated smoke run.
+- Do NOT add Cursor, Azure OpenAI-specific support, streaming, tools, or non-text OpenAI products in this slice. Explicit Responses-compatible endpoints are supported only through `OPENAI_BASE_URL`.
 - Do NOT log API keys, raw prompts, or full LLM responses at INFO.
-- Do NOT modify root `pyproject.toml` — `anthropic>=0.32` already present.
+- Keep the OpenAI SDK floor Responses-capable (`openai>=1.99.1`) and keep the lock file synchronized; do not add alternate provider SDKs in this slice.
 - Do NOT implement full scout bounds YAML merge (CFG-01) — LLM keys only in this slice.
 - Do NOT reintroduce Payment API hardcoded candidates outside `LLM_PROVIDER=scripted`.
 
@@ -165,7 +177,7 @@ Inherit [`SHARED-CONTRACT.md`](../00-foundation/SHARED-CONTRACT.md), plus:
 
 ## SAO.md Sections That Apply
 
-- **§2 LLM abstraction** — `LLMClient` protocol; `LLM_PROVIDER` env; thinking models normalized at adapter boundary
+- **§2 LLM abstraction** — `BaseLLM`/`LLMResponse`; `LLM_PROVIDER` env; thinking models normalized at adapter boundary
 - **§17.3 Ratatosk Field/Batch** — small/fast LLM for map/extract; element ops only
 - **§17.6 Model tiers** — Haiku default for Anthropic field tier; Sonnet via explicit `BASE_MODEL=sonnet5`
 - **§18 external integrations** — CLI uses env + YAML merge, not in-process Django settings for bootstrap subprocess
@@ -558,7 +570,7 @@ Apply [`do-informative-logging.mdc`](../../../../.cursor/rules/do-informative-lo
 
 ## Out of scope (explicit deferrals)
 
-- OpenAI adapter
+- Credential-gated live OpenAI smoke certification (deterministic SDK doubles cover ordinary CI)
 - Munin extended-thinking request budget
 - Package-slug cleanup in discovery `_cleanup`
 - Project-map directory-vs-file target fix

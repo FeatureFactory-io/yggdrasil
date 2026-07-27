@@ -74,7 +74,11 @@ class ScriptedDiscoveryLLM:
         system: str = "",
         max_tokens: int = 1024,
         temperature: float = 0.2,
+        *,
+        options: object | None = None,
     ) -> LLMResponse:
+        if options is not None:
+            raise ValueError("Scripted discovery does not support LLM options")
         self._call_count += 1
         user_content = messages[-1].content if messages else ""
         logger.info(

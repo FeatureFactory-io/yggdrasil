@@ -14,7 +14,7 @@ Personas from [PRD.MD](../../PRD.MD). Primary actors: **Priya** (Software Archit
 
 #### Screen: AUTH-LOGIN-1
 
-Elena opens `https://yggdrasil.featurefactory.io`. Login form: email, password, [Sign in]. On success → `VIEW-BROWSE-1` (default landing).
+Elena opens `https://yggdrasil.featurefactory.io`. Login form: email, password, [Sign in]. On success → `VIEW-BROWSE-1` (default landing): `/views/` **302**s to `/models/{default-slug}/views/` (see Act 2 Model switcher — default resolution).
 
 #### Screen: AUTH-TOKEN-1
 
@@ -188,13 +188,17 @@ Priya follows the printed link to `MUNIN-BRIEFING-1` — Munin's post-run archit
 
 **Context:** Priya needs to see all Applications supporting Capability "Fulfill Orders" and their owners. This is the flagship "view browser" (Key Feature #2).
 
-**Pattern:** Multi-level filter panel + results table/graph toggle.
+**Pattern:** Multi-level filter panel + results table/graph toggle. Always scoped to one **Model** (instance graph); switch Models from the left navigator.
 
 #### Screen: VIEW-BROWSE-1
 
 **Layout:**
 
 - **Header:** "View Browser" with saved-views dropdown
+- **Left navigator (content-browser panel):**
+  - **Model switcher** (navigator header — not a static title): dropdown showing the current Model name (`browser-model-name`) and listing every Model the signed-in user may read (`browser-model-switcher`). Selecting another Model navigates to `/models/{slug}/views/` and **reloads** package tree, filters, canvas, and inspector for that graph. Filters, time-travel, and selection are **not** carried across Models.
+  - The switcher does **not** create Models. New Models are created by `ratatosk bootstrap` / MCP `ensure_model` (Act 1 / Act 5).
+  - **Traversal tree** + navigator search (below the switcher): roots = elements matching active filters; children = next **outgoing** hop (same subgraph as canvas). Chevron expand/collapse is **local UI only** — does not change `?depth=`.
 - **Filter panel (top of the list; collapsible panel - when collapsed reads what filters applied):**
   - Package selector (Context, Container, Component, Code — from the C4 bootstrap)
   - Stereotype multi-select (Application, Capability, …)
@@ -202,12 +206,22 @@ Priya follows the printed link to `MUNIN-BRIEFING-1` — Munin's post-run archit
   - **Time Travel:** date picker (defaults to "now"); selecting a past date sets `?as_of=` in the URL and re-runs the query against the historical snapshot — a banner "Viewing model as of 2026-01-15" appears; [Compare with now →] opens `VIEW-HISTORY-1`
   - [Apply Filters] [Clear] [Save View]
 - **Results (center, under filters):**
-  - Table mode: columns Name, Stereotype, Owner, Health, Package
-  - Graph mode: Cytoscape.js rendering of filtered subgraph
+  - **Depth slider (graph mode):** “Show N levels deep” — N = 1 is filter roots only; each increment adds one **outgoing** hop (max = longest reachable path from roots, cap 20). Synced to `?depth=N` in the URL.
+  - Table mode: columns Name, Stereotype, Owner, Health, Package — rows = flat list of nodes in the **current depth-scoped subgraph**
+  - Graph mode: Cytoscape.js rendering of the depth-scoped subgraph (nodes + edges where both endpoints in scope)
   - Toggle [Table] [Graph]
   - **Actions bar:** [Export →] (`EXPORT-BRIEFING-1`) [History →] (`VIEW-HISTORY-1`)
 - **Detail drawer (right):** selected element summary + quick links to VIEW/EDIT
 - **Munin panel:** collapsible chat side panel (`Act 8`) that can drive this same screen
+
+**Model scope & landing:**
+
+- Canonical browse URL always includes the Model slug (see Semantic URL rules). History is already `/models/{model}/history`.
+- `GET /views/` is an unscoped alias: **302** to `/models/{default-slug}/views/`.
+- **Default Model** (for the alias and post-login landing): if the user can read exactly one Model → that Model; else last-used Model stored in session cookie `yggdrasil_model`; else first Model by `name` among those the user can read.
+- Zero Models: `/views/` returns 200 with empty state “No models yet — run `ratatosk bootstrap`”; switcher disabled.
+- Unknown `{model-slug}`: 404.
+- Other GUI screens (Elements, Relationships, ChangeSets, Runs) inherit the current Model from the session; they do not use `/models/{slug}/…` prefixes in this change.
 
 **Advanced filter builder:** each row is a rule (field · operator · value); rows are joined with AND or OR; groups can be nested. Supported operators by property type:
 
@@ -220,10 +234,10 @@ Priya follows the printed link to `MUNIN-BRIEFING-1` — Munin's post-run archit
 | Enum / Stereotype | is one of, is not one of                                           |
 
 
-Every filter state is encoded as a JSON query object appended to the URL — shareable, bookmarkable, and AI-constructable:
+Every filter state is encoded as a JSON query object appended to the URL — shareable, bookmarkable, and AI-constructable. The Model slug is a path segment, not a query param:
 
 ```
-/views/technology/application?filter={"and":[{"field":"version","op":"gt","value":1},{"field":"name","op":"contains","value":"payment"}]}
+/models/yggdrasil/views/technology/application?filter={"and":[{"field":"version","op":"gt","value":1},{"field":"name","op":"contains","value":"payment"}]}
 ```
 
 **Semantic URL rules (filter encoding):**
@@ -231,20 +245,24 @@ Every filter state is encoded as a JSON query object appended to the URL — sha
 
 | Concept                | URL key / value                                                                          |
 | ---------------------- | ---------------------------------------------------------------------------------------- |
+| Model scope            | path segment: `/models/{model-slug}/`                                                    |
+| View browser           | `/models/{model-slug}/views/`                                                            |
+| Package scope          | `/models/{model-slug}/views/{package-slug}/`                                             |
+| Stereotype scope       | `/models/{model-slug}/views/{package-slug}/{stereotype-slug}`                            |
+| Graph JSON             | `/models/{model-slug}/views/graph.json`                                                  |
+| Unscoped alias         | `/views/` → 302 `/models/{default-slug}/views/`                                          |
 | AND group              | `{"and": [...rules]}`                                                                    |
 | OR group               | `{"or": [...rules]}`                                                                     |
 | Rule                   | `{"field": "<prop>", "op": "<operator>", "value": <scalar or array>}`                    |
 | Operators              | `eq` `neq` `gt` `gte` `lt` `lte` `contains` `not_contains` `starts` `ends` `in` `not_in` |
-| Package scope          | path segment: `/views/{package-slug}/`                                                   |
-| Stereotype scope       | path segment: `/views/{package-slug}/{stereotype-slug}`                                  |
-| Depth (traversal)      | `?depth=N`                                                                               |
+| Depth (traversal)      | `?depth=N` — N ≥ 1; filters define roots; N = 1 → roots only; each +1 adds one outgoing hop (BFS). Default: `1`. Unfiltered browse uses graph sources as roots. |
 | Time travel            | `?as_of=2026-06-01`                                                                      |
 | Pre-filled create form | `/elements/new?prefill={"name":"X","stereotype":"Container","package":"technology"}`     |
 
 
 Munin (`Act 8`) and any MCP client can construct these URLs from natural language without touching the GUI (Key Feature 1). The filter builder always reflects the current URL state — paste a URL, restore the exact view.
 
-Priya selects Package "Technology", Stereotype "Application", adds rule `version > 1 AND name contains "payment"` — URL updates live; she copies it to Slack. Marcus clicks it and lands on the identical subgraph.
+Priya switches the navigator to Model "Yggdrasil", selects Stereotype "Capability", sets depth **1** — she sees only capabilities. She moves the slider to **3** — apps that realize those capabilities and stacks they depend on appear in the navigator tree and graph. She adds rule `name contains "payment"` — URL updates live; she copies it to Slack. Marcus clicks it and lands on the identical subgraph of the same Model at the same depth.
 
 #### Screen: EXPORT-BRIEFING-1
 
@@ -264,7 +282,7 @@ Priya selects Package "Technology", Stereotype "Application", adds rule `version
 
 **Download:** [Export as Mermaid] [Export as Markdown Deck] [Export as JSON] — each triggers a file download. No server-side storage; exports are point-in-time snapshots.
 
-Semantic URL for export: `/views/{package}/{stereotype}/export?format=mermaid&filter=...` — constructible by Munin in chat so a GUI-free user can generate a download link without opening the browser.
+Semantic URL for export: `/models/{model}/views/{package}/{stereotype}/export?format=mermaid&filter=...` — constructible by Munin in chat so a GUI-free user can generate a download link without opening the browser.
 
 #### Screen: VIEW-HISTORY-1
 
@@ -587,7 +605,7 @@ Munin answers from ground truth only (never hallucinates), drives the surroundin
 
 **Example 1 — find & navigate:** "Who owns Payment API?" → Munin queries the graph, responds with owner/health, navigates the view to `/elements/payment-api`.
 
-**Example 2 — scope a view:** "Show me everything that depends on Payment API and is owned by another team" → Munin constructs `/traverse?from=payment-api&direction=incoming&filter={"owner_ne":"my-team"}` and navigates.
+**Example 2 — scope a view:** "Show me everything that depends on Payment API and is owned by another team" → Munin constructs `/models/yggdrasil/views/?traverse=payment-api&direction=incoming&filter={"owner_ne":"my-team"}` and navigates.
 
 **Example 3 — propose an element:** "Add Notification Service as a Container under Technology" → Munin responds with a clickable link to `/elements/new?prefill={"name":"Notification Service","stereotype":"Container","package":"technology"}` — the human clicks, reviews the pre-filled form, and submits.
 

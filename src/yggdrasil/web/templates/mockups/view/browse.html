@@ -65,6 +65,10 @@
     color: var(--hg-primary);
     margin-bottom: 0.25rem;
   }
+  .yrg-nav-model-title.dropdown-toggle::after {
+    vertical-align: 0.15em;
+    margin-left: 0.35rem;
+  }
   .yrg-nav-search {
     margin: 0.5rem 0;
   }
@@ -344,8 +348,29 @@
          aria-label="Package and element navigator">
 
     <div class="yrg-browser-nav-scroll">
-      <div class="yrg-nav-model-title" data-testid="browser-model-name">
-        <i class="fa-solid fa-diagram-project me-1" aria-hidden="true"></i>{{ model_name }}
+      <div class="dropdown mb-1">
+        <button class="yrg-nav-model-title dropdown-toggle border-0 bg-transparent p-0"
+                type="button"
+                data-bs-toggle="dropdown"
+                data-testid="browser-model-switcher"
+                aria-expanded="false"
+                aria-label="Switch model"
+                title="Enables you to switch which architecture Model the View Browser shows. Use it to move between landscapes without leaving the explorer.">
+          <i class="fa-solid fa-diagram-project me-1" aria-hidden="true"></i>
+          <span data-testid="browser-model-name">{{ model_name }}</span>
+        </button>
+        <ul class="dropdown-menu" data-testid="browser-model-menu">
+          <li>
+            <a class="dropdown-item active"
+               href="/models/yggdrasil/views/"
+               data-testid="browser-model-option-yggdrasil">Yggdrasil</a>
+          </li>
+          <li>
+            <a class="dropdown-item"
+               href="/models/payments/views/"
+               data-testid="browser-model-option-payments">Payments</a>
+          </li>
+        </ul>
       </div>
       <div class="text-muted" style="font-size:0.68rem;">Ratatosk bootstrap · synced 4m ago</div>
 
@@ -358,8 +383,36 @@
                id="navSearchInput">
       </div>
 
-      <div class="hg-section-label mb-1">Packages</div>
-      <nav aria-label="Package tree" data-testid="browser-package-tree" id="packageTree">
+      <div class="hg-section-label mb-1">Elements</div>
+      <nav aria-label="Element traversal tree" data-testid="browser-element-tree" id="elementTree">
+        {% for root in traversal_roots %}
+        <div class="yrg-tree-node" data-element="{{ root.slug }}">
+          <button type="button"
+                  class="yrg-package-toggle"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#tree-{{ root.slug }}"
+                  aria-expanded="{% if root.expanded %}true{% else %}false{% endif %}"
+                  data-testid="nav-toggle-{{ root.slug }}">
+            <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+            <i class="fa-solid fa-cube text-primary" aria-hidden="true"></i>
+            <span>{{ root.name }}</span>
+            <span class="badge bg-secondary ms-auto" style="font-size:0.6rem;">{{ root.children|length }}</span>
+          </button>
+          <div class="collapse {% if root.expanded %}show{% endif %}" id="tree-{{ root.slug }}">
+            {% for el in root.children %}
+            <button type="button"
+                    class="yrg-element-item"
+                    data-element-id="{{ el.id }}"
+                    data-testid="nav-element-{{ el.slug }}"
+                    onclick="selectElement({{ el.id }})">
+              <span class="st-icon" aria-hidden="true"><i class="fa-solid fa-box"></i></span>
+              <span class="text-truncate">{{ el.name }}</span>
+              <span class="hg-dot hg-dot-{{ el.health }} ms-auto flex-shrink-0" aria-hidden="true"></span>
+            </button>
+            {% endfor %}
+          </div>
+        </div>
+        {% empty %}
         {% for pkg in packages %}
         <div class="yrg-package-node" data-package="{{ pkg.slug }}">
           <button type="button"
@@ -394,6 +447,7 @@
           </div>
         </div>
         {% endfor %}
+        {% endfor %}
       </nav>
     </div>
   </aside>
@@ -422,6 +476,21 @@
                 onclick="console.log('[mockup:view-browse-1] clear filters')">Clear</button>
       </div>
       <div class="d-flex align-items-center gap-2">
+        <div class="yrg-depth-control d-flex align-items-center gap-2 me-2"
+             data-testid="browser-depth-control"
+             title="Controls how many relationship levels appear from your filtered starting points. Increase to see dependencies further down the graph.">
+          <label for="depthSlider" class="form-label small mb-0 text-nowrap">Levels</label>
+          <input type="range"
+                 class="form-range"
+                 style="width:6rem;"
+                 id="depthSlider"
+                 min="1"
+                 max="3"
+                 value="2"
+                 data-testid="browser-depth-slider"
+                 aria-label="Show levels deep">
+          <span class="badge bg-secondary" data-testid="browser-depth-value">2 / 3</span>
+        </div>
         <span style="font-size:0.72rem;color:var(--hg-ink-muted);" data-testid="results-container">
           {{ element_count }} elements
         </span>

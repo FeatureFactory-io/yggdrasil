@@ -38,3 +38,7 @@ Scenarios **01–15** (except 11 @wip) covered by `test_view_browse.py`.
 ## Deferred (unchanged)
 
 VIEW-BROWSE-1-07 saved views · 09 export/history prod wiring · 11 time travel banner.
+
+## Change request (BPE-08 closed, approved 2026-08-17)
+
+Model switcher in the left navigator; canonical URLs `/models/{slug}/views/…`. Specs: [`VIEW-BROWSE-1_MODEL_SWITCHER_CHANGE_RECONCILIATION.md`](VIEW-BROWSE-1_MODEL_SWITCHER_CHANGE_RECONCILIATION.md). **W12 shipped.**

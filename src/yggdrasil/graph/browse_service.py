@@ -9,16 +9,20 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.db.models import Q, QuerySet
 
 from yggdrasil.graph.models import Element, Package, Relationship, Stereotype, YggdrasilModel
 
+if TYPE_CHECKING:
+    from django.contrib.auth.models import AbstractBaseUser
+
 logger = logging.getLogger("yggdrasil.graph.browse")
 
 MAX_LIMIT = 200
 DEFAULT_MODEL_SLUG = "yggdrasil"
+MODEL_COOKIE_NAME = "yggdrasil_model"
 
 
 @dataclass(frozen=True)
@@ -40,6 +44,101 @@ class BrowseResult:
     limit: int
     offset: int
     as_of: str | None = None
+
+
+def list_readable_models(user: AbstractBaseUser) -> QuerySet[YggdrasilModel]:
+    """
+    Return Models the signed-in user may read for the View Browser switcher.
+
+    Admin users (staff/superuser) see all Models. Other users see Models with
+    no ``owner_group`` or whose ``owner_group`` matches one of the user's groups.
+
+    :param user: Authenticated Django user.
+    :return: Queryset ordered by ``name``.
+    """
+    logger.info("browse_service.list_readable_models | entry | user_pk=%s", user.pk)
+    if user.is_superuser or user.is_staff:
+        queryset = YggdrasilModel.objects.all()
+    else:
+        group_ids = list(user.groups.values_list("pk", flat=True))
+        queryset = YggdrasilModel.objects.filter(
+            Q(owner_group__isnull=True) | Q(owner_group_id__in=group_ids)
+        )
+    queryset = queryset.order_by("name")
+    logger.info(
+        "browse_service.list_readable_models | exit | user_pk=%s model_count=%s",
+        user.pk,
+        queryset.count(),
+    )
+    return queryset
+
+
+def resolve_default_model_slug(
+    user: AbstractBaseUser,
+    cookie_value: str | None,
+) -> str | None:
+    """
+    Resolve the default Model slug for unscoped ``GET /views/`` redirects.
+
+    Priority: sole visible Model → valid cookie → first readable by ``name``.
+
+    :param user: Authenticated Django user.
+    :param cookie_value: Last-used Model slug from cookie, if any.
+    :return: Default slug, or ``None`` when the user can read zero Models.
+    """
+    logger.info("browse_service.resolve_default_model_slug | entry | user_pk=%s", user.pk)
+    readable = list(list_readable_models(user))
+    if not readable:
+        logger.info(
+            "browse_service.resolve_default_model_slug | error | user_pk=%s reason=no_models",
+            user.pk,
+        )
+        return None
+    if len(readable) == 1:
+        slug = readable[0].slug
+        logger.info(
+            "browse_service.resolve_default_model_slug | branch | user_pk=%s "
+            "reason=sole_visible model_slug=%s",
+            user.pk,
+            slug,
+        )
+        return slug
+    if cookie_value:
+        for model in readable:
+            if model.slug.lower() == cookie_value.lower():
+                logger.info(
+                    "browse_service.resolve_default_model_slug | branch | user_pk=%s "
+                    "reason=cookie model_slug=%s",
+                    user.pk,
+                    model.slug,
+                )
+                return model.slug
+    slug = readable[0].slug
+    logger.info(
+        "browse_service.resolve_default_model_slug | branch | user_pk=%s "
+        "reason=first_by_name model_slug=%s",
+        user.pk,
+        slug,
+    )
+    return slug
+
+
+def user_can_read_model(user: AbstractBaseUser, model_slug: str) -> YggdrasilModel:
+    """
+    Resolve a Model slug and verify the user may read it.
+
+    :param user: Authenticated Django user.
+    :param model_slug: Model slug from the URL. Example: ``"yggdrasil"``.
+    :return: Matching ``YggdrasilModel``.
+    :raises ValueError: If the slug does not exist.
+    :raises PermissionError: If the user cannot read the Model.
+    """
+    model = resolve_model(model_slug)
+    readable_slugs = {item.slug.lower() for item in list_readable_models(user)}
+    if model.slug.lower() not in readable_slugs:
+        msg = f"Model {model_slug!r} not readable"
+        raise PermissionError(msg)
+    return model
 
 
 def resolve_model(model_slug: str) -> YggdrasilModel:

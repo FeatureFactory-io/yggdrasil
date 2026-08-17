@@ -31,7 +31,7 @@ def test_build_view_browse_context_includes_slugs_and_packages(view_browser_expl
     user = UserFactory(is_architect=True)
     request = RequestFactory().get("/views/")
     request.user = user
-    params = parse_view_browse_params(request)
+    params = parse_view_browse_params(request, "yggdrasil")
     context = build_view_browse_context(request, params)
     assert context["element_count"] == 19
     assert len(context["packages"]) == 3
@@ -47,7 +47,7 @@ def test_build_view_browse_context_returns_packages(view_browser_explorer_model)
     user = UserFactory(is_architect=True)
     request = RequestFactory().get("/views/")
     request.user = user
-    params = parse_view_browse_params(request)
+    params = parse_view_browse_params(request, "yggdrasil")
     context = build_view_browse_context(request, params)
     assert context["packages"]
     assert context["model_name"] == "Yggdrasil"

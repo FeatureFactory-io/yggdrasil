@@ -9,17 +9,26 @@ app_name = "web"
 
 urlpatterns = [
     path("", views.index, name="index"),
-    path("views/", views.ViewBrowseView.as_view(), name="view_browse"),
-    path("views/graph.json", views.ViewBrowseGraphJsonView.as_view(), name="view_browse_graph"),
+    path("views/", views.ViewBrowseRedirectView.as_view(), name="view_browse"),
     path(
-        "views/inspector/element/<int:pk>/",
-        views.ViewBrowseInspectorElementView.as_view(),
-        name="view_browse_inspector_element",
+        "models/<slug:model_slug>/views/",
+        views.ViewBrowseView.as_view(),
+        name="view_browse_model",
     ),
     path(
-        "views/inspector/relationship/<int:pk>/",
+        "models/<slug:model_slug>/views/graph.json",
+        views.ViewBrowseGraphJsonView.as_view(),
+        name="view_browse_graph_model",
+    ),
+    path(
+        "models/<slug:model_slug>/views/inspector/element/<int:pk>/",
+        views.ViewBrowseInspectorElementView.as_view(),
+        name="view_browse_inspector_element_model",
+    ),
+    path(
+        "models/<slug:model_slug>/views/inspector/relationship/<int:pk>/",
         views.ViewBrowseInspectorRelationshipView.as_view(),
-        name="view_browse_inspector_relationship",
+        name="view_browse_inspector_relationship_model",
     ),
     path("chat/munin/", MuninChatView.as_view(), name="munin_chat"),
 ]

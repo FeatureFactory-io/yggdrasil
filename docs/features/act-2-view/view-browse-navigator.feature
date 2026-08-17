@@ -4,10 +4,12 @@ Feature: VIEW-BROWSE-1 View Browser — Package & Element Navigator (left panel)
   So that I can jump to any node without relying on the graph alone
 
   # Component: left panel · Pattern: Mimir Content Browser FOB-CONTENT-BROWSER-20..27
-  # Production: /views/ · Mockup reference: /mockups/view/browse/ (DEBUG only — not an AT target)
-  # Testids: browser-nav-panel, browser-model-name, browser-search-input,
-  #          browser-package-tree, package-toggle-{slug}, nav-element-{id},
-  #          browser-toggle-nav-panel
+  # Production: /models/{slug}/views/ · alias GET /views/ 302s to default model
+  # Mockup reference: /mockups/view/browse/ (DEBUG only — not an AT target)
+  # Testids: browser-nav-panel, browser-model-name, browser-model-switcher,
+  #          browser-model-menu, browser-model-option-{slug},
+  #          browser-search-input, browser-package-tree, package-toggle-{slug},
+  #          nav-element-{id}, browser-toggle-nav-panel
   # Fixture: view_browser_model (pytest) · extend via TFK-07 for AT behave load
   # Depends: VIEW-BROWSE-1-16 three-panel shell
 
@@ -18,7 +20,7 @@ Feature: VIEW-BROWSE-1 View Browser — Package & Element Navigator (left panel)
   # ── AT: shell + static HTML ───────────────────────────────────────────────
 
   Scenario: VIEW-BROWSE-1-17 Navigator panel renders with model name and package tree
-    When I GET "/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?view=graph"
     Then the response status is 200
     And the element "browser-nav-panel" should be visible
     And the element "browser-model-name" should be visible
@@ -27,7 +29,7 @@ Feature: VIEW-BROWSE-1 View Browser — Package & Element Navigator (left panel)
     And the user should see "Yggdrasil"
 
   Scenario: VIEW-BROWSE-1-18 Package tree lists Context, Application, and Technology with counts
-    When I GET "/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?view=graph"
     Then the response status is 200
     And the element "package-toggle-context" should be visible
     And the element "package-toggle-application" should be visible
@@ -35,7 +37,7 @@ Feature: VIEW-BROWSE-1 View Browser — Package & Element Navigator (left panel)
     And the user should see "Application"
 
   Scenario: VIEW-BROWSE-1-19 Navigator lists elements under expanded Application package
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the user should see "auth"
     And the user should see "graph"
@@ -43,7 +45,7 @@ Feature: VIEW-BROWSE-1 View Browser — Package & Element Navigator (left panel)
     And the user should see "web"
 
   Scenario: VIEW-BROWSE-1-20 Navigator collapse toggle control is present
-    When I GET "/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?view=graph"
     Then the response status is 200
     And the element "browser-toggle-nav-panel" should be visible
 
@@ -83,3 +85,55 @@ Feature: VIEW-BROWSE-1 View Browser — Package & Element Navigator (left panel)
     When she clicks the navigator collapse toggle
     Then the element "browser-nav-panel" is collapsed
     And the graph canvas fills the freed horizontal space
+
+  # ── Model switcher (CR: VIEW-BROWSE-1 model switcher) ─────────────────────
+  # Canonical URL: /models/{slug}/views/ · alias GET /views/ 302s to default
+  # Scenarios 17–20 use canonical URLs; 49/53 exercise the /views/ alias.
+
+  Scenario: VIEW-BROWSE-1-48 Model switcher lists Models the user can read
+    Given the models "yggdrasil" and "payments" exist and the architect can read both
+    When I GET "/models/yggdrasil/views/?view=graph"
+    Then the response status is 200
+    And the element "browser-model-switcher" should be visible
+    And the element "browser-model-name" should be visible
+    And the element "browser-model-option-yggdrasil" should be visible
+    And the element "browser-model-option-payments" should be visible
+    And the user should see "Yggdrasil"
+
+  Scenario: VIEW-BROWSE-1-49 Unscoped /views/ redirects to the default Model
+    When I GET "/views/"
+    Then the response status is 302
+    And the Location header starts with "/models/yggdrasil/views/"
+
+  Scenario: VIEW-BROWSE-1-50 Canonical browse URL includes the Model slug
+    When I GET "/models/yggdrasil/views/?view=graph"
+    Then the response status is 200
+    And the element "browser-nav-panel" should be visible
+    And the user should see "Yggdrasil"
+
+  @wip
+  Scenario: VIEW-BROWSE-1-51 Selecting another Model reloads the navigator for that graph
+    Given the models "yggdrasil" and "payments" exist and the architect can read both
+    And Priya is on the View Browser for model "yggdrasil"
+    When she selects model "payments" in the model switcher
+    Then she is on "/models/payments/views/"
+    And the element "browser-model-name" shows "Payments"
+    And she does not see "munin" in the navigator
+
+  Scenario: VIEW-BROWSE-1-52 Unknown Model slug returns 404
+    Given the user is logged in as "architect"
+    When I GET "/models/does-not-exist/views/"
+    Then the response status is 404
+
+  Scenario: VIEW-BROWSE-1-53 Zero Models shows empty state and disables the switcher
+    Given the architect can read no models
+    When I GET "/views/"
+    Then the response status is 200
+    And the user should see "No models yet"
+    And the element "browser-model-switcher" is disabled
+
+  Scenario: VIEW-BROWSE-1-54 Model switcher has no create-model action
+    Given the models "yggdrasil" and "payments" exist and the architect can read both
+    When I GET "/models/yggdrasil/views/?view=graph"
+    Then the response status is 200
+    And the user should not see "Create model"

@@ -54,6 +54,26 @@ def step_element_not_visible(context, test_id: str) -> None:
     logger.info("Element testid=%s is not visible", test_id)
 
 
+@then('the element "{test_id}" is disabled')
+def step_element_is_disabled(context, test_id: str) -> None:
+    """Assert ``data-testid`` element has a ``disabled`` attribute."""
+    content = get_response_content(context)
+    pattern = rf'data-testid="{re.escape(test_id)}"[^>]*disabled'
+    assert re.search(pattern, content), f"Expected testid={test_id!r} to be disabled"
+    logger.info("Element testid=%s is disabled", test_id)
+
+
+@then('the element "{test_id}" shows "{text}"')
+def step_element_shows_text(context, test_id: str, text: str) -> None:
+    """Assert element with ``data-testid`` contains ``text``."""
+    content = get_response_content(context)
+    tag_pattern = rf'<[^>]*data-testid="{re.escape(test_id)}"[^>]*>.*?</[^>]+>'
+    match = re.search(tag_pattern, content, re.DOTALL)
+    assert match, f"Element testid={test_id!r} not found"
+    assert text in match.group(0), f"Expected {text!r} in element {test_id!r}"
+    logger.info("Element testid=%s shows %s", test_id, text)
+
+
 @then("the page uses the full-height view browser layout")
 def step_page_uses_view_browser_layout(context) -> None:
     """Assert ``yrg-view-browser`` appears on the ``<body>`` class list."""

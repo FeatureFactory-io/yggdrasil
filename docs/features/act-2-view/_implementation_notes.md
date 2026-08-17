@@ -9,14 +9,14 @@
 
 | Panel | Responsibility | Primary testids | Feature file |
 |-------|----------------|-----------------|--------------|
-| Left navigator | Package tree, element list, search | `browser-nav-panel`, `browser-package-tree`, `browser-search-input`, `package-toggle-{slug}`, `nav-element-{slug}` | `view-browse-navigator.feature` |
+| Left navigator | Package tree, element list, search, **Model switcher** | `browser-nav-panel`, `browser-package-tree`, `browser-search-input`, `browser-model-switcher`, `package-toggle-{slug}`, `nav-element-{slug}` | `view-browse-navigator.feature` |
 | Centre canvas | Cytoscape graph + table toggle, filters | `graph-cy-container`, `toggle-table`, `toggle-graph`, `results-container` | `view-browse-canvas.feature` |
 | Right inspector | Element/relationship properties (embed mode) | `browser-inspector-panel`, `inspector-empty`, `inspector-content` | `view-browse-inspector.feature` |
 | Page shell | Header actions, Munin offcanvas | `view-browse-page`, `export-btn`, `open-munin-btn` | `view-browse.feature` |
 
 ---
 
-## Scenario index (VIEW-BROWSE-1-01 … 44)
+## Scenario index (VIEW-BROWSE-1-01 … 54)
 
 | IDs | Status | Runner | Notes |
 |-----|--------|--------|-------|
@@ -25,6 +25,7 @@
 | 17–24 | v0.3 navigator | AT + E2E | 17–20 AT testid shell; 21–24 Playwright interaction |
 | 25–34 | v0.3 inspector | AT + E2E | 27–28 embed partials; 29–34 selection sync |
 | 35–37, 45–46 | v0.3 canvas | AT | Graph JSON, mode SSR, canvas controls |
+| 48–54 | **W12 implemented** | AT + E2E | Model switcher; canonical `/models/{slug}/views/` |
 
 ---
 
@@ -37,8 +38,11 @@
 | W9 | Inspector + embed partials on Element/Relationship views | 25–34 |
 | W10 | Full-height Cytoscape canvas + selection bus JS | 38–42 |
 | W11 | Filter ↔ navigator ↔ graph sync | 43–44 |
+| W12 | **Model switcher** (BPE-01 shipped) | 48–54 |
 
 Deferred from v0.2 (unchanged): 07 saved views, 09 export/history wiring, 11 time travel banner.
+
+W12 is **shipped** (model switcher + canonical URLs). See plan [`VIEW-BROWSE-1_MODEL_SWITCHER_CHANGE_RECONCILIATION.md`](VIEW-BROWSE-1_MODEL_SWITCHER_CHANGE_RECONCILIATION.md).
 
 ---
 

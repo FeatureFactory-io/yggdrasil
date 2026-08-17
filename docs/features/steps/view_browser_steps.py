@@ -27,6 +27,7 @@ import logging
 import re
 
 from behave import given, then, when
+from django.contrib.auth.models import Group
 from django.urls import reverse
 from steps.common_steps import get_client
 from support.visibility import (
@@ -55,12 +56,19 @@ def _load_fixture(context, model_slug: str, element_specs, relationship_specs, r
     """Seed model via ChangeSet and store slug on context."""
     user = getattr(context, "current_user", None)
     if user is None:
-        user = UserFactory(is_architect=True)
+        user = UserFactory(groups="architect")
         context.current_user = user
     set_current_user_id(user.pk)
     set_token_scope("read-write")
     mm = ensure_c4_metamodel()
-    model = YggdrasilModelFactory(name=model_slug.title(), slug=model_slug, metamodel=mm)
+    model, _ = YggdrasilModelFactory._meta.model.objects.get_or_create(
+        slug=model_slug,
+        defaults={"name": model_slug.title(), "metamodel": mm},
+    )
+    if Element.objects.filter(model=model).exists():
+        context.view_browser_model_slug = model_slug
+        logger.info("View browser fixture already loaded model_slug=%s", model_slug)
+        return
     _seed_view_browser(model, element_specs, relationship_specs, run_id=run_id)
     context.view_browser_model_slug = model_slug
     logger.info(
@@ -90,19 +98,80 @@ def step_model_loaded_explorer_fixture(context, slug: str) -> None:
     assert count == 19, f"Expected 19 explorer elements, got {count}"
 
 
+@given('the models "{model_a}" and "{model_b}" exist and the architect can read both')
+def step_two_models_readable(context, model_a: str, model_b: str) -> None:
+    """Seed two models with explorer/payment fixtures; architect group owns both."""
+    architect_group, _ = Group.objects.get_or_create(name="architect")
+    user = getattr(context, "current_user", None)
+    if user is not None:
+        user.groups.add(architect_group)
+    mm = ensure_c4_metamodel()
+    yggdrasil, _ = YggdrasilModelFactory._meta.model.objects.get_or_create(
+        slug=model_a,
+        defaults={"name": model_a.title(), "metamodel": mm, "owner_group": architect_group},
+    )
+    if yggdrasil.owner_group_id is None:
+        yggdrasil.owner_group = architect_group
+        yggdrasil.save(update_fields=["owner_group"])
+    payments, _ = YggdrasilModelFactory._meta.model.objects.get_or_create(
+        slug=model_b,
+        defaults={"name": model_b.title(), "metamodel": mm, "owner_group": architect_group},
+    )
+    if not Element.objects.filter(model=yggdrasil).exists():
+        _seed_view_browser(
+            yggdrasil,
+            VIEW_BROWSER_EXPLORER_ELEMENTS,
+            VIEW_BROWSER_EXPLORER_RELATIONSHIPS,
+            run_id="run-at-two-model-yggdrasil",
+        )
+    if not Element.objects.filter(model=payments).exists():
+        _seed_view_browser(
+            payments,
+            VIEW_BROWSER_ELEMENTS,
+            _PAYMENT_RELATIONSHIPS,
+            run_id="run-at-two-model-payments",
+        )
+    context.view_browser_model_slug = model_a
+    logger.info("Seeded readable models %s and %s", model_a, model_b)
+
+
+@given("the architect can read no models")
+def step_architect_can_read_no_models(context) -> None:
+    """Ensure no model is readable by the signed-in architect."""
+    other_group, _ = Group.objects.get_or_create(name="other-team")
+    from yggdrasil.graph.models import YggdrasilModel
+
+    YggdrasilModel.objects.update(owner_group=other_group)
+    if not YggdrasilModel.objects.filter(slug="private").exists():
+        mm = ensure_c4_metamodel()
+        YggdrasilModelFactory(name="Private", slug="private", metamodel=mm, owner_group=other_group)
+    logger.info("Architect cannot read any models")
+
+
+@given('Priya is on the View Browser for model "{slug}"')
+def step_priya_on_view_browser_for_model(context, slug: str) -> None:
+    """GET canonical browse URL for a specific model."""
+    path = reverse("web:view_browse_model", kwargs={"model_slug": slug})
+    context.response = get_client(context).get(path)
+    context.view_browser_model_slug = slug
+    logger.info(
+        "Priya on View Browser model=%s GET %s -> %s", slug, path, context.response.status_code
+    )
+
+
 @given("Priya is on the View Browser")
 def step_priya_on_view_browser(context) -> None:
-    """GET production View Browser (not mockup)."""
+    """GET production View Browser (follows alias redirect)."""
     path = reverse("web:view_browse")
-    context.response = get_client(context).get(path)
+    context.response = get_client(context).get(path, follow=True)
     logger.info("Priya on View Browser GET %s -> %s", path, context.response.status_code)
 
 
 @given("Priya is on the View Browser in graph mode")
 def step_priya_on_view_browser_graph_mode(context) -> None:
-    """GET View Browser with ``?view=graph`` (three-panel explorer)."""
+    """GET View Browser with ``?view=graph`` (follows alias redirect)."""
     path = reverse("web:view_browse") + "?view=graph"
-    context.response = get_client(context).get(path)
+    context.response = get_client(context).get(path, follow=True)
     logger.info("Priya on View Browser graph mode GET %s -> %s", path, context.response.status_code)
 
 
@@ -141,7 +210,10 @@ def step_get_inspector_element_partial(context, slug: str) -> None:
     """GET ``/views/inspector/element/<pk>/`` for an element slug on the loaded model."""
     model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
     element = Element.objects.get(model__slug=model_slug, slug=slug)
-    path = reverse("web:view_browse_inspector_element", args=[element.pk])
+    path = reverse(
+        "web:view_browse_inspector_element_model",
+        kwargs={"model_slug": model_slug, "pk": element.pk},
+    )
     context.response = get_client(context).get(path)
     logger.info(
         "GET inspector element partial slug=%s pk=%s -> %s",
@@ -162,7 +234,10 @@ def step_get_inspector_relationship_partial(context, source: str, target: str) -
         source=source_el,
         target=target_el,
     )
-    path = reverse("web:view_browse_inspector_relationship", args=[relationship.pk])
+    path = reverse(
+        "web:view_browse_inspector_relationship_model",
+        kwargs={"model_slug": model_slug, "pk": relationship.pk},
+    )
     context.response = get_client(context).get(path)
     logger.info(
         "GET inspector relationship partial %s->%s pk=%s -> %s",

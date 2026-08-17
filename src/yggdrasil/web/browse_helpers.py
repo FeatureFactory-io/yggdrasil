@@ -65,23 +65,59 @@ class ViewBrowseParams:
     view_mode: str
 
 
-def parse_view_browse_params(request: HttpRequest) -> ViewBrowseParams:
+def parse_view_browse_params(request: HttpRequest, model_slug: str) -> ViewBrowseParams:
     """
     Parse filter query parameters from a View Browser request.
 
     :param request: Django HTTP request.
+    :param model_slug: Model slug from the URL path. Example: ``"yggdrasil"``.
     :return: Normalized browse parameters.
     """
     raw_view = _blank_to_none(request.GET.get("view")) or "table"
     view_mode = raw_view if raw_view in VALID_VIEW_MODES else "table"
     return ViewBrowseParams(
-        model_slug=browse_service.DEFAULT_MODEL_SLUG,
+        model_slug=model_slug,
         stereotype=_blank_to_none(request.GET.get("stereotype")),
         package=_blank_to_none(request.GET.get("package")),
         health=_blank_to_none(request.GET.get("health")),
         as_of=_blank_to_none(request.GET.get("as_of")),
         view_mode=view_mode,
     )
+
+
+def build_empty_browse_context(request: HttpRequest) -> dict[str, Any]:
+    """
+    Build template context when the user can read zero Models.
+
+    :param request: Authenticated request.
+    :return: Empty browse context with switcher disabled.
+    """
+    readable_models = list(browse_service.list_readable_models(request.user))
+    logger.info(
+        "build_empty_browse_context | user_pk=%s readable_count=%s",
+        request.user.pk,
+        len(readable_models),
+    )
+    return {
+        "elements": [],
+        "element_count": 0,
+        "packages": [],
+        "model_name": "",
+        "filter_options": {"packages": [], "stereotypes": [], "health": []},
+        "active_filters": ViewBrowseParams(
+            model_slug="",
+            stereotype=None,
+            package=None,
+            health=None,
+            as_of=None,
+            view_mode="table",
+        ),
+        "model_slug": "",
+        "view_mode": "table",
+        "readable_models": readable_models,
+        "switcher_disabled": True,
+        "no_models": True,
+    }
 
 
 def build_package_tree(elements: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -123,6 +159,8 @@ def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) ->
     :param params: Parsed browse parameters.
     :return: Context dict[str, Any] with elements, packages, filter options, and active filters.
     """
+    readable_models = list(browse_service.list_readable_models(request.user))
+    switcher_disabled = len(readable_models) <= 1
     model_name = params.model_slug.title()
     try:
         ymodel = browse_service.resolve_model(params.model_slug)
@@ -161,6 +199,9 @@ def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) ->
         "active_filters": params,
         "model_slug": params.model_slug,
         "view_mode": params.view_mode,
+        "readable_models": readable_models,
+        "switcher_disabled": switcher_disabled,
+        "no_models": False,
     }
 
 

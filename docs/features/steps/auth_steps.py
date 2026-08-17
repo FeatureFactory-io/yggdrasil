@@ -32,7 +32,7 @@ def step_user_logged_in_as(context, role: str) -> None:
     """Create a user with the given RBAC role and force-login via test client."""
     trait = _ROLE_TRAITS.get(role)
     assert trait, f"Unknown role {role!r}; expected one of {list(_ROLE_TRAITS)}"
-    user = UserFactory(**{trait: True})
+    user = UserFactory(groups="architect") if role == "architect" else UserFactory(**{trait: True})
     password = "test-pass-only-1234"
     user.set_password(password)
     user.save()
@@ -89,6 +89,14 @@ def step_response_redirects_away(context, path: str) -> None:
     assert location, "Redirect response has no Location header"
     assert not location.startswith(path), f"Expected redirect away from {path!r}, got {location!r}"
     logger.info("Redirected away from %s → %s", path, location)
+
+
+@then('the Location header starts with "{path}"')
+def step_location_starts_with(context, path: str) -> None:
+    """Assert the redirect Location header starts with ``path``."""
+    location = context.response.get("Location", "")
+    assert location.startswith(path), f"Expected Location to start with {path!r}, got {location!r}"
+    logger.info("Location starts with %s → %s", path, location)
 
 
 @then('the response Location contains "{fragment}"')

@@ -352,9 +352,9 @@
      class="yrg-browser-root yrg-mode-{{ view_mode }} flex-grow-1"
      id="browserRoot"
      data-initial-view="{{ view_mode }}"
-     data-graph-url="{% url 'web:view_browse_graph' %}"
-     data-inspector-element-url="{% url 'web:view_browse_inspector_element' pk=0 %}"
-     data-inspector-relationship-url="{% url 'web:view_browse_inspector_relationship' pk=0 %}">
+     data-graph-url="{% if model_slug %}{% url 'web:view_browse_graph_model' model_slug=model_slug %}{% endif %}"
+     data-inspector-element-url="{% if model_slug %}{% url 'web:view_browse_inspector_element_model' model_slug=model_slug pk=0 %}{% endif %}"
+     data-inspector-relationship-url="{% if model_slug %}{% url 'web:view_browse_inspector_relationship_model' model_slug=model_slug pk=0 %}{% endif %}">
 
   {% include "web/view/partials/navigator.html" %}
 
@@ -374,7 +374,7 @@
                 data-testid="filters-toggle">
           <i class="fa-solid fa-sliders me-1" aria-hidden="true"></i>Filters
         </button>
-        <a href="{% url 'web:view_browse' %}" class="btn btn-sm btn-outline-danger"
+        <a href="{% if model_slug %}{% url 'web:view_browse_model' model_slug=model_slug %}{% else %}{% url 'web:view_browse' %}{% endif %}" class="btn btn-sm btn-outline-danger"
            data-testid="clear-filters-btn">Clear</a>
       </div>
       <div class="d-flex align-items-center gap-2">
@@ -399,7 +399,7 @@
     </div>
 
     <div class="collapse" id="filterPanel">
-      <form method="get" action="{% url 'web:view_browse' %}" id="filterForm">
+      <form method="get" action="{% if model_slug %}{% url 'web:view_browse_model' model_slug=model_slug %}{% else %}{% url 'web:view_browse' %}{% endif %}" id="filterForm">
         <input type="hidden" name="view" id="filterViewMode" value="{{ view_mode }}">
         <div class="hg-filter-panel">
           <div class="row g-3 mb-3">
@@ -446,7 +446,7 @@
             </div>
           </div>
           <div class="d-flex gap-2">
-            <a href="{% url 'web:view_browse' %}" class="btn btn-outline-secondary btn-sm"
+            <a href="{% if model_slug %}{% url 'web:view_browse_model' model_slug=model_slug %}{% else %}{% url 'web:view_browse' %}{% endif %}" class="btn btn-outline-secondary btn-sm"
                data-testid="filter-panel-clear-btn">Clear</a>
             <button class="btn btn-outline-secondary btn-sm" type="button" disabled>Save View</button>
             <button class="btn btn-primary btn-sm" type="submit" data-testid="apply-filters-btn">Apply Filters</button>
@@ -509,7 +509,7 @@
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     console.log('[view-browse-1] page loaded, elements={{ element_count }}, mode={{ view_mode }}');
-    window.viewBrowseGraphUrl = "{% url 'web:view_browse_graph' %}?" + new URLSearchParams(window.location.search).toString();
+    window.viewBrowseGraphUrl = "{% if model_slug %}{% url 'web:view_browse_graph_model' model_slug=model_slug %}{% endif %}?" + new URLSearchParams(window.location.search).toString();
 
     var filterView = document.getElementById('filterViewMode');
     var tableBtn = document.getElementById('tableViewBtn');

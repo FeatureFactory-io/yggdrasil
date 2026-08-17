@@ -1,13 +1,38 @@
-{# Left panel: package + element navigator (SSR, W7) #}
+{# Left panel: package + element navigator (SSR, W7 + W12 model switcher) #}
 <aside id="browserNavPanel"
        class="yrg-browser-nav yrg-graph-only"
        data-testid="browser-nav-panel"
        aria-label="Package and element navigator">
 
   <div class="yrg-browser-nav-scroll">
-    <div class="yrg-nav-model-title" data-testid="browser-model-name">
-      <i class="fa-solid fa-diagram-project me-1" aria-hidden="true"></i>{{ model_name }}
+    <div class="dropdown mb-1">
+      <button class="yrg-nav-model-title dropdown-toggle border-0 bg-transparent p-0"
+              type="button"
+              data-bs-toggle="dropdown"
+              data-testid="browser-model-switcher"
+              aria-expanded="false"
+              aria-label="Switch model"
+              title="Switch which architecture Model the View Browser shows"
+              {% if switcher_disabled %}disabled{% endif %}>
+        <i class="fa-solid fa-diagram-project me-1" aria-hidden="true"></i>
+        <span data-testid="browser-model-name">{{ model_name }}</span>
+      </button>
+      {% if readable_models %}
+      <ul class="dropdown-menu" data-testid="browser-model-menu">
+        {% for readable_model in readable_models %}
+        <li>
+          <a class="dropdown-item{% if readable_model.slug == model_slug %} active{% endif %}"
+             href="{% url 'web:view_browse_model' model_slug=readable_model.slug %}"
+             data-testid="browser-model-option-{{ readable_model.slug }}">{{ readable_model.name }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
     </div>
+
+    {% if no_models %}
+    <p class="text-muted small mb-2">No models yet — run <code>ratatosk bootstrap</code></p>
+    {% endif %}
 
     <div class="yrg-nav-search">
       <input type="search"

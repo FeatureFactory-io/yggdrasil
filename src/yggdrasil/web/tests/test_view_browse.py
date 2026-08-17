@@ -3,16 +3,82 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import pytest
+from django.contrib.auth.models import Group
 from django.urls import reverse
+from tests.fixtures.factories import UserFactory
+from tests.fixtures.factories.model_factories import YggdrasilModelFactory
+from tests.fixtures.view_browser import (
+    _PAYMENT_RELATIONSHIPS,
+    VIEW_BROWSER_ELEMENTS,
+    VIEW_BROWSER_EXPLORER_ELEMENTS,
+    VIEW_BROWSER_EXPLORER_RELATIONSHIPS,
+    _seed_view_browser,
+)
+from tests.support.log_story import assert_log_story
+
+from yggdrasil.graph import browse_service
+from yggdrasil.graph.models import ensure_c4_metamodel
+from yggdrasil.mcp.server import set_current_user_id, set_token_scope
+
+
+def _browse_url(model_slug: str = "yggdrasil") -> str:
+    """Canonical model-scoped browse URL."""
+    return reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+
+
+def _browse_graph_url(model_slug: str = "yggdrasil") -> str:
+    """Canonical model-scoped graph JSON URL."""
+    return reverse("web:view_browse_graph_model", kwargs={"model_slug": model_slug})
+
+
+GRAPH_URL = _browse_url("yggdrasil") + "?view=graph"
+
+
+@pytest.fixture
+def two_model_fixture(db, view_browser_user):
+    """Yggdrasil explorer + Payments payment models readable by architect."""
+    architect_group, _ = Group.objects.get_or_create(name="architect")
+    view_browser_user.groups.add(architect_group)
+    set_current_user_id(view_browser_user.pk)
+    set_token_scope("read-write")
+    mm = ensure_c4_metamodel()
+    yggdrasil = YggdrasilModelFactory(
+        name="Yggdrasil",
+        slug="yggdrasil",
+        metamodel=mm,
+        owner_group=architect_group,
+    )
+    payments = YggdrasilModelFactory(
+        name="Payments",
+        slug="payments",
+        metamodel=mm,
+        owner_group=architect_group,
+    )
+    _seed_view_browser(
+        yggdrasil,
+        VIEW_BROWSER_EXPLORER_ELEMENTS,
+        VIEW_BROWSER_EXPLORER_RELATIONSHIPS,
+        run_id="run-two-model-yggdrasil",
+    )
+    _seed_view_browser(
+        payments,
+        VIEW_BROWSER_ELEMENTS,
+        _PAYMENT_RELATIONSHIPS,
+        run_id="run-two-model-payments",
+    )
+    yield {"yggdrasil": yggdrasil, "payments": payments}
+    set_current_user_id(None)
+    set_token_scope("read-write")
 
 
 @pytest.mark.django_db
 def test_view_browser_shell_testids(client, view_browser_user, view_browser_model):
     """VIEW-BROWSE-1-01: shell exposes filter panel and table/graph toggles."""
     client.force_login(view_browser_user)
-    response = client.get(reverse("web:view_browse"))
+    response = client.get(_browse_url())
     assert response.status_code == 200
     body = response.content.decode()
     assert 'data-testid="view-browse-page"' in body
@@ -27,7 +93,7 @@ def test_view_browser_shell_testids(client, view_browser_user, view_browser_mode
 def test_default_view_shows_elements(client, view_browser_user, view_browser_model):
     """VIEW-BROWSE-1-02: default view lists six seeded elements."""
     client.force_login(view_browser_user)
-    response = client.get(reverse("web:view_browse"))
+    response = client.get(_browse_url())
     body = response.content.decode()
     assert response.status_code == 200
     for name in (
@@ -45,7 +111,7 @@ def test_default_view_shows_elements(client, view_browser_user, view_browser_mod
 def test_table_columns_present(client, view_browser_user, view_browser_model):
     """VIEW-BROWSE-1-03: table shows stereotype, package, owner columns."""
     client.force_login(view_browser_user)
-    response = client.get(reverse("web:view_browse"))
+    response = client.get(_browse_url())
     body = response.content.decode()
     assert "Container" in body
     assert "Technology" in body
@@ -56,7 +122,7 @@ def test_table_columns_present(client, view_browser_user, view_browser_model):
 def test_filter_package_excludes_context(client, view_browser_user, view_browser_model):
     """VIEW-BROWSE-1-14: package filter returns technology subset only."""
     client.force_login(view_browser_user)
-    response = client.get(reverse("web:view_browse"), {"package": "technology"})
+    response = client.get(_browse_url(), {"package": "technology"})
     body = response.content.decode()
     assert response.status_code == 200
     assert "Payment API" in body
@@ -67,7 +133,7 @@ def test_filter_package_excludes_context(client, view_browser_user, view_browser
 def test_graph_json_returns_nodes_and_edges(client, view_browser_user, view_browser_model):
     """VIEW-BROWSE-1-15: graph JSON endpoint returns elements and edges."""
     client.force_login(view_browser_user)
-    response = client.get(reverse("web:view_browse_graph"), {"package": "technology"})
+    response = client.get(_browse_graph_url(), {"package": "technology"})
     assert response.status_code == 200
     payload = json.loads(response.content)
     assert "elements" in payload
@@ -79,7 +145,7 @@ def test_graph_json_returns_nodes_and_edges(client, view_browser_user, view_brow
 def test_element_view_links_present(client, view_browser_user, view_browser_model):
     """VIEW-BROWSE-1-08: rows expose view-element links."""
     client.force_login(view_browser_user)
-    response = client.get(reverse("web:view_browse"))
+    response = client.get(_browse_url())
     body = response.content.decode()
     assert 'data-testid="view-element-' in body
 
@@ -87,11 +153,9 @@ def test_element_view_links_present(client, view_browser_user, view_browser_mode
 @pytest.mark.django_db
 def test_viewer_sees_browser_without_create(client, view_browser_model):
     """VIEW-BROWSE-1-12: viewer role has browse without create affordance."""
-    from tests.fixtures.factories import UserFactory
-
     viewer = UserFactory(is_viewer=True)
     client.force_login(viewer)
-    response = client.get(reverse("web:view_browse"))
+    response = client.get(_browse_url())
     body = response.content.decode()
     assert response.status_code == 200
     assert 'data-testid="view-browse-page"' in body
@@ -102,16 +166,13 @@ def test_viewer_sees_browser_without_create(client, view_browser_model):
 def test_navbar_primary_links(client, view_browser_user, view_browser_model):
     """VIEW-BROWSE-1-13: primary navbar testids visible."""
     client.force_login(view_browser_user)
-    response = client.get(reverse("web:view_browse"))
+    response = client.get(_browse_url())
     body = response.content.decode()
     assert 'data-testid="nav-view-browser"' in body
     assert 'data-testid="nav-elements"' in body
     assert 'data-testid="nav-relationships"' in body
     assert 'data-testid="nav-changesets"' in body
     assert 'data-testid="nav-runs"' in body
-
-
-GRAPH_URL = reverse("web:view_browse") + "?view=graph"
 
 
 @pytest.mark.django_db
@@ -152,7 +213,7 @@ def test_view_browser_table_mode_hides_graph_panels(
 ):
     """Default table mode SSR hides graph-only panels via yrg-mode-table."""
     client.force_login(view_browser_user)
-    response = client.get(reverse("web:view_browse"))
+    response = client.get(_browse_url())
     body = response.content.decode()
     assert "yrg-mode-table" in body
     assert "yrg-graph-only" in body
@@ -179,7 +240,7 @@ def test_view_browser_navigator_lists_elements(
 ):
     """VIEW-BROWSE-1-19: navigator lists Application package elements."""
     client.force_login(view_browser_user)
-    response = client.get(reverse("web:view_browse"))
+    response = client.get(_browse_url())
     body = response.content.decode()
     for name in ("auth", "graph", "munin", "web"):
         assert name in body
@@ -201,13 +262,11 @@ def test_view_browse_log_story_happy(
     client, view_browser_user, view_browser_explorer_model, caplog
 ):
     """Log story: ViewBrowseView.get and build_view_browse_context beats."""
-    import logging
-
     caplog.set_level(logging.INFO, logger="yggdrasil.web")
     client.force_login(view_browser_user)
-    client.get(reverse("web:view_browse"))
-    client.get(reverse("web:view_browse_graph"))
-    messages = " ".join(r.message for r in caplog.records)
+    client.get(_browse_url())
+    client.get(_browse_graph_url())
+    messages = " ".join(record.message for record in caplog.records)
     assert "ViewBrowseView.get" in messages
     assert "user_pk=" in messages
     assert "element_count=" in messages
@@ -222,7 +281,7 @@ def test_view_browse_log_story_happy(
 def test_htmx_partial_returns_results_only(client, view_browser_user, view_browser_model):
     """HTMX partial path returns self-contained results without breaking."""
     client.force_login(view_browser_user)
-    response = client.get(reverse("web:view_browse"), HTTP_HX_REQUEST="true")
+    response = client.get(_browse_url(), HTTP_HX_REQUEST="true")
     body = response.content.decode()
     assert response.status_code == 200
     assert 'data-testid="results-container"' in body
@@ -239,10 +298,15 @@ def test_inspector_element_partial_renders_properties(
     element = Element.objects.filter(model=view_browser_explorer_model, slug="munin").first()
     assert element is not None
     client.force_login(view_browser_user)
-    response = client.get(reverse("web:view_browse_inspector_element", args=[element.pk]))
+    response = client.get(
+        reverse(
+            "web:view_browse_inspector_element_model",
+            kwargs={"model_slug": "yggdrasil", "pk": element.pk},
+        )
+    )
     body = response.content.decode()
     assert response.status_code == 200
-    assert 'data-testid="inspector-element-' + str(element.pk) + '"' in body
+    assert f'data-testid="inspector-element-{element.pk}"' in body
     assert "munin" in body
     assert "Properties" in body
     assert "nav-view-browser" not in body
@@ -262,11 +326,177 @@ def test_inspector_relationship_partial_renders_endpoints(
     ).first()
     assert rel is not None
     client.force_login(view_browser_user)
-    response = client.get(reverse("web:view_browse_inspector_relationship", args=[rel.pk]))
+    response = client.get(
+        reverse(
+            "web:view_browse_inspector_relationship_model",
+            kwargs={"model_slug": "yggdrasil", "pk": rel.pk},
+        )
+    )
     body = response.content.decode()
     assert response.status_code == 200
-    assert 'data-testid="inspector-relationship-' + str(rel.pk) + '"' in body
+    assert f'data-testid="inspector-relationship-{rel.pk}"' in body
     assert "depends_on" in body
     assert "munin" in body
     assert "llm" in body
     assert "nav-view-browser" not in body
+
+
+# -- W12: Model switcher (scenarios 48-54) --
+
+
+@pytest.mark.django_db
+def test_view_browse_switcher_lists_models(client, view_browser_user, two_model_fixture):
+    """VIEW-BROWSE-1-48: switcher lists readable models."""
+    client.force_login(view_browser_user)
+    response = client.get(_browse_url("yggdrasil") + "?view=graph")
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'data-testid="browser-model-switcher"' in body
+    assert 'data-testid="browser-model-name"' in body
+    assert 'data-testid="browser-model-option-yggdrasil"' in body
+    assert 'data-testid="browser-model-option-payments"' in body
+    assert "Yggdrasil" in body
+
+
+@pytest.mark.django_db
+def test_view_browse_redirect_302_to_default(client, view_browser_user, view_browser_model):
+    """VIEW-BROWSE-1-49: unscoped /views/ redirects to default model."""
+    client.force_login(view_browser_user)
+    response = client.get(reverse("web:view_browse"))
+    assert response.status_code == 302
+    assert response["Location"].startswith("/models/yggdrasil/views/")
+
+
+@pytest.mark.django_db
+def test_view_browse_canonical_200(client, view_browser_user, view_browser_explorer_model):
+    """VIEW-BROWSE-1-50: canonical browse URL includes model slug."""
+    client.force_login(view_browser_user)
+    response = client.get(_browse_url("yggdrasil") + "?view=graph")
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'data-testid="browser-nav-panel"' in body
+    assert "Yggdrasil" in body
+
+
+@pytest.mark.django_db
+def test_view_browse_unknown_model_404(client, view_browser_user):
+    """VIEW-BROWSE-1-52: unknown model slug returns 404."""
+    client.force_login(view_browser_user)
+    response = client.get(_browse_url("does-not-exist"))
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_view_browse_zero_models_empty_state(client, db):
+    """VIEW-BROWSE-1-53: zero models shows empty state and disables switcher."""
+    architect_group, _ = Group.objects.get_or_create(name="architect")
+    other_group, _ = Group.objects.get_or_create(name="other-team")
+    user = UserFactory(groups="architect")
+    mm = ensure_c4_metamodel()
+    YggdrasilModelFactory(name="Private", slug="private", metamodel=mm, owner_group=other_group)
+    client.force_login(user)
+    response = client.get(reverse("web:view_browse"))
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert "No models yet" in body
+    assert 'data-testid="browser-model-switcher"' in body
+    assert "disabled" in body
+
+
+@pytest.mark.django_db
+def test_view_browse_switcher_no_create_action(client, view_browser_user, two_model_fixture):
+    """VIEW-BROWSE-1-54: switcher has no create-model action."""
+    client.force_login(view_browser_user)
+    response = client.get(_browse_url("yggdrasil") + "?view=graph")
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert "Create model" not in body
+
+
+@pytest.mark.django_db
+def test_view_browse_sets_model_cookie(client, view_browser_user, view_browser_model):
+    """W12: canonical GET sets yggdrasil_model cookie."""
+    client.force_login(view_browser_user)
+    response = client.get(_browse_url())
+    assert response.status_code == 200
+    assert response.cookies[browse_service.MODEL_COOKIE_NAME].value == "yggdrasil"
+
+
+@pytest.mark.django_db
+def test_view_browse_sets_session_model_id(client, view_browser_user, view_browser_model):
+    """W12: canonical GET sets session model_id for other GUI screens."""
+    client.force_login(view_browser_user)
+    client.get(_browse_url())
+    session = client.session
+    assert session.get("model_id") == view_browser_model.pk
+
+
+@pytest.mark.django_db
+def test_view_browse_redirect_log_story_happy(
+    client, view_browser_user, view_browser_model, caplog
+):
+    """W12 log story: redirect alias emits entry and exit beats."""
+    caplog.set_level(logging.INFO, logger="yggdrasil.web")
+    client.force_login(view_browser_user)
+    client.get(reverse("web:view_browse"))
+    assert_log_story(
+        caplog,
+        where="ViewBrowseRedirectView.get",
+        beats={
+            "entry": ["user_pk="],
+            "exit": ["location=", "model_slug="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_view_browse_redirect_log_story_zero_models(client, db, caplog):
+    """W12 log story: zero-model branch on alias."""
+    other_group, _ = Group.objects.get_or_create(name="other-team")
+    user = UserFactory(groups="architect")
+    mm = ensure_c4_metamodel()
+    YggdrasilModelFactory(name="Private", slug="private", metamodel=mm, owner_group=other_group)
+    caplog.set_level(logging.INFO, logger="yggdrasil.web")
+    client.force_login(user)
+    client.get(reverse("web:view_browse"))
+    assert_log_story(
+        caplog,
+        where="ViewBrowseRedirectView.get",
+        beats={
+            "empty": ["empty_state=true"],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_view_browse_canonical_log_story_happy(
+    client, view_browser_user, view_browser_model, caplog
+):
+    """W12 log story: canonical browse sets cookie and exits."""
+    caplog.set_level(logging.INFO, logger="yggdrasil.web")
+    client.force_login(view_browser_user)
+    client.get(_browse_url())
+    assert_log_story(
+        caplog,
+        where="ViewBrowseView.get",
+        beats={
+            "entry": ["user_pk=", "model_slug="],
+            "cookie": ["cookie=", "model_slug="],
+            "exit": ["element_count="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_view_browse_canonical_log_story_reject(client, view_browser_user, caplog):
+    """W12 log story: unknown slug validation beat."""
+    caplog.set_level(logging.INFO, logger="yggdrasil.web")
+    client.force_login(view_browser_user)
+    client.get(_browse_url("does-not-exist"))
+    assert_log_story(
+        caplog,
+        where="ViewBrowseView.get",
+        beats={
+            "reject": ["model not found"],
+        },
+    )

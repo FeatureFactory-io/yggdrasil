@@ -1,0 +1,37 @@
+{# Recursive traversal tree node (W13) #}
+<div class="yrg-tree-node" data-element="{{ node.slug }}">
+  {% if node.children %}
+  <button type="button"
+          class="yrg-package-toggle"
+          data-bs-toggle="collapse"
+          data-bs-target="#tree-{{ node.slug }}"
+          aria-expanded="{% if node.expanded %}true{% else %}false{% endif %}"
+          data-testid="nav-toggle-{{ node.slug }}">
+    <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+    <i class="fa-solid fa-cube text-primary" aria-hidden="true"></i>
+    <span>{{ node.name }}</span>
+    <span class="badge bg-secondary ms-auto" style="font-size:0.6rem;">{{ node.children|length }}</span>
+  </button>
+  <div class="collapse {% if node.expanded %}show{% endif %}" id="tree-{{ node.slug }}">
+    {% for child in node.children %}
+      {% include "web/view/partials/navigator_tree_node.html" with node=child %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <button type="button"
+          class="yrg-element-item"
+          data-element-id="{{ node.id }}"
+          data-element-slug="{{ node.slug }}"
+          data-testid="nav-element-{{ node.slug }}">
+    <span class="st-icon" aria-hidden="true">
+      {% if node.stereotype == 'System' %}<i class="fa-solid fa-cube"></i>
+      {% elif node.stereotype == 'Container' %}<i class="fa-solid fa-box"></i>
+      {% elif node.stereotype == 'Component' %}<i class="fa-solid fa-puzzle-piece"></i>
+      {% elif node.stereotype == 'Person' %}<i class="fa-solid fa-user"></i>
+      {% else %}<i class="fa-solid fa-circle"></i>{% endif %}
+    </span>
+    <span class="text-truncate">{{ node.name }}</span>
+    <span class="hg-dot hg-dot-{{ node.health }} ms-auto flex-shrink-0" aria-hidden="true"></span>
+  </button>
+  {% endif %}
+</div>

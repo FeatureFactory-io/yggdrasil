@@ -377,7 +377,22 @@
         <a href="{% if model_slug %}{% url 'web:view_browse_model' model_slug=model_slug %}{% else %}{% url 'web:view_browse' %}{% endif %}" class="btn btn-sm btn-outline-danger"
            data-testid="clear-filters-btn">Clear</a>
       </div>
-      <div class="d-flex align-items-center gap-2">
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <div class="yrg-depth-control yrg-graph-only d-flex align-items-center gap-2 me-2"
+             data-testid="browser-depth-control"
+             title="Controls how many relationship levels appear from your filtered starting points.">
+          <label for="depthSlider" class="form-label small mb-0 text-nowrap">Levels</label>
+          <input type="range"
+                 class="form-range"
+                 style="width:6rem;"
+                 id="depthSlider"
+                 min="1"
+                 max="{{ max_depth }}"
+                 value="{{ current_depth }}"
+                 data-testid="browser-depth-slider"
+                 aria-label="Show levels deep">
+          <span class="badge bg-secondary" data-testid="browser-depth-value">{{ current_depth }} / {{ max_depth }}</span>
+        </div>
         <span style="font-size:0.82rem;color:var(--hg-ink-muted);">{{ element_count }} elements</span>
         <div class="yrg-view-toggle btn-group btn-group-sm" role="group" aria-label="View mode">
           <button class="btn btn-outline-secondary{% if view_mode == 'table' %} active{% endif %}"
@@ -401,6 +416,7 @@
     <div class="collapse" id="filterPanel">
       <form method="get" action="{% if model_slug %}{% url 'web:view_browse_model' model_slug=model_slug %}{% else %}{% url 'web:view_browse' %}{% endif %}" id="filterForm">
         <input type="hidden" name="view" id="filterViewMode" value="{{ view_mode }}">
+        <input type="hidden" name="depth" value="{{ current_depth }}">
         <div class="hg-filter-panel">
           <div class="row g-3 mb-3">
             <div class="col-md-3">

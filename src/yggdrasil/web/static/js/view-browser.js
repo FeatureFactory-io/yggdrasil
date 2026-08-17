@@ -433,8 +433,20 @@
     }
   }
 
+  function bindDepthSlider() {
+    var slider = document.getElementById('depthSlider');
+    if (!slider) {
+      return;
+    }
+    slider.addEventListener('input', function () {
+      var params = new URLSearchParams(window.location.search);
+      params.set('depth', slider.value);
+      window.location.search = params.toString();
+    });
+  }
+
   function bindNavigatorSelection() {
-    var tree = document.getElementById('packageTree');
+    var tree = document.getElementById('elementTree');
     if (!tree) {
       return;
     }
@@ -460,6 +472,7 @@
     bindNavigatorSelection();
     bindInspectorInteractions();
     bindZoomControls();
+    bindDepthSlider();
     syncPanelTogglePositions();
 
     var root = getRoot();

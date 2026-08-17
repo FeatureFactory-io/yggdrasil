@@ -232,6 +232,8 @@ Key decisions at a glance:
 
 ---
 
-## Licence
+## License
 
-Proprietary — all rights reserved.
+Copyright 2026 Feature Factory
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). You may obtain a copy of the License at <https://www.apache.org/licenses/LICENSE-2.0>.

@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 # MCP facade has its own minimal deps (fastmcp + httpx)
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md LICENSE NOTICE ./
 COPY src/yggdrasil/mcp/ ./src/yggdrasil/mcp/
 
 RUN pip install fastmcp httpx

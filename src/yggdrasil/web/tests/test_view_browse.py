@@ -584,3 +584,37 @@ def test_view_browse_depth_log_story_happy(
     assert "depth=2" in messages
     assert "ViewBrowseGraphJsonView.get" in messages
     assert "nodes=" in messages
+
+
+@pytest.mark.django_db
+def test_navigator_partial_returns_tree_without_full_page(
+    client, view_browser_user, view_browser_explorer_model
+):
+    """Depth slider refresh: partial=navigator returns tree HTML only."""
+    client.force_login(view_browser_user)
+    response = client.get(
+        _browse_url("yggdrasil"),
+        {"partial": "navigator", "view": "graph", "stereotype": "component", "depth": "2"},
+    )
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'data-testid="browser-nav-panel"' not in body
+    assert 'id="elementTree"' not in body
+    assert "yrg-tree-node" in body or 'data-testid="nav-element-' in body
+
+
+@pytest.mark.django_db
+def test_depth_change_with_view_graph_stays_in_graph_mode_ssr(
+    client, view_browser_user, view_browser_explorer_model
+):
+    """Server must honour view=graph when depth changes (full reload fallback)."""
+    client.force_login(view_browser_user)
+    response = client.get(
+        _browse_url("yggdrasil"),
+        {"view": "graph", "stereotype": "component", "depth": "3"},
+    )
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'class="yrg-browser-root yrg-mode-graph' in body or "yrg-mode-graph" in body
+    assert 'data-testid="browser-depth-value"' in body
+    assert "3 /" in body

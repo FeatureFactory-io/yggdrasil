@@ -21,8 +21,76 @@
     }
     var params = new URLSearchParams(window.location.search);
     params.delete('view');
+    params.delete('partial');
     var qs = params.toString();
     return qs ? base + '?' + qs : base;
+  }
+
+  function isGraphMode() {
+    var root = getRoot();
+    return !!(root && root.classList.contains('yrg-mode-graph'));
+  }
+
+  function syncBrowseUrl(params) {
+    var qs = params.toString();
+    var url = window.location.pathname + (qs ? '?' + qs : '');
+    window.history.replaceState(null, '', url);
+  }
+
+  function updateDepthBadge(slider) {
+    var badge = document.querySelector('[data-testid="browser-depth-value"]');
+    if (badge && slider) {
+      badge.textContent = slider.value + ' / ' + slider.max;
+    }
+  }
+
+  function syncFilterFormDepth(depth) {
+    var input = document.querySelector('#filterForm input[name="depth"]');
+    if (input) {
+      input.value = depth;
+    }
+  }
+
+  function refreshNavigatorTree(params) {
+    var fetchParams = new URLSearchParams(params.toString());
+    fetchParams.set('partial', 'navigator');
+    fetchParams.delete('view');
+    var url = window.location.pathname + '?' + fetchParams.toString();
+    fetch(url, { headers: { Accept: 'text/html' } })
+      .then(function (r) {
+        if (!r.ok) {
+          throw new Error('navigator partial failed status=' + r.status);
+        }
+        return r.text();
+      })
+      .then(function (html) {
+        var tree = document.getElementById('elementTree');
+        if (tree) {
+          tree.innerHTML = html;
+        }
+        console.log('[view-browser] navigator tree refreshed for depth=%s', params.get('depth'));
+      })
+      .catch(function (err) {
+        console.error('[view-browser] navigator refresh failed', err);
+      });
+  }
+
+  function applyDepthChange(slider) {
+    var params = new URLSearchParams(window.location.search);
+    params.set('depth', slider.value);
+    params.delete('partial');
+    if (isGraphMode()) {
+      params.set('view', 'graph');
+      syncBrowseUrl(params);
+      updateDepthBadge(slider);
+      syncFilterFormDepth(slider.value);
+      refreshNavigatorTree(params);
+      replotGraph();
+      clearSelection();
+      console.log('[view-browser] depth=%s applied in graph mode (in-place)', slider.value);
+      return;
+    }
+    window.location.search = params.toString();
   }
 
   function scheduleGraphResize() {
@@ -367,6 +435,11 @@
       zoomControls.classList.toggle('d-none', !isGraph);
     }
 
+    var urlParams = new URLSearchParams(window.location.search);
+    urlParams.set('view', mode);
+    urlParams.delete('partial');
+    syncBrowseUrl(urlParams);
+
     console.log('[view-browser] mode=%s', mode);
   }
 
@@ -438,10 +511,8 @@
     if (!slider) {
       return;
     }
-    slider.addEventListener('input', function () {
-      var params = new URLSearchParams(window.location.search);
-      params.set('depth', slider.value);
-      window.location.search = params.toString();
+    slider.addEventListener('change', function () {
+      applyDepthChange(slider);
     });
   }
 

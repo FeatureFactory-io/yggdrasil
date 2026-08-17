@@ -1,0 +1,5 @@
+{% for root in traversal_roots %}
+  {% include "web/view/partials/navigator_tree_node.html" with node=root %}
+{% empty %}
+<p class="text-muted small mb-0">No elements in current scope.</p>
+{% endfor %}

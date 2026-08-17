@@ -172,3 +172,56 @@ def step_she_does_not_see_in_navigator_e2e(context, text: str) -> None:
     navigator = context.page.get_by_test_id("browser-nav-panel")
     assert text not in navigator.inner_text(), f"Expected {text!r} absent from navigator"
     logger.info('E2E navigator does not show "%s"', text)
+
+
+@given("the view browser explorer fixture is seeded for E2E")
+def step_seed_explorer_fixture_e2e(context) -> None:
+    """Seed yggdrasil explorer graph for depth-slider E2E."""
+    if not getattr(context, "current_user", None):
+        step_priya_logged_in_e2e(context)
+    architect_group, _ = Group.objects.get_or_create(name="architect")
+    context.current_user.groups.add(architect_group)
+    set_current_user_id(context.current_user.pk)
+    mm = ensure_c4_metamodel()
+    yggdrasil, _ = YggdrasilModel.objects.get_or_create(
+        slug="yggdrasil",
+        defaults={"name": "Yggdrasil", "metamodel": mm, "owner_group": architect_group},
+    )
+    if not Element.objects.filter(model=yggdrasil).exists():
+        _seed_view_browser(
+            yggdrasil,
+            VIEW_BROWSER_EXPLORER_ELEMENTS,
+            VIEW_BROWSER_EXPLORER_RELATIONSHIPS,
+            run_id="run-e2e-explorer-depth",
+        )
+    logger.info("E2E explorer fixture seeded for yggdrasil")
+
+
+@when('she sets the view browser depth slider to "{value}"')
+def step_set_depth_slider_e2e(context, value: str) -> None:
+    """Change Levels slider and fire change event (in-place graph update)."""
+    slider = context.page.get_by_test_id("browser-depth-slider")
+    slider.wait_for(state="visible", timeout=10_000)
+    slider.fill(value)
+    slider.dispatch_event("change")
+    context.page.wait_for_timeout(500)
+    logger.info("E2E depth slider set to %s url=%s", value, context.page.url)
+
+
+@then("the view browser is in graph mode in the browser")
+def step_graph_mode_in_browser_e2e(context) -> None:
+    """Assert #browserRoot has yrg-mode-graph after client-side depth change."""
+    root = context.page.locator("#browserRoot")
+    classes = root.get_attribute("class") or ""
+    assert "yrg-mode-graph" in classes, f"Expected graph mode classes, got {classes!r}"
+    assert "yrg-mode-table" not in classes.split(), f"Expected not table mode, got {classes!r}"
+    logger.info("E2E view browser in graph mode")
+
+
+@then("the graph view is visible in the browser")
+def step_graph_view_visible_e2e(context) -> None:
+    """Assert #graphView is visible (not d-none)."""
+    graph = context.page.locator("#graphView")
+    graph.wait_for(state="attached", timeout=5_000)
+    assert "d-none" not in (graph.get_attribute("class") or ""), "Graph view is hidden"
+    logger.info("E2E graph view visible")

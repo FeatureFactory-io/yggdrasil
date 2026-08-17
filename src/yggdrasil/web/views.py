@@ -114,6 +114,7 @@ class ViewBrowseView(LoginRequiredMixin, View):
 
     template_name = "web/view/browse.html"
     partial_template_name = "web/view/partials/results.html"
+    navigator_partial_template_name = "web/view/partials/navigator_tree.html"
 
     def get(self, request: HttpRequest, model_slug: str) -> HttpResponse:
         """
@@ -147,6 +148,13 @@ class ViewBrowseView(LoginRequiredMixin, View):
 
         params = parse_view_browse_params(request, model_slug)
         context = build_view_browse_context(request, params)
+        if request.GET.get("partial") == "navigator":
+            logger.info(
+                "ViewBrowseView.get | partial=navigator | user_pk=%s depth=%s",
+                request.user.pk,
+                params.depth,
+            )
+            return render(request, self.navigator_partial_template_name, context)
         template = (
             self.partial_template_name if request.headers.get("HX-Request") else self.template_name
         )

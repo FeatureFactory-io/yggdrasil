@@ -93,6 +93,33 @@ edit file  →  pytest runs affected tests  →  result in <10 s
 
 ---
 
+## 6. AT / E2E Patterns (implementation-confirmed)
+
+These patterns recur across features; prefer them over ad-hoc per-feature invention.
+
+### E2E authentication (Django session + Playwright)
+
+1. Create the user in the test DB (`UserFactory` or seed fixture).
+2. `Client().force_login(user)` → read `sessionid` cookie.
+3. `page.context.add_cookies([{name, value, domain, path}])` before `page.goto`.
+4. Do **not** construct `SessionStore` keys manually — they will not match behave-django's live server session backend.
+
+Reference: `tests/e2e/steps/view_browser_steps.py::_force_login_playwright`.
+
+### AT fixture idempotency (behave Background + scenario Givens)
+
+When Background and a scenario both seed entities with stable natural keys (model slug, username, etc.), use `get_or_create` or update-in-place in step definitions. Blind `create()` causes `IntegrityError` when the scenario runs after Background.
+
+### Mode-scoped visibility (`data-testid` assertions)
+
+Before asserting an element is visible, confirm which SSR mode renders it (e.g. graph vs table). Controls tagged `yrg-graph-only` are absent in table mode — AT/E2E URLs and setup must match the mode the scenario describes.
+
+### RBAC factory checks
+
+When tests assign `YggdrasilModel.owner_group`, the acting user must belong to that Django `Group`. `UserFactory(is_architect=True)` uses the `groups="architect"` trait; after factory use with `django_get_or_create` on username, re-fetch or assert group membership when debugging read-filter failures.
+
+---
+
 ## Authoritative Reference
 
 All detailed decisions, directory structure, fixture strategy, CI gate configuration, and the full AT vs E2E comparison table live in:

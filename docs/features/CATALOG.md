@@ -312,10 +312,14 @@ assertions and in form step fields.
 | Model switcher menu | `browser-model-menu` |
 | Model option | `browser-model-option-{slug}` |
 | Navigator search | `browser-search-input` |
-| Package tree root | `browser-package-tree` |
-| Package toggle | `package-toggle-{slug}` |
+| Element tree root | `browser-element-tree` |
+| Navigator node chevron | `nav-toggle-{slug}` |
 | Navigator element row | `nav-element-{slug}` |
 | Navigator collapse toggle | `browser-toggle-nav-panel` |
+| **v0.3 — Depth control** | |
+| Depth slider | `browser-depth-slider` |
+| Depth value badge | `browser-depth-value` |
+| Depth control wrapper | `browser-depth-control` |
 | **v0.3 — Right inspector** | |
 | Inspector panel | `browser-inspector-panel` |
 | Inspector empty state | `inspector-empty` |
@@ -669,7 +673,7 @@ Gaps discovered during ESM-05 spec authoring. Implement via TFK-07 in BPE-04.
 | 15 | Graph interaction steps | Stub `NotImplementedError` until W10 | `Then the graph view is active` |
 | 16 | Cross-panel sync assertions | Stub `NotImplementedError` until W10 | `Then the navigator row for "{name}" is highlighted` |
 | 17 | PAGE_REGISTRY entry | **Closed** — `support/pages.py` | `"view-browse" → web:view_browse` |
-| 18 | Two-model fixture + RBAC visibility | Spec only (BPE-08) | `Given the models "{a}" and "{b}" exist and the architect can read both` |
-| 19 | Model switcher interaction | Spec only (BPE-08) | `When she selects model "{slug}" in the model switcher` |
-| 20 | Redirect Location assertion | Spec only (BPE-08) | `Then the Location header starts with "{path}"` |
-| 21 | Zero-model empty state | Spec only (BPE-08) | `Given the architect can read no models` |
+| 18 | Two-model fixture + RBAC visibility | **Closed** — `view_browser_steps.py` | `Given the models "{a}" and "{b}" exist and the architect can read both` |
+| 19 | Model switcher interaction | **Closed** — AT + E2E in `view_browser_steps.py` | `When she selects model "{slug}" in the model switcher` |
+| 20 | Redirect Location assertion | **Closed** — `auth_steps.py` | `Then the Location header starts with "{path}"` |
+| 21 | Zero-model empty state | **Closed** — `view_browser_steps.py` | `Given the architect can read no models` |

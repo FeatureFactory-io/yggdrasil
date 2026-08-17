@@ -38,7 +38,7 @@ Yggdrasil is an AI-augmented architecture knowledge-graph platform that keeps a 
 | `mcp` | FastMCP server, `tools_handler.py` exposing the full service layer as MCP tools |
 | `api` | DRF routers and serializers — REST interface consumed by GUI, Ratatosk CLI, and MCP facade |
 | `llm` | `LLMClient` protocol + `AnthropicClient`, `OpenAIClient`, `OllamaClient` adapters |
-| `web` | Django views, HTMX partials, templates, Cytoscape.js graph rendering |
+| `web` | Django views, HTMX partials, templates, Cytoscape.js graph rendering. View Browser is always scoped to a Model; canonical GUI path `/models/{slug}/views/` (`GET /views/` 302s to the default Model). Browse subgraph = BFS from filter roots (or graph sources when unfiltered) with `?depth=N` outgoing hops — shared by navigator tree, table, graph JSON, and export scope. |
 
 **Dependency rules** (no circular imports allowed):
 
@@ -1088,7 +1088,7 @@ All tools expose the read surface and write surface of the graph, changeset, and
 | `get_diagram` | `diagram_service.get()` | No | No | Cytoscape-compatible JSON for a diagram; for AI visualisation context |
 | `list_packages` | `graph_service.list_packages()` | No | No | Package hierarchy for a model; **Ratatosk scout read** (spec — implement in MCP query tools) |
 | `search` | `element_service.search()` | No | No | Name/substring search; **Ratatosk scout read** |
-| `traverse` | `graph_service.traverse()` | No | No | Neighbourhood walk from element; **Ratatosk scout read** |
+| `traverse` | `browse_service.bfs_from_element()` | No | No | Multi-hop neighbourhood walk from element (`depth` ≥ 1); **Ratatosk scout read**; same BFS helper as View Browser |
 | `wipe_model_graph` | `graph_service.wipe_model()` | **Yes** | No | **Bootstrap only:** bulk delete all Elements + Relationships on a Model; single auditable op before rescan; revertible via ChangeSet rollback / time-travel |
 
 **Ratatosk CLI tool policy:** the standalone CLI may call a **subset** of read tools above plus connector MCPs (e.g. Atlassian `get_issue`) per config allowlist (`~/.ratatosk/config.yaml`, repo `ratatosk.yaml`). Local tools: `read_file`, `list_dir`, `git_diff_paths`. Ratatosk proposes element ops only; Munin plans relationships.
@@ -1227,15 +1227,21 @@ Before any MCP slice is merged:
 
 ## Discovered Patterns & Lessons Learned
 
-*Reserved — populated during and after implementation.*
+*Populated during implementation — see also feature-scoped logs (e.g. `docs/plans/act-2-view-browser/lessons_learned.md`).*
 
 ### Critical Discoveries
 
-*(None yet — implementation has not begun.)*
+**Model-scoped GUI browse (W12, Act 2):** View Browser is always scoped to one `YggdrasilModel`. Canonical path `/models/{slug}/views/…`; `GET /views/` 302s to the user's default Model (sole visible → cookie `yggdrasil_model` → first by name). Model read visibility: admin sees all; others see models with `owner_group IS NULL` or matching user group — enforced in `browse_service.list_readable_models()`.
+
+**E2E session auth (Playwright + Django):** Do not hand-roll session keys. Authenticate Playwright by `Client.force_login(user)` on the Django test client, read the `sessionid` cookie, and inject it into the browser context before navigation. Reference: `tests/e2e/steps/view_browser_steps.py::_force_login_playwright`.
+
+**Mode-scoped UI visibility:** Some controls (e.g. View Browser navigator / model switcher) render only in graph mode (`?view=graph`, elements with `yrg-graph-only`). E2E and visibility assertions must match the mode the spec assumes — table mode hides graph chrome.
+
+**AT fixture idempotency:** behave Background + scenario-specific Given steps that seed the same natural keys (e.g. `(model_id, slug)`) must use `get_or_create` or update-in-place, not blind `create`.
 
 ### Retrospective Updates
 
-*(None yet — DTA decisions are pre-implementation.)*
+*(DTA decisions above remain authoritative; these are implementation-confirmed refinements.)*
 
 ---
 

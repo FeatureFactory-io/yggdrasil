@@ -89,6 +89,8 @@ viewer = UserFactory(is_viewer=True)
 
 Traits match SAO.md §13 RBAC: `admin` / `architect` / `viewer`.
 
+**RBAC pitfall (W12):** tests that set `YggdrasilModel.owner_group` filter visibility by Django `Group`. The acting user must be in that group — use `is_architect=True` / `is_viewer=True` traits or `UserFactory(groups="architect")`. Permission flags alone do not satisfy `browse_service.list_readable_models()`.
+
 ### `ElementFactory` / `RelationshipFactory` (stubs)
 
 Not yet usable — raise `NotImplementedError` until `yggdrasil.graph.models` ships.

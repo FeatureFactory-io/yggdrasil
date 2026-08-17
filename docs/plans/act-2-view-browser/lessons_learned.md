@@ -26,3 +26,11 @@ Categories: `workflow-drift` | `tech-blocker` | `mockup-delta` | `decision`
 | 2026-07-27 | decision | W7 ships SSR navigator + empty inspector; selection bus deferred W8–W10 | Three-panel shell on `/views/`; `@wip` only on E2E scenarios 21+ |
 | 2026-07-27 | workflow-drift | Mockup `build_package_tree` duplicated in mockups | Shared helper in `browse_helpers.py`; mockup wraps adapter |
 | 2026-07-27 | decision | `element-row-{slug}` primary testid in v0.3; `{id}` on `data-element-id` | Keeps v0.2 name-based assertions green |
+| 2026-08-17 | tech-blocker | RBAC tests with `owner_group` failed when user lacked matching `Group` | Use `UserFactory(is_architect=True)` trait or `groups="architect"`; verify `user.groups` when mixing manual `Group` with factory users |
+| 2026-08-17 | tech-blocker | AT Background + scenario both seeded models → `IntegrityError` on `(model_id, slug)` | Idempotent `get_or_create` / update-in-place in behave Given steps |
+| 2026-08-17 | tech-blocker | Scenario 53 (zero models) still saw Background models | `step_architect_can_read_no_models` reassigns **all** models to unreadable `owner_group` |
+| 2026-08-17 | tech-blocker | E2E scenario 51 timeout — switcher not found | Navigator chrome is graph-mode only (`yrg-graph-only`); E2E URL must include `?view=graph` |
+| 2026-08-17 | tech-blocker | E2E login via manual `SessionStore` did not authenticate Playwright | Inject `sessionid` from Django test `Client.force_login` → `page.context.add_cookies` (see `tests/e2e/steps/view_browser_steps.py`) |
+| 2026-08-17 | workflow-drift | Existing pytest/AT expected 200 on `/views/` after W12 alias | Default to canonical `/models/{slug}/views/…`; reserve alias assertions for scenarios 49/53 |
+| 2026-08-17 | tech-blocker | `make test` collection failed on unregistered `@pytest.mark.e2e_self` | Register new markers in `pyproject.toml` `[tool.pytest.ini_options].markers` before use |
+| 2026-08-17 | decision | W12 AT + E2E both cover scenario 51; separate step modules | AT: `docs/features/steps/`; E2E: `tests/e2e/steps/` + dedicated `.feature` under `tests/e2e/` |

@@ -96,13 +96,13 @@ class RatatoskMcpClient:
             msg = f"MCP tool {name!r} returned non-JSON body"
             raise McpClientError(msg) from exc
 
-        if isinstance(payload, dict[str, Any]) and "result" in payload:
+        if isinstance(payload, dict) and "result" in payload:
             result = payload["result"]
-            if isinstance(result, dict[str, Any]):
+            if isinstance(result, dict):
                 self._log_tool_result(name, result)
                 return result
             return {"value": result}
-        if isinstance(payload, dict[str, Any]):
+        if isinstance(payload, dict):
             self._log_tool_result(name, payload)
             return payload
         return {"value": payload}

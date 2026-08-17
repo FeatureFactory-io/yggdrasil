@@ -153,6 +153,7 @@ def step_priya_on_view_browser_for_model(context, slug: str) -> None:
     """GET canonical browse URL for a specific model."""
     path = reverse("web:view_browse_model", kwargs={"model_slug": slug})
     context.response = get_client(context).get(path)
+    context.current_path = path
     context.view_browser_model_slug = slug
     logger.info(
         "Priya on View Browser model=%s GET %s -> %s", slug, path, context.response.status_code
@@ -179,6 +180,60 @@ def step_priya_on_view_browser_graph_mode(context) -> None:
 def step_priya_on_view_browser_nav_expanded(context) -> None:
     """Open View Browser — navigator SSR expanded by default for Application."""
     step_priya_on_view_browser(context)
+
+
+@when('she selects model "{slug}" in the model switcher')
+def step_select_model_in_switcher(context, slug: str) -> None:
+    """Navigate to another Model via the switcher dropdown link (AT)."""
+    path = reverse("web:view_browse_model", kwargs={"model_slug": slug})
+    context.response = get_client(context).get(path)
+    context.current_path = path
+    context.view_browser_model_slug = slug
+    logger.info(
+        "Selected model %s in switcher GET %s -> %s",
+        slug,
+        path,
+        context.response.status_code,
+    )
+
+
+@then('she is on "{path}"')
+def step_she_is_on_path(context, path: str) -> None:
+    """Assert the last navigation landed on ``path`` with HTTP 200."""
+    assert (
+        context.response.status_code == 200
+    ), f"Expected 200 on {path!r}, got {context.response.status_code}"
+    assert (
+        getattr(context, "current_path", None) == path
+    ), f"Expected current_path={path!r}, got {getattr(context, 'current_path', None)!r}"
+    logger.info("Priya is on %s", path)
+
+
+def _navigator_panel_html(content: str) -> str:
+    """Extract navigator panel HTML for scoped text assertions."""
+    match = re.search(
+        r'<aside[^>]*data-testid="browser-nav-panel"[\s\S]*?</aside>',
+        content,
+    )
+    return match.group(0) if match else content
+
+
+@then('she sees "{text}" in the navigator')
+def step_she_sees_in_navigator(context, text: str) -> None:
+    """Assert ``text`` appears inside the navigator panel."""
+    content = context.response.content.decode()
+    navigator = _navigator_panel_html(content)
+    assert text in navigator, f"Expected {text!r} in navigator panel"
+    logger.info('Navigator shows "%s"', text)
+
+
+@then('she does not see "{text}" in the navigator')
+def step_she_does_not_see_in_navigator(context, text: str) -> None:
+    """Assert ``text`` is absent from the navigator panel."""
+    content = context.response.content.decode()
+    navigator = _navigator_panel_html(content)
+    assert text not in navigator, f"Expected {text!r} absent from navigator panel"
+    logger.info('Navigator does not show "%s"', text)
 
 
 @when('she toggles the "{slug}" package in the navigator')

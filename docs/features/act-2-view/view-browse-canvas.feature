@@ -4,7 +4,7 @@ Feature: VIEW-BROWSE-1 View Browser — Graph Canvas (centre panel)
   So that I can explore filtered subgraphs visually and switch to tabular data when needed
 
   # Component: centre canvas · Pattern: Mimir FOB-CONTENT-BROWSER-03, 07
-  # Production: /views/ · graph data: GET /views/graph.json
+  # Production: /models/{slug}/views/ · graph data: GET /models/{slug}/views/graph.json
   # Testids: graph-cy-container, toggle-table, toggle-graph, results-container,
   #          graph-replot-btn, graph-zoom-in, graph-zoom-out, graph-zoom-fit,
   #          graph-node-count, browser-canvas-controls
@@ -17,20 +17,20 @@ Feature: VIEW-BROWSE-1 View Browser — Graph Canvas (centre panel)
   # ── AT: graph JSON, mode SSR, canvas controls ─────────────────────────────
 
   Scenario: VIEW-BROWSE-1-35 Graph JSON endpoint returns nodes and edges for current filters
-    When I GET "/views/graph.json?package=application"
+    When I GET "/models/yggdrasil/views/graph.json?package=application"
     Then the response status is 200
     And the user should see "elements"
     And the user should see "edges"
 
   Scenario: VIEW-BROWSE-1-36 View-mode toggles and results container render in canvas toolbar
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the element "toggle-table" should be visible
     And the element "toggle-graph" should be visible
     And the element "results-container" should be visible
 
   Scenario: VIEW-BROWSE-1-37 Table mode shows element rows inside the canvas panel
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the view browser is in table mode
     And the table view is active
@@ -39,7 +39,7 @@ Feature: VIEW-BROWSE-1 View Browser — Graph Canvas (centre panel)
     And the user should see "element-row-"
 
   Scenario: VIEW-BROWSE-1-45 Table mode hides graph canvas and explorer chrome
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the view browser is in table mode
     And the graph-only panels are hidden
@@ -48,7 +48,7 @@ Feature: VIEW-BROWSE-1 View Browser — Graph Canvas (centre panel)
     And the element "browser-canvas-controls" should not be visible
 
   Scenario: VIEW-BROWSE-1-46 Graph mode shows canvas controls and cytoscape container
-    When I GET "/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?view=graph"
     Then the response status is 200
     And the view browser is in graph mode
     And the graph view is active

@@ -158,7 +158,7 @@ And the element "element-list-page" should be visible
 |---------|--------|-------|
 | `Given the model "{slug}" is loaded with the view browser fixture` | AT | 6-element payment preset |
 | `Given the model "{slug}" is loaded with the view browser explorer fixture` | AT | 19-element Yggdrasil self-model |
-| `Given Priya is on the View Browser` | AT+E2E | GET `/views/` (not mockup) |
+| `Given Priya is on the View Browser` | AT+E2E | GET `/views/` alias (302 to `/models/{slug}/views/` after W12) |
 | `Given the user is on the "view-browse" page with query "{query}"` | AT | Query-string navigation |
 | `Then the page uses the full-height view browser layout` | AT | Asserts `yrg-view-browser` on `<body>` |
 | `Then the response is an embed partial` | AT | No navigator chrome (W9 routes pending) |
@@ -174,6 +174,14 @@ And the element "element-list-page" should be visible
 | `When she toggles the "{slug}" package in the navigator` | AT stub | `NotImplementedError` until W8 E2E |
 | `Then the inspector shows element "{name}"` | AT stub | E2E — `NotImplementedError` until W9 Playwright |
 | `Then the navigator row for "{name}" is highlighted` | AT stub | E2E — `NotImplementedError` until W10 |
+| `When she selects model "{slug}" in the model switcher` | AT + E2E | Navigate via switcher dropdown |
+| `Then she is on "{path}"` | AT + E2E | Last navigation path assertion |
+| `Then she does not see "{text}" in the navigator` | AT + E2E | Scoped navigator panel assertion |
+| `Then she sees "{text}" in the navigator` | AT + E2E | Scoped navigator panel assertion |
+| `Given the models "{a}" and "{b}" exist and the architect can read both` | AT stub | W12 fixture — two Models |
+| `Given the architect can read no models` | AT stub | W12 empty-state |
+| `Then the Location header starts with "{path}"` | AT stub | 302 alias `/views/` → `/models/{slug}/views/` |
+| `Then the element "browser-model-switcher" is disabled` | AT stub | Zero-model empty state |
 
 ---
 
@@ -299,7 +307,10 @@ assertions and in form step fields.
 | View element link | `view-element-{id}` |
 | **v0.3 — Left navigator** | |
 | Navigator panel | `browser-nav-panel` |
-| Model name heading | `browser-model-name` |
+| Model name (current) | `browser-model-name` |
+| Model switcher toggle | `browser-model-switcher` |
+| Model switcher menu | `browser-model-menu` |
+| Model option | `browser-model-option-{slug}` |
 | Navigator search | `browser-search-input` |
 | Package tree root | `browser-package-tree` |
 | Package toggle | `package-toggle-{slug}` |
@@ -658,3 +669,7 @@ Gaps discovered during ESM-05 spec authoring. Implement via TFK-07 in BPE-04.
 | 15 | Graph interaction steps | Stub `NotImplementedError` until W10 | `Then the graph view is active` |
 | 16 | Cross-panel sync assertions | Stub `NotImplementedError` until W10 | `Then the navigator row for "{name}" is highlighted` |
 | 17 | PAGE_REGISTRY entry | **Closed** — `support/pages.py` | `"view-browse" → web:view_browse` |
+| 18 | Two-model fixture + RBAC visibility | Spec only (BPE-08) | `Given the models "{a}" and "{b}" exist and the architect can read both` |
+| 19 | Model switcher interaction | Spec only (BPE-08) | `When she selects model "{slug}" in the model switcher` |
+| 20 | Redirect Location assertion | Spec only (BPE-08) | `Then the Location header starts with "{path}"` |
+| 21 | Zero-model empty state | Spec only (BPE-08) | `Given the architect can read no models` |

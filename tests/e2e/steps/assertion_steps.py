@@ -34,6 +34,14 @@ def step_user_should_not_see_text(context, text: str) -> None:
     logger.info('User does not see "%s"', text)
 
 
+@then('the element "{test_id}" shows "{text}"')
+def step_element_shows_text(context, test_id: str, text: str) -> None:
+    """Assert element with ``data-testid`` contains ``text``."""
+    locator = context.page.get_by_test_id(test_id)
+    assert text in locator.inner_text(), f"Expected {text!r} in element {test_id!r}"
+    logger.info("Element testid=%s shows %s", test_id, text)
+
+
 @then('the element "{test_id}" should be visible')
 def step_element_visible(context, test_id: str) -> None:
     """Assert element with ``data-testid`` is visible."""

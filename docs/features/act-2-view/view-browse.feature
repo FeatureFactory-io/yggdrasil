@@ -8,7 +8,7 @@ Feature: VIEW-BROWSE-1 View Browser
   # v0.3 (@wip): three-panel explorer — navigator + canvas + inspector
   #   See also: view-browse-navigator.feature, view-browse-inspector.feature,
   #             view-browse-canvas.feature
-  # Production: /views/ · Mockup reference: /mockups/view/browse/ (DEBUG only)
+  # Production: /models/{slug}/views/ · alias GET /views/ 302s to default model
   # Testids (v0.2): view-browse-page, filters-toggle, filter-*, toggle-table,
   #          toggle-graph, element-row-{id}, export-btn, history-btn, open-munin-btn
   # Testids (v0.3): browser-nav-panel, browser-inspector-panel, browser-package-tree,
@@ -18,11 +18,12 @@ Feature: VIEW-BROWSE-1 View Browser
 
   Background:
     Given the user is logged in as "architect"
+    And the model "yggdrasil" is loaded with the view browser fixture
 
   # ── v0.2 shell (implemented) ──────────────────────────────────────────────
 
   Scenario: VIEW-BROWSE-1-01 View Browser renders with filter panel and element table
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the element "view-browse-page" should be visible
     And the element "filters-toggle" should be visible
@@ -32,7 +33,7 @@ Feature: VIEW-BROWSE-1 View Browser
 
   Scenario: VIEW-BROWSE-1-02 Default view shows all seeded elements in table
     Given the model "yggdrasil" is loaded with the view browser fixture
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the user should see "Payment API"
     And the user should see "Notification Service"
@@ -43,14 +44,14 @@ Feature: VIEW-BROWSE-1 View Browser
 
   Scenario: VIEW-BROWSE-1-03 Each element row shows Name, Stereotype, Owner, Health, Package columns
     Given the model "yggdrasil" is loaded with the view browser fixture
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the user should see "Container"
     And the user should see "payments-team"
     And the user should see "Technology"
 
   Scenario: VIEW-BROWSE-1-04 Filter panel shows package, stereotype, health, and time-travel controls
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the element "filter-package" should be visible
     And the element "filter-stereotype" should be visible
@@ -58,35 +59,35 @@ Feature: VIEW-BROWSE-1 View Browser
     And the element "filter-as-of" should be visible
 
   Scenario: VIEW-BROWSE-1-05 Filter panel can be collapsed and expanded
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the element "filters-toggle" should be visible
 
   Scenario: VIEW-BROWSE-1-06 Clear filters button is available
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the element "clear-filters-btn" should be visible
 
   Scenario: VIEW-BROWSE-1-07 Saved views dropdown is visible
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the element "saved-views-dropdown" should be visible
 
   Scenario: VIEW-BROWSE-1-08 View Browser has clickable links to each element's detail view
     Given the model "yggdrasil" is loaded with the view browser fixture
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     # TFK-07: resolve element PKs dynamically — step `Then element detail links exist for:`
     And the user should see "view-element-"
 
   Scenario: VIEW-BROWSE-1-09 Export and History actions are available from View Browser
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the element "export-btn" should be visible
     And the element "history-btn" should be visible
 
   Scenario: VIEW-BROWSE-1-10 Munin panel toggle is available
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the element "open-munin-btn" should be visible
 
@@ -99,13 +100,13 @@ Feature: VIEW-BROWSE-1 View Browser
 
   Scenario: VIEW-BROWSE-1-12 Viewer can browse elements but has no create button
     Given the user is logged in as "viewer"
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the element "view-browse-page" should be visible
     And the user should not see "Create Element"
 
   Scenario: VIEW-BROWSE-1-13 Navbar shows all primary navigation links
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the element "nav-view-browser" should be visible
     And the element "nav-elements" should be visible
@@ -115,14 +116,14 @@ Feature: VIEW-BROWSE-1 View Browser
 
   Scenario: VIEW-BROWSE-1-14 Apply package filter returns matching rows only
     Given the model "yggdrasil" is loaded with the view browser fixture
-    When I GET "/views/?package=technology"
+    When I GET "/models/yggdrasil/views/?package=technology"
     Then the response status is 200
     And the user should see "Payment API"
     And the user should not see "Mobile App"
 
   Scenario: VIEW-BROWSE-1-15 Graph JSON endpoint returns elements and edges
     Given the model "yggdrasil" is loaded with the view browser fixture
-    When I GET "/views/graph.json?package=technology"
+    When I GET "/models/yggdrasil/views/graph.json?package=technology"
     Then the response status is 200
     And the user should see "elements"
     And the user should see "edges"
@@ -130,7 +131,7 @@ Feature: VIEW-BROWSE-1 View Browser
   # ── v0.3 three-panel shell ─────────────────────────────────────────
 
   Scenario: VIEW-BROWSE-1-16 Three-panel explorer layout renders below page header
-    When I GET "/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?view=graph"
     Then the response status is 200
     And the element "browser-nav-panel" should be visible
     And the element "graph-cy-container" should be visible

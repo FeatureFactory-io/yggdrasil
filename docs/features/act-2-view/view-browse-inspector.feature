@@ -4,11 +4,11 @@ Feature: VIEW-BROWSE-1 View Browser — Property Inspector (right panel)
   So that I can inspect the graph without leaving the View Browser
 
   # Component: right inspector · Pattern: Mimir Content Browser FOB-CONTENT-BROWSER-08..10
-  # Production: /views/ · Mockup: /mockups/view/browse/
+  # Production: /models/{slug}/views/ · Mockup: /mockups/view/browse/
   # Testids: browser-inspector-panel, browser-toggle-inspector-panel,
   #          inspector-empty, inspector-content, inspector-element-{id},
   #          inspector-relationship-{id}, inspector-open-full-{id}
-  # Inspector partials: GET /views/inspector/element/<pk>/ · relationship/<pk>/
+  # Inspector partials: GET /models/{slug}/views/inspector/element/<pk>/ · relationship/<pk>/
   # Fixture: view_browser_explorer_fixture (TFK-07)
 
   Background:
@@ -18,19 +18,19 @@ Feature: VIEW-BROWSE-1 View Browser — Property Inspector (right panel)
   # ── AT: shell ─────────────────────────────────────────────────────────────
 
   Scenario: VIEW-BROWSE-1-25 Inspector panel renders with empty-state prompt in graph mode
-    When I GET "/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?view=graph"
     Then the response status is 200
     And the element "browser-inspector-panel" should be visible
     And the element "inspector-empty" should be visible
     And the user should see "Select an element or relationship"
 
   Scenario: VIEW-BROWSE-1-26 Inspector collapse toggle control is present in graph mode
-    When I GET "/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?view=graph"
     Then the response status is 200
     And the element "browser-toggle-inspector-panel" should be visible
 
   Scenario: VIEW-BROWSE-1-47 Inspector panel is hidden in default table mode
-    When I GET "/views/"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the view browser is in table mode
     And the element "browser-inspector-panel" should not be visible

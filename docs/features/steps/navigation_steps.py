@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 def step_user_is_on_page(context, page_name: str) -> None:
     """GET the registered page and store the response on context."""
     path = resolve_page_path(page_name)
-    context.response = get_client(context).get(path)
+    follow = page_name == "view-browse"
+    context.response = get_client(context).get(path, follow=follow)
     context.current_page = page_name
     logger.info("User on page %s (%s) -> %s", page_name, path, context.response.status_code)
 
@@ -35,7 +36,8 @@ def step_user_is_on_page_with_query(context, page_name: str, query: str) -> None
     if not query.startswith("?"):
         query = "?" + query
     full_path = path + query
-    context.response = get_client(context).get(full_path)
+    follow = page_name == "view-browse"
+    context.response = get_client(context).get(full_path, follow=follow)
     context.current_page = page_name
     logger.info("User on page %s (%s) -> %s", page_name, full_path, context.response.status_code)
 

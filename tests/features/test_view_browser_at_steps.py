@@ -84,6 +84,37 @@ def test_inspector_element_partial_step(at_context) -> None:
 @pytest.mark.django_db
 def test_table_mode_step(at_context) -> None:
     """Table mode step detects yrg-mode-table on browse page."""
-    path = resolve_page_path("view-browse")
+    from tests.fixtures.factories.model_factories import YggdrasilModelFactory
+    from tests.fixtures.view_browser import (
+        _PAYMENT_RELATIONSHIPS,
+        VIEW_BROWSER_ELEMENTS,
+        _seed_view_browser,
+    )
+
+    from yggdrasil.graph.models import ensure_c4_metamodel
+
+    mm = ensure_c4_metamodel()
+    model = YggdrasilModelFactory(name="Yggdrasil", slug="yggdrasil", metamodel=mm)
+    _seed_view_browser(
+        model, VIEW_BROWSER_ELEMENTS, _PAYMENT_RELATIONSHIPS, run_id="run-at-table-mode"
+    )
+    path = reverse("web:view_browse_model", kwargs={"model_slug": "yggdrasil"})
     at_context.response = at_context.test.client.get(path)
     view_browser_steps.step_view_browser_table_mode(at_context)
+
+
+@pytest.mark.django_db
+def test_select_model_in_switcher(at_context) -> None:
+    """Scenario 51 AT: switcher navigates to payments model without munin."""
+    from django.contrib.auth.models import Group
+
+    user = UserFactory(groups="architect")
+    at_context.current_user = user
+    at_context.test.client.force_login(user)
+    architect_group, _ = Group.objects.get_or_create(name="architect")
+    user.groups.add(architect_group)
+    view_browser_steps.step_two_models_readable(at_context, "yggdrasil", "payments")
+    view_browser_steps.step_priya_on_view_browser_for_model(at_context, "yggdrasil")
+    view_browser_steps.step_select_model_in_switcher(at_context, "payments")
+    view_browser_steps.step_she_is_on_path(at_context, "/models/payments/views/")
+    view_browser_steps.step_she_does_not_see_in_navigator(at_context, "munin")

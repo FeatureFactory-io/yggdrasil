@@ -53,6 +53,16 @@ Feature: ACT-5-MCP-QUERY MCP Read Tools — Browse Graph from Any AI Client
     And the response contains "Order Domain"
     And each entry includes the element owner and confidence
 
+  Scenario: ACT-5-MCP-QUERY-04b traverse depth 2 returns two-hop neighbourhood
+    Given the model "yggdrasil" is loaded with the view browser explorer fixture
+    When Priya calls MCP tool "traverse" with:
+      | param     | value       |
+      | from      | munin       |
+      | direction | outgoing    |
+      | depth     | 2           |
+    Then the response contains "llm"
+    And the response contains "Ollama"
+
   Scenario: ACT-5-MCP-QUERY-05 list_elements with stereotype filter returns only matching elements
     Given Priya has a valid read-write token
     When Priya calls MCP tool "list_elements" with:

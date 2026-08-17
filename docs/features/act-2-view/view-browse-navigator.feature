@@ -42,6 +42,11 @@ Feature: VIEW-BROWSE-1 View Browser — Element Navigator (left panel)
     And the user should see "auth"
     And the user should see "graph"
     And the user should see "munin"
+    And the user should see "llm"
+
+  Scenario: VIEW-BROWSE-1-19b Depth 3 reaches infrastructure dependents
+    When I GET "/models/yggdrasil/views/?view=graph&stereotype=component&depth=3"
+    Then the response status is 200
     And the user should see "Redis"
 
   Scenario: VIEW-BROWSE-1-20 Navigator collapse toggle control is present

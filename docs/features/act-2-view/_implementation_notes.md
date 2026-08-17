@@ -9,23 +9,24 @@
 
 | Panel | Responsibility | Primary testids | Feature file |
 |-------|----------------|-----------------|--------------|
-| Left navigator | Package tree, element list, search, **Model switcher** | `browser-nav-panel`, `browser-package-tree`, `browser-search-input`, `browser-model-switcher`, `package-toggle-{slug}`, `nav-element-{slug}` | `view-browse-navigator.feature` |
-| Centre canvas | Cytoscape graph + table toggle, filters | `graph-cy-container`, `toggle-table`, `toggle-graph`, `results-container` | `view-browse-canvas.feature` |
+| Left navigator | **Traversal tree**, search, **Model switcher** | `browser-nav-panel`, `browser-element-tree`, `browser-search-input`, `browser-model-switcher`, `nav-toggle-{slug}`, `nav-element-{slug}` | `view-browse-navigator.feature` |
+| Centre canvas | Cytoscape graph + table toggle, filters, **depth slider** | `graph-cy-container`, `toggle-table`, `toggle-graph`, `browser-depth-slider`, `browser-depth-value`, `results-container` | `view-browse-canvas.feature` |
 | Right inspector | Element/relationship properties (embed mode) | `browser-inspector-panel`, `inspector-empty`, `inspector-content` | `view-browse-inspector.feature` |
 | Page shell | Header actions, Munin offcanvas | `view-browse-page`, `export-btn`, `open-munin-btn` | `view-browse.feature` |
 
 ---
 
-## Scenario index (VIEW-BROWSE-1-01 … 54)
+## Scenario index (VIEW-BROWSE-1-01 … 60)
 
 | IDs | Status | Runner | Notes |
 |-----|--------|--------|-------|
 | 01–15 | v0.2 implemented | AT (pytest + behave) | Single-column; update 02/08/14/15 to use fixture Given when TFK-07 lands |
 | 16 | v0.3 shell | AT | Three-panel DOM + layout class |
-| 17–24 | v0.3 navigator | AT + E2E | 17–20 AT testid shell; 21–24 Playwright interaction |
+| 17–24 | v0.3 navigator | AT + E2E | Revise for traversal tree (BPE-08 depth CR) |
 | 25–34 | v0.3 inspector | AT + E2E | 27–28 embed partials; 29–34 selection sync |
 | 35–37, 45–46 | v0.3 canvas | AT | Graph JSON, mode SSR, canvas controls |
 | 48–54 | **W12 implemented** | AT + E2E | Model switcher; canonical `/models/{slug}/views/` |
+| 55–60 | **spec only** (BPE-08 depth CR) | AT + E2E | Depth slider + BFS subgraph |
 
 ---
 
@@ -34,15 +35,27 @@
 | Wave | Deliverable | Scenarios unlocked |
 |------|-------------|-------------------|
 | W7 | Three-panel template shell + CSS (`yrg-view-browser`) | 16 |
-| W8 | Left navigator (package tree HTMX or SSR) | 17–24 |
+| W8 | Left navigator SSR/HTMX | 17–24 |
 | W9 | Inspector + embed partials on Element/Relationship views | 25–34 |
 | W10 | Full-height Cytoscape canvas + selection bus JS | 38–42 |
-| W11 | Filter ↔ navigator ↔ graph sync | 43–44 |
-| W12 | **Model switcher** (BPE-01 shipped) | 48–54 |
+| W11 | Filter ↔ navigator ↔ graph URL sync | 43–44 |
+| W12 | **Model switcher** (shipped) | 48–54 |
+| W13 | **Depth traversal** — `browse_service.subgraph_from_roots`, slider, traversal tree, multi-hop `traverse` | 55–60 |
 
 Deferred from v0.2 (unchanged): 07 saved views, 09 export/history wiring, 11 time travel banner.
 
-W12 is **shipped** (model switcher + canonical URLs). See plan [`VIEW-BROWSE-1_MODEL_SWITCHER_CHANGE_RECONCILIATION.md`](VIEW-BROWSE-1_MODEL_SWITCHER_CHANGE_RECONCILIATION.md).
+W12 is **shipped**. W13 is unblocked for planning after BPE-08 approval: [`VIEW-BROWSE-1_DEPTH_TRAVERSAL_CHANGE_RECONCILIATION.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_DEPTH_TRAVERSAL_CHANGE_RECONCILIATION.md).
+
+---
+
+## Depth-scoped subgraph (W13)
+
+**Algorithm:** `browse_service.subgraph_from_roots(model, filters, depth)` — shared by web browse, `graph.json`, and MCP `traverse`.
+
+1. **Roots** = elements matching browse filters. If no element-narrowing filter → graph **sources** (zero incoming edges).
+2. **BFS** along **outgoing** edges for `depth − 1` hops (visited set for cycles).
+3. **Edges** = relationships where both endpoints ∈ node set.
+4. **Navigator** = tree from BFS parent map; chevron toggles local child visibility only.
 
 ---
 
@@ -55,6 +68,7 @@ Adopt from Mimir Content Browser (`browser_graph.html`):
 | Node count badge | yes | `graph-node-count` |
 | Re-plot | yes | `graph-replot-btn` |
 | Zoom in / out / fit | yes | `graph-zoom-in`, `graph-zoom-out`, `graph-zoom-fit` |
+| Depth slider | yes (Yggdrasil-specific) | `browser-depth-slider`, `browser-depth-value` |
 
 **Explicitly out of scope** (playbook methodology graph only — do not port):
 
@@ -64,7 +78,7 @@ Adopt from Mimir Content Browser (`browser_graph.html`):
 - Compound / workflow grouping
 - Node size mode toggle
 
-Yggdrasil uses a fixed `cose` layout and bezier edges from filtered `/views/graph.json`.
+Yggdrasil uses a fixed `cose` layout and bezier edges from depth-scoped `/views/graph.json`.
 
 ---
 
@@ -89,7 +103,7 @@ Tree click, table row click, graph node tap, and inspector endpoint link MUST pr
 2. Select Cytoscape node/edge
 3. Load inspector content (element or relationship)
 
-Chevron-only click on package row toggles accordion WITHOUT changing selection (Mimir FOB-26 pattern).
+Chevron-only click on a navigator node toggles child rows WITHOUT changing selection or URL `depth` (Mimir FOB-26 pattern).
 
 ---
 
@@ -99,6 +113,7 @@ Prefer **slug** over numeric PK for navigator rows so AT specs stay stable:
 
 ```
 data-testid="nav-element-{slug}"     # e.g. nav-element-munin
+data-testid="nav-toggle-{slug}"      # chevron for traversal tree node
 data-testid="element-row-{slug}"     # table mode
 ```
 

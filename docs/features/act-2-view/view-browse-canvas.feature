@@ -113,3 +113,36 @@ Feature: VIEW-BROWSE-1 View Browser — Graph Canvas (centre panel)
     When she applies stereotype filter "Person" and package filter "technology"
     Then she sees "No elements match the current filters"
     And the graph shows an empty-state message
+
+  # ── Depth traversal (CR: VIEW-BROWSE-1 depth BFS) ─────────────────────────
+
+  Scenario: VIEW-BROWSE-1-55 Depth slider renders in graph mode canvas toolbar
+    When I GET "/models/yggdrasil/views/?view=graph"
+    Then the response status is 200
+    And the element "browser-depth-slider" should be visible
+    And the element "browser-depth-value" should be visible
+
+  Scenario: VIEW-BROWSE-1-56 Graph JSON respects depth parameter
+    Given the model "yggdrasil" is loaded with the view browser explorer fixture
+    When I GET "/models/yggdrasil/views/graph.json?stereotype=component&depth=1"
+    Then the response status is 200
+    And the user should see "auth"
+    And the user should not see "Redis"
+    When I GET "/models/yggdrasil/views/graph.json?stereotype=component&depth=2"
+    Then the response status is 200
+    And the user should see "llm"
+    And the user should not see "Redis"
+    When I GET "/models/yggdrasil/views/graph.json?stereotype=component&depth=3"
+    Then the response status is 200
+    And the user should see "Redis"
+
+  Scenario: VIEW-BROWSE-1-57 Depth query param syncs with slider default
+    When I GET "/models/yggdrasil/views/?view=graph&depth=3"
+    Then the response status is 200
+    And the depth slider value is 3
+
+  Scenario: VIEW-BROWSE-1-58 Table rows match depth-scoped node set
+    When I GET "/models/yggdrasil/views/?stereotype=component&depth=1"
+    Then the response status is 200
+    And the user should see "auth"
+    And the user should not see "Redis"

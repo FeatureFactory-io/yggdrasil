@@ -310,6 +310,9 @@ def test_inspector_element_partial_renders_properties(
     assert "munin" in body
     assert "Properties" in body
     assert "nav-view-browser" not in body
+    assert f'data-testid="inspector-open-full-{element.pk}"' in body
+    assert 'title="not Yet implemented"' in body
+    assert "disabled" in body
 
 
 @pytest.mark.django_db

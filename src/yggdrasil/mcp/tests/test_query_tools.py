@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 from tests.fixtures.factories import UserFactory
 from tests.fixtures.factories.model_factories import (
@@ -86,10 +88,28 @@ def test_get_element_by_name(bootstrapped_model) -> None:
 
 @pytest.mark.django_db
 def test_traverse_incoming_payment_api(bootstrapped_model) -> None:
-    """QUERY-04: traverse incoming to Payment API."""
-    result = traverse(from_="Payment API", direction="incoming", model="yggdrasil")
+    """QUERY-04: traverse incoming to Payment API at depth=1 (source only)."""
+    result = traverse(from_="Payment API", direction="incoming", depth=1, model="yggdrasil")
     assert result["source"]["name"] == "Payment API"
-    assert len(result["edges"]) >= 1 or len(result["nodes"]) >= 1
+
+
+@pytest.mark.django_db
+def test_traverse_depth_2_multi_hop(view_browser_explorer_model) -> None:
+    """QUERY-04b: munin → llm at depth=2."""
+    result = traverse(from_="munin", direction="outgoing", depth=2, model="yggdrasil")
+    node_slugs = {node["slug"] for node in result["nodes"]}
+    assert "llm" in node_slugs
+
+
+@pytest.mark.django_db
+def test_traverse_depth_2_log_story_happy(view_browser_explorer_model, caplog) -> None:
+    """W13: traverse emits entry and exit beats with depth=."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.mcp.tools.query"):
+        traverse(from_="munin", direction="outgoing", depth=2, model="yggdrasil")
+    messages = " ".join(record.message for record in caplog.records)
+    assert "traverse | from=munin" in messages
+    assert "depth=2" in messages
+    assert "node_count=" in messages
 
 
 @pytest.mark.django_db

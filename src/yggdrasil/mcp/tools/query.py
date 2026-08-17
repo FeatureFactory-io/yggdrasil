@@ -141,18 +141,18 @@ def get_element(
 def traverse(
     from_: str,
     direction: str = "outgoing",
-    depth: int = 1,
+    depth: int = 2,
     model: str | None = None,
 ) -> dict[str, Any]:
     """
     Walk the graph from an element and return connected elements.
 
-    :param from_: Source element slug or id. Example: "payment-api"
-    :param direction: "outgoing", "incoming", or "both". Example: "incoming"
-    :param depth: Traversal depth (1 = immediate neighbours). Example: 1
-    :param model: Model slug for disambiguation. Example: "yggdrasil"
-    :return: {"source": {...}, "edges": [...], "nodes": [...]}
-    :raises ValueError: If from_ element not found.
+    :param from_: Source element slug or id. Example: ``"payment-api"``
+    :param direction: ``outgoing``, ``incoming``, or ``both``. Example: ``"incoming"``
+    :param depth: Level count including source (2 = source + one hop). Example: ``2``
+    :param model: Model slug for disambiguation. Example: ``"yggdrasil"``
+    :return: ``{"source": {...}, "edges": [...], "nodes": [...]}``
+    :raises ValueError: If from_ element not found or depth invalid.
     """
     user_id = get_current_user_id()
     logger.info(
@@ -163,23 +163,27 @@ def traverse(
         user_id,
     )
     source = _resolve_element(from_, model)
+    scoped = browse_service.bfs_from_element(source, direction=direction, depth=depth)
+    rel_ids = [int(edge["data"]["id"]) for edge in scoped.cytoscape_edges]
+    rels = Relationship.objects.filter(pk__in=rel_ids).select_related(
+        "source", "target", "stereotype"
+    )
     edges: list[dict[str, Any]] = []
-    nodes: dict[int, dict[str, Any]] = {}
-    if direction in {"outgoing", "both"}:
-        for rel in source.outgoing_relationships.select_related("target", "stereotype"):
+    for rel in rels:
+        if rel.source_id == source.pk:
             edges.append(_edge_dict(rel, "outgoing"))
-            nodes[rel.target_id] = _element_summary(rel.target)
-    if direction in {"incoming", "both"}:
-        for rel in source.incoming_relationships.select_related("source", "stereotype"):
+        elif rel.target_id == source.pk or direction == "incoming":
             edges.append(_edge_dict(rel, "incoming"))
-            nodes[rel.source_id] = _element_summary(rel.source)
+        else:
+            edges.append(_edge_dict(rel, "outgoing"))
+    nodes = [summary for summary in scoped.node_summaries if summary["id"] != source.pk]
     result = {
         "source": _element_summary(source),
         "edges": edges,
-        "nodes": list(nodes.values()),
+        "nodes": nodes,
         "depth": depth,
     }
-    logger.info("traverse | from=%s nodes=%s user=%s", from_, len(nodes), user_id)
+    logger.info("traverse | from=%s node_count=%s user=%s", from_, len(nodes), user_id)
     return result
 
 

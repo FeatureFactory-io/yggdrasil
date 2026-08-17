@@ -75,7 +75,6 @@ def test_resolve_default_model_first_by_name() -> None:
 @pytest.mark.django_db
 def test_resolve_default_model_no_readable_returns_none() -> None:
     """W12: zero readable Models yields None."""
-    architect_group, _ = Group.objects.get_or_create(name="architect")
     other_group, _ = Group.objects.get_or_create(name="other-team")
     user = UserFactory(groups="architect")
     YggdrasilModelFactory(name="Private", slug="private", owner_group=other_group)
@@ -85,7 +84,6 @@ def test_resolve_default_model_no_readable_returns_none() -> None:
 @pytest.mark.django_db
 def test_user_can_read_model_rejects_private() -> None:
     """W12: unreadable slug raises PermissionError."""
-    architect_group, _ = Group.objects.get_or_create(name="architect")
     other_group, _ = Group.objects.get_or_create(name="other-team")
     user = UserFactory(groups="architect")
     YggdrasilModelFactory(name="Private", slug="private", owner_group=other_group)

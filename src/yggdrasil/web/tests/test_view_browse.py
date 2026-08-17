@@ -389,7 +389,6 @@ def test_view_browse_unknown_model_404(client, view_browser_user):
 @pytest.mark.django_db
 def test_view_browse_zero_models_empty_state(client, db):
     """VIEW-BROWSE-1-53: zero models shows empty state and disables switcher."""
-    architect_group, _ = Group.objects.get_or_create(name="architect")
     other_group, _ = Group.objects.get_or_create(name="other-team")
     user = UserFactory(groups="architect")
     mm = ensure_c4_metamodel()

@@ -1,13 +1,17 @@
-"""Unit tests for browse_helpers (W7)."""
+"""Unit tests for browse_helpers (W7 + W13)."""
 
 from __future__ import annotations
+
+import logging
 
 import pytest
 from django.test import RequestFactory
 from tests.fixtures.factories import UserFactory
+from tests.support.log_story import assert_log_story
 
 from yggdrasil.web.browse_helpers import (
     build_package_tree,
+    build_traversal_tree,
     build_view_browse_context,
     parse_view_browse_params,
 )
@@ -25,16 +29,53 @@ def test_build_package_tree_groups_and_orders_packages() -> None:
     assert tree[1]["elements"][0]["name"] == "auth"
 
 
+def test_parse_depth_defaults_to_1() -> None:
+    """W13: omitted depth query param defaults to 1."""
+    request = RequestFactory().get("/models/yggdrasil/views/")
+    params = parse_view_browse_params(request, "yggdrasil")
+    assert params.depth == 1
+
+
+def test_build_traversal_tree_nests_children() -> None:
+    """W13: parent/child nesting from BFS parent map."""
+    rows = [
+        {"id": 1, "name": "munin", "slug": "munin", "stereotype": "Component", "health": "green"},
+        {"id": 2, "name": "llm", "slug": "llm", "stereotype": "Component", "health": "green"},
+    ]
+    parent_map = {1: None, 2: 1}
+    tree = build_traversal_tree(rows, parent_map, frozenset({1}))
+    assert len(tree) == 1
+    assert tree[0]["slug"] == "munin"
+    assert tree[0]["children"][0]["slug"] == "llm"
+
+
+def test_build_traversal_tree_log_story_happy(caplog) -> None:
+    """W13: traversal tree build logs tree_root_count."""
+    rows = [
+        {"id": 1, "name": "auth", "slug": "auth", "stereotype": "Component", "health": "green"},
+    ]
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        build_traversal_tree(rows, {1: None}, frozenset({1}))
+    assert_log_story(
+        caplog,
+        where="build_traversal_tree",
+        beats={
+            "exit": ["tree_root_count=", "element_count="],
+        },
+    )
+
+
 @pytest.mark.django_db
-def test_build_view_browse_context_includes_slugs_and_packages(view_browser_explorer_model) -> None:
-    """build_view_browse_context rows include slug fields and package tree."""
+def test_build_view_browse_context_includes_slugs_and_traversal(view_browser_model) -> None:
+    """build_view_browse_context rows include slug fields and traversal tree."""
     user = UserFactory(is_architect=True)
-    request = RequestFactory().get("/views/")
+    request = RequestFactory().get("/models/yggdrasil/views/", {"depth": "3"})
     request.user = user
     params = parse_view_browse_params(request, "yggdrasil")
     context = build_view_browse_context(request, params)
-    assert context["element_count"] == 19
-    assert len(context["packages"]) == 3
+    assert context["element_count"] == 6
+    assert context["traversal_roots"]
+    assert context["current_depth"] == 3
     assert context["model_name"] == "Yggdrasil"
     row = context["elements"][0]
     for key in ("slug", "stereotype_slug", "package_slug"):
@@ -42,13 +83,13 @@ def test_build_view_browse_context_includes_slugs_and_packages(view_browser_expl
 
 
 @pytest.mark.django_db
-def test_build_view_browse_context_returns_packages(view_browser_explorer_model) -> None:
-    """Context includes packages list and model_name from resolve_model."""
+def test_build_view_browse_context_returns_traversal_fields(view_browser_model) -> None:
+    """Context includes traversal_roots and model_name from resolve_model."""
     user = UserFactory(is_architect=True)
-    request = RequestFactory().get("/views/")
+    request = RequestFactory().get("/models/yggdrasil/views/")
     request.user = user
     params = parse_view_browse_params(request, "yggdrasil")
     context = build_view_browse_context(request, params)
-    assert context["packages"]
+    assert context["traversal_roots"]
     assert context["model_name"] == "Yggdrasil"
-    assert context["element_count"] == 19
+    assert context["element_count"] == 4

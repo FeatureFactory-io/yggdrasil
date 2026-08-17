@@ -91,27 +91,26 @@ def test_view_browser_shell_testids(client, view_browser_user, view_browser_mode
 
 @pytest.mark.django_db
 def test_default_view_shows_elements(client, view_browser_user, view_browser_model):
-    """VIEW-BROWSE-1-02: default view lists six seeded elements."""
+    """VIEW-BROWSE-1-02: default depth=1 lists graph source elements."""
     client.force_login(view_browser_user)
     response = client.get(_browse_url())
     body = response.content.decode()
     assert response.status_code == 200
     for name in (
-        "Payment API",
+        "Mobile App",
         "Notification Service",
         "Order Domain",
         "Fulfillment Worker",
-        "PostgreSQL",
-        "Mobile App",
     ):
         assert name in body
+    assert "Payment API" not in body
 
 
 @pytest.mark.django_db
 def test_table_columns_present(client, view_browser_user, view_browser_model):
     """VIEW-BROWSE-1-03: table shows stereotype, package, owner columns."""
     client.force_login(view_browser_user)
-    response = client.get(_browse_url())
+    response = client.get(_browse_url(), {"depth": "3"})
     body = response.content.decode()
     assert "Container" in body
     assert "Technology" in body
@@ -221,26 +220,26 @@ def test_view_browser_table_mode_hides_graph_panels(
 
 
 @pytest.mark.django_db
-def test_view_browser_navigator_package_tree(
+def test_view_browser_navigator_element_tree(
     client, view_browser_user, view_browser_explorer_model
 ):
-    """VIEW-BROWSE-1-17/18: navigator shows model name and package toggles (graph mode)."""
+    """VIEW-BROWSE-1-17/18: navigator shows traversal tree (graph mode)."""
     client.force_login(view_browser_user)
     response = client.get(GRAPH_URL)
     body = response.content.decode()
     assert 'data-testid="browser-model-name"' in body
     assert "Yggdrasil" in body
-    for slug in ("context", "application", "technology"):
-        assert f'data-testid="package-toggle-{slug}"' in body
+    assert 'data-testid="browser-element-tree"' in body
+    assert 'data-testid="nav-element-' in body or 'data-testid="nav-toggle-' in body
 
 
 @pytest.mark.django_db
 def test_view_browser_navigator_lists_elements(
     client, view_browser_user, view_browser_explorer_model
 ):
-    """VIEW-BROWSE-1-19: navigator lists Application package elements."""
+    """VIEW-BROWSE-1-19: navigator lists component elements at depth=1."""
     client.force_login(view_browser_user)
-    response = client.get(_browse_url())
+    response = client.get(_browse_url(), {"stereotype": "component", "view": "graph"})
     body = response.content.decode()
     for name in ("auth", "graph", "munin", "web"):
         assert name in body
@@ -271,7 +270,8 @@ def test_view_browse_log_story_happy(
     assert "user_pk=" in messages
     assert "element_count=" in messages
     assert "build_view_browse_context" in messages
-    assert "package_count=" in messages
+    assert "depth=" in messages
+    assert "tree_root_count=" in messages
     assert "ViewBrowseGraphJsonView.get" in messages
     assert "nodes=" in messages
     assert "edges=" in messages
@@ -499,3 +499,88 @@ def test_view_browse_canonical_log_story_reject(client, view_browser_user, caplo
             "reject": ["model not found"],
         },
     )
+
+
+# -- W13: depth traversal (scenarios 55-60) --
+
+
+@pytest.mark.django_db
+def test_depth_slider_renders_graph_mode(client, view_browser_user, view_browser_explorer_model):
+    """VIEW-BROWSE-1-55: depth slider visible in graph mode."""
+    client.force_login(view_browser_user)
+    response = client.get(GRAPH_URL)
+    body = response.content.decode()
+    assert 'data-testid="browser-depth-slider"' in body
+    assert 'data-testid="browser-depth-value"' in body
+
+
+@pytest.mark.django_db
+def test_depth_1_hides_neighbors_in_navigator(
+    client, view_browser_user, view_browser_explorer_model
+):
+    """VIEW-BROWSE-1-18: component depth=1 hides Redis."""
+    client.force_login(view_browser_user)
+    response = client.get(
+        _browse_url(),
+        {"view": "graph", "stereotype": "component", "depth": "1"},
+    )
+    body = response.content.decode()
+    assert 'data-testid="nav-element-redis"' not in body
+    assert "Redis" not in body or 'data-testid="nav-element-redis"' not in body
+
+
+@pytest.mark.django_db
+def test_depth_3_shows_redis_in_navigator(client, view_browser_user, view_browser_explorer_model):
+    """VIEW-BROWSE-1-19b: component depth=3 shows Redis in navigator."""
+    client.force_login(view_browser_user)
+    response = client.get(
+        _browse_url(),
+        {"view": "graph", "stereotype": "component", "depth": "3"},
+    )
+    body = response.content.decode()
+    assert 'data-testid="nav-element-redis"' in body
+
+
+@pytest.mark.django_db
+def test_graph_json_respects_depth(client, view_browser_user, view_browser_explorer_model):
+    """VIEW-BROWSE-1-56: graph JSON node set respects depth param."""
+    client.force_login(view_browser_user)
+    shallow = client.get(
+        _browse_graph_url(),
+        {"stereotype": "component", "depth": "1"},
+    )
+    deep = client.get(
+        _browse_graph_url(),
+        {"stereotype": "component", "depth": "3"},
+    )
+    shallow_count = len(json.loads(shallow.content)["elements"])
+    deep_count = len(json.loads(deep.content)["elements"])
+    assert deep_count > shallow_count
+
+
+@pytest.mark.django_db
+def test_table_respects_depth(client, view_browser_user, view_browser_model):
+    """VIEW-BROWSE-1-58: table row count respects depth param."""
+    client.force_login(view_browser_user)
+    shallow = client.get(_browse_url(), {"depth": "1"})
+    deep = client.get(_browse_url(), {"depth": "3"})
+    shallow_body = shallow.content.decode()
+    deep_body = deep.content.decode()
+    assert shallow_body.count('data-testid="view-element-') < deep_body.count(
+        'data-testid="view-element-'
+    )
+
+
+@pytest.mark.django_db
+def test_view_browse_depth_log_story_happy(
+    client, view_browser_user, view_browser_explorer_model, caplog
+):
+    """W13: depth beats in context build and graph JSON."""
+    caplog.set_level(logging.INFO)
+    client.force_login(view_browser_user)
+    client.get(_browse_url(), {"depth": "2", "view": "graph", "stereotype": "component"})
+    client.get(_browse_graph_url(), {"depth": "2", "stereotype": "component"})
+    messages = " ".join(record.message for record in caplog.records)
+    assert "depth=2" in messages
+    assert "ViewBrowseGraphJsonView.get" in messages
+    assert "nodes=" in messages

@@ -47,4 +47,4 @@ Model switcher in the left navigator; canonical URLs `/models/{slug}/views/…`.
 
 ## Change request (BPE-08 closed, approved 2026-08-17)
 
-Depth traversal: filter roots + `?depth=N` BFS subgraph; canvas depth slider; navigator traversal tree. Specs: [`VIEW-BROWSE-1_DEPTH_TRAVERSAL_CHANGE_RECONCILIATION.md`](VIEW-BROWSE-1_DEPTH_TRAVERSAL_CHANGE_RECONCILIATION.md). Plan: [`BPE-W13-depth-traversal.md`](BPE-W13-depth-traversal.md). **W13 in progress** — [#93](https://github.com/FeatureFactory-io/yggdrasil/issues/93).
+Depth traversal: filter roots + `?depth=N` BFS subgraph; canvas depth slider; navigator traversal tree. Specs: [`VIEW-BROWSE-1_DEPTH_TRAVERSAL_CHANGE_RECONCILIATION.md`](VIEW-BROWSE-1_DEPTH_TRAVERSAL_CHANGE_RECONCILIATION.md). Plan: [`BPE-W13-depth-traversal.md`](BPE-W13-depth-traversal.md). **W13 shipped** — [#93](https://github.com/FeatureFactory-io/yggdrasil/issues/93).

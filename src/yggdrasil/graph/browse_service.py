@@ -8,6 +8,7 @@ logic here (SAO §18.2 Case A Service Bridge).
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -23,6 +24,8 @@ logger = logging.getLogger("yggdrasil.graph.browse")
 MAX_LIMIT = 200
 DEFAULT_MODEL_SLUG = "yggdrasil"
 MODEL_COOKIE_NAME = "yggdrasil_model"
+MAX_DEPTH = 20
+DEFAULT_DEPTH = 1
 
 
 @dataclass(frozen=True)
@@ -44,6 +47,18 @@ class BrowseResult:
     limit: int
     offset: int
     as_of: str | None = None
+
+
+@dataclass(frozen=True)
+class DepthSubgraph:
+    """Depth-scoped subgraph for View Browser and MCP traverse."""
+
+    node_summaries: list[dict[str, Any]]
+    cytoscape_elements: list[dict[str, Any]]
+    cytoscape_edges: list[dict[str, Any]]
+    max_depth: int
+    parent_map: dict[int, int | None]
+    root_ids: frozenset[int]
 
 
 def list_readable_models(user: AbstractBaseUser) -> QuerySet[YggdrasilModel]:
@@ -280,35 +295,179 @@ def list_filter_options(*, model_slug: str) -> dict[str, list[dict[str, str]]]:
     return {"packages": packages, "stereotypes": stereotypes, "health": health}
 
 
-def subgraph_for_elements(
+def _has_narrowing_filter(filters: BrowseFilters) -> bool:
+    """Return True when any element-narrowing browse filter is active."""
+    return bool(filters.stereotype or filters.package or filters.health)
+
+
+def resolve_root_element_ids(ymodel: YggdrasilModel, filters: BrowseFilters) -> set[int]:
+    """
+    Resolve BFS root element PKs from browse filters.
+
+    When no element-narrowing filter is active, roots are graph sources
+    (nodes with zero incoming edges).
+
+    :param ymodel: Target model instance.
+    :param filters: Active browse filters.
+    :return: Set of root element primary keys.
+    """
+    logger.info(
+        "browse_service.resolve_root_element_ids | entry | model_slug=%s filters=%s",
+        ymodel.slug,
+        filters,
+    )
+    if _has_narrowing_filter(filters):
+        root_ids = set(_filtered_queryset(ymodel, filters).values_list("pk", flat=True))
+    else:
+        incoming_targets = set(
+            Relationship.objects.filter(model=ymodel).values_list("target_id", flat=True)
+        )
+        root_ids = set(
+            Element.objects.filter(model=ymodel)
+            .exclude(pk__in=incoming_targets)
+            .values_list("pk", flat=True)
+        )
+        logger.info(
+            "browse_service.resolve_root_element_ids | branch | reason=graph_sources root_count=%s",
+            len(root_ids),
+        )
+    logger.info(
+        "browse_service.resolve_root_element_ids | exit | model_slug=%s root_count=%s",
+        ymodel.slug,
+        len(root_ids),
+    )
+    return root_ids
+
+
+def _outgoing_adjacency(ymodel: YggdrasilModel) -> dict[int, list[int]]:
+    """Build source_id -> [target_id, ...] adjacency for a model."""
+    adjacency: dict[int, list[int]] = defaultdict(list)
+    for source_id, target_id in Relationship.objects.filter(model=ymodel).values_list(
+        "source_id", "target_id"
+    ):
+        adjacency[source_id].append(target_id)
+    return adjacency
+
+
+def _incoming_adjacency(ymodel: YggdrasilModel) -> dict[int, list[int]]:
+    """Build target_id -> [source_id, ...] adjacency for a model."""
+    adjacency: dict[int, list[int]] = defaultdict(list)
+    for source_id, target_id in Relationship.objects.filter(model=ymodel).values_list(
+        "source_id", "target_id"
+    ):
+        adjacency[target_id].append(source_id)
+    return adjacency
+
+
+def _bfs_expand(
+    root_ids: set[int],
+    adjacency: dict[int, list[int]],
+    depth: int,
+) -> tuple[set[int], dict[int, int | None]]:
+    """
+    Expand ``depth - 1`` hops along adjacency from ``root_ids``.
+
+    :param root_ids: Starting element PKs.
+    :param adjacency: Directed adjacency list.
+    :param depth: Level count (1 = roots only).
+    :return: Visited PKs and parent map (root -> None).
+    """
+    visited = set(root_ids)
+    parent_map: dict[int, int | None] = dict.fromkeys(root_ids, None)
+    frontier = set(root_ids)
+    for _ in range(max(depth - 1, 0)):
+        if not frontier:
+            break
+        next_frontier: set[int] = set()
+        for node_id in frontier:
+            for neighbor_id in adjacency.get(node_id, []):
+                if neighbor_id not in visited:
+                    visited.add(neighbor_id)
+                    parent_map[neighbor_id] = node_id
+                    next_frontier.add(neighbor_id)
+        frontier = next_frontier
+    return visited, parent_map
+
+
+def compute_max_depth(ymodel: YggdrasilModel, root_ids: set[int]) -> int:
+    """
+    Compute longest reachable outgoing hop depth from roots (capped at ``MAX_DEPTH``).
+
+    :param ymodel: Target model instance.
+    :param root_ids: BFS root element PKs.
+    :return: Maximum useful depth level (at least 1).
+    """
+    if not root_ids:
+        return 1
+    adjacency = _outgoing_adjacency(ymodel)
+    depth = 1
+    frontier = set(root_ids)
+    visited = set(root_ids)
+    while frontier and depth < MAX_DEPTH:
+        next_frontier: set[int] = set()
+        for node_id in frontier:
+            for neighbor_id in adjacency.get(node_id, []):
+                if neighbor_id not in visited:
+                    visited.add(neighbor_id)
+                    next_frontier.add(neighbor_id)
+        if not next_frontier:
+            break
+        depth += 1
+        frontier = next_frontier
+    capped = depth >= MAX_DEPTH
+    logger.info(
+        "browse_service.compute_max_depth | exit | max_depth=%s capped=%s",
+        depth,
+        capped,
+    )
+    return depth
+
+
+def subgraph_from_roots(
     *,
     model_slug: str,
     stereotype: str | None = None,
     package: str | None = None,
     health: str | None = None,
-    element_ids: list[int] | None = None,
+    depth: int = DEFAULT_DEPTH,
     user_id: int | None = None,
-) -> dict[str, list[dict[str, Any]]]:
+) -> DepthSubgraph:
     """
-    Build a Cytoscape-compatible subgraph for filtered elements.
+    Build a depth-scoped subgraph from filter roots via outgoing BFS.
 
     :param model_slug: Model slug. Example: ``"yggdrasil"``
-    :param stereotype: Optional stereotype filter.
-    :param package: Optional package filter.
-    :param health: Optional health filter.
-    :param element_ids: Restrict to these PKs when set[Any].
+    :param stereotype: Optional stereotype filter for roots.
+    :param package: Optional package filter for roots.
+    :param health: Optional health filter for roots.
+    :param depth: Level count (1 = roots only). Example: ``2``
     :param user_id: Authenticated user PK for audit logs.
-    :return: ``{"elements": [node data...], "edges": [edge data...]}``
-    :raises ValueError: If model not found.
+    :return: ``DepthSubgraph`` with summaries, cytoscape payload, and tree metadata.
+    :raises ValueError: If model not found or depth invalid.
     """
+    if depth < 1:
+        logger.info(
+            "browse_service.subgraph_from_roots | error | depth=%s reason=invalid",
+            depth,
+        )
+        msg = f"depth must be >= 1, got {depth}"
+        raise ValueError(msg)
     filters = BrowseFilters(stereotype=stereotype, package=package, health=health)
+    logger.info(
+        "browse_service.subgraph_from_roots | entry | model_slug=%s depth=%s direction=outgoing user_id=%s",
+        model_slug,
+        depth,
+        user_id,
+    )
     ymodel = resolve_model(model_slug)
-    qs = _filtered_queryset(ymodel, filters)
-    if element_ids is not None:
-        qs = qs.filter(pk__in=element_ids)
-    elements = list(qs.select_related("stereotype", "package"))
+    root_ids = resolve_root_element_ids(ymodel, filters)
+    adjacency = _outgoing_adjacency(ymodel)
+    visited, parent_map = _bfs_expand(root_ids, adjacency, depth)
+    elements = list(
+        Element.objects.filter(model=ymodel, pk__in=visited).select_related("stereotype", "package")
+    )
     id_set = {el.pk for el in elements}
-    nodes = [
+    node_summaries = [element_summary(el) for el in sorted(elements, key=lambda e: e.name)]
+    cytoscape_elements = [
         {
             "data": {
                 "id": str(el.pk),
@@ -318,8 +477,10 @@ def subgraph_for_elements(
         }
         for el in elements
     ]
-    rels = Relationship.objects.filter(model=ymodel, source_id__in=id_set, target_id__in=id_set)
-    edges = [
+    rels = Relationship.objects.filter(
+        model=ymodel, source_id__in=id_set, target_id__in=id_set
+    ).select_related("stereotype")
+    cytoscape_edges = [
         {
             "data": {
                 "id": str(rel.pk),
@@ -328,16 +489,188 @@ def subgraph_for_elements(
                 "label": rel.stereotype.slug if rel.stereotype_id else "rel",
             }
         }
-        for rel in rels.select_related("stereotype")
+        for rel in rels
     ]
+    max_depth = compute_max_depth(ymodel, root_ids)
+    logger.info(
+        "browse_service.subgraph_from_roots | processing | node_count=%s edge_count=%s",
+        len(node_summaries),
+        len(cytoscape_edges),
+    )
+    logger.info(
+        "browse_service.subgraph_from_roots | exit | model_slug=%s max_depth=%s user_id=%s",
+        model_slug,
+        max_depth,
+        user_id,
+    )
+    return DepthSubgraph(
+        node_summaries=node_summaries,
+        cytoscape_elements=cytoscape_elements,
+        cytoscape_edges=cytoscape_edges,
+        max_depth=max_depth,
+        parent_map=parent_map,
+        root_ids=frozenset(root_ids),
+    )
+
+
+def bfs_from_element(
+    element: Element,
+    *,
+    direction: str = "outgoing",
+    depth: int = DEFAULT_DEPTH,
+) -> DepthSubgraph:
+    """
+    Multi-hop BFS from a single element (MCP ``traverse``).
+
+    Uses the same level semantics as ``subgraph_from_roots``: depth=1 is the
+    source only; depth=2 adds immediate neighbors in ``direction``.
+
+    :param element: Source element ORM instance.
+    :param direction: ``outgoing``, ``incoming``, or ``both``.
+    :param depth: Level count including the source. Example: ``2``
+    :return: ``DepthSubgraph`` scoped to the walk.
+    :raises ValueError: If depth or direction is invalid.
+    """
+    if depth < 1:
+        msg = f"depth must be >= 1, got {depth}"
+        raise ValueError(msg)
+    if direction not in {"outgoing", "incoming", "both"}:
+        msg = f"direction must be outgoing, incoming, or both, got {direction!r}"
+        raise ValueError(msg)
+    ymodel = element.model
+    root_ids = {element.pk}
+    if direction == "outgoing":
+        adjacency = _outgoing_adjacency(ymodel)
+    elif direction == "incoming":
+        adjacency = _incoming_adjacency(ymodel)
+    else:
+        outgoing = _outgoing_adjacency(ymodel)
+        incoming = _incoming_adjacency(ymodel)
+        merged: dict[int, list[int]] = defaultdict(list)
+        for node_id, neighbors in outgoing.items():
+            merged[node_id].extend(neighbors)
+        for node_id, neighbors in incoming.items():
+            merged[node_id].extend(neighbors)
+        adjacency = merged
+    visited, parent_map = _bfs_expand(root_ids, adjacency, depth)
+    elements = list(
+        Element.objects.filter(model=ymodel, pk__in=visited).select_related("stereotype", "package")
+    )
+    id_set = {el.pk for el in elements}
+    node_summaries = [element_summary(el) for el in sorted(elements, key=lambda e: e.name)]
+    cytoscape_elements = [
+        {
+            "data": {
+                "id": str(el.pk),
+                "label": el.name,
+                "stereotype": el.stereotype.name if el.stereotype_id else "",
+            }
+        }
+        for el in elements
+    ]
+    rels = Relationship.objects.filter(
+        model=ymodel, source_id__in=id_set, target_id__in=id_set
+    ).select_related("stereotype")
+    cytoscape_edges = [
+        {
+            "data": {
+                "id": str(rel.pk),
+                "source": str(rel.source_id),
+                "target": str(rel.target_id),
+                "label": rel.stereotype.slug if rel.stereotype_id else "rel",
+            }
+        }
+        for rel in rels
+    ]
+    max_depth = compute_max_depth(ymodel, root_ids)
+    return DepthSubgraph(
+        node_summaries=node_summaries,
+        cytoscape_elements=cytoscape_elements,
+        cytoscape_edges=cytoscape_edges,
+        max_depth=max_depth,
+        parent_map=parent_map,
+        root_ids=frozenset(root_ids),
+    )
+
+
+def subgraph_for_elements(
+    *,
+    model_slug: str,
+    stereotype: str | None = None,
+    package: str | None = None,
+    health: str | None = None,
+    element_ids: list[int] | None = None,
+    depth: int = DEFAULT_DEPTH,
+    user_id: int | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """
+    Build a Cytoscape-compatible subgraph for filtered elements.
+
+    :param model_slug: Model slug. Example: ``"yggdrasil"``
+    :param stereotype: Optional stereotype filter.
+    :param package: Optional package filter.
+    :param health: Optional health filter.
+    :param element_ids: Restrict to these PKs when set (legacy; prefer depth BFS).
+    :param depth: Outgoing BFS level count from filter roots. Example: ``1``
+    :param user_id: Authenticated user PK for audit logs.
+    :return: ``{"elements": [node data...], "edges": [edge data...]}``
+    :raises ValueError: If model not found.
+    """
+    if element_ids is not None:
+        ymodel = resolve_model(model_slug)
+        elements = list(
+            Element.objects.filter(model=ymodel, pk__in=element_ids).select_related(
+                "stereotype", "package"
+            )
+        )
+        id_set = {el.pk for el in elements}
+        nodes = [
+            {
+                "data": {
+                    "id": str(el.pk),
+                    "label": el.name,
+                    "stereotype": el.stereotype.name if el.stereotype_id else "",
+                }
+            }
+            for el in elements
+        ]
+        rels = Relationship.objects.filter(model=ymodel, source_id__in=id_set, target_id__in=id_set)
+        edges = [
+            {
+                "data": {
+                    "id": str(rel.pk),
+                    "source": str(rel.source_id),
+                    "target": str(rel.target_id),
+                    "label": rel.stereotype.slug if rel.stereotype_id else "rel",
+                }
+            }
+            for rel in rels.select_related("stereotype")
+        ]
+        logger.info(
+            "browse_service.subgraph_for_elements | exit model_slug=%s node_count=%s edge_count=%s user_id=%s",
+            model_slug,
+            len(nodes),
+            len(edges),
+            user_id,
+        )
+        return {"elements": nodes, "edges": edges}
+
+    scoped = subgraph_from_roots(
+        model_slug=model_slug,
+        stereotype=stereotype,
+        package=package,
+        health=health,
+        depth=depth,
+        user_id=user_id,
+    )
     logger.info(
         "browse_service.subgraph_for_elements | exit model_slug=%s node_count=%s edge_count=%s user_id=%s",
         model_slug,
-        len(nodes),
-        len(edges),
+        len(scoped.cytoscape_elements),
+        len(scoped.cytoscape_edges),
         user_id,
     )
-    return {"elements": nodes, "edges": edges}
+    return {"elements": scoped.cytoscape_elements, "edges": scoped.cytoscape_edges}
 
 
 def get_element_for_inspector(element_id: int, *, user_id: int | None = None) -> dict[str, Any]:

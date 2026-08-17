@@ -11,6 +11,7 @@ from tests.fixtures.factories.model_factories import YggdrasilModelFactory
 from tests.support.log_story import assert_log_story
 
 from yggdrasil.graph import browse_service
+from yggdrasil.graph.models import Element
 from yggdrasil.mcp.tools.query import list_elements as mcp_list_elements
 
 
@@ -139,9 +140,216 @@ def test_list_elements_filter_stereotype(view_browser_model) -> None:
 @pytest.mark.django_db
 def test_subgraph_includes_edges_among_nodes(view_browser_model) -> None:
     """F0: subgraph JSON includes nodes and edges for filtered set."""
-    payload = browse_service.subgraph_for_elements(model_slug="yggdrasil", package="technology")
+    payload = browse_service.subgraph_for_elements(
+        model_slug="yggdrasil", package="technology", depth=2
+    )
     assert len(payload["elements"]) >= 3
     assert len(payload["edges"]) >= 1
+
+
+# -- W13: depth traversal BFS --
+
+
+@pytest.mark.django_db
+def test_resolve_roots_from_stereotype_filter(view_browser_explorer_model) -> None:
+    """W13: component filter roots exclude Redis."""
+    ymodel = browse_service.resolve_model("yggdrasil")
+    filters = browse_service.BrowseFilters(stereotype="component")
+    root_ids = browse_service.resolve_root_element_ids(ymodel, filters)
+    slugs = set(Element.objects.filter(pk__in=root_ids).values_list("slug", flat=True))
+    assert {"auth", "munin", "graph"}.issubset(slugs)
+    assert "redis" not in slugs
+
+
+@pytest.mark.django_db
+def test_resolve_roots_graph_sources_when_unfiltered(view_browser_model) -> None:
+    """W13: unfiltered roots are graph sources, not all six payment elements."""
+    ymodel = browse_service.resolve_model("yggdrasil")
+    root_ids = browse_service.resolve_root_element_ids(ymodel, browse_service.BrowseFilters())
+    assert len(root_ids) == 4
+    slugs = set(Element.objects.filter(pk__in=root_ids).values_list("slug", flat=True))
+    assert slugs == {
+        "mobile-app",
+        "notification-service",
+        "order-domain",
+        "fulfillment-worker",
+    }
+
+
+@pytest.mark.django_db
+def test_bfs_depth_1_roots_only(view_browser_explorer_model) -> None:
+    """W13: depth=1 component filter excludes Backend and Redis."""
+    scoped = browse_service.subgraph_from_roots(
+        model_slug="yggdrasil", stereotype="component", depth=1
+    )
+    slugs = {row["slug"] for row in scoped.node_summaries}
+    assert "auth" in slugs
+    assert "backend-web-celery" not in slugs
+    assert "redis" not in slugs
+
+
+@pytest.mark.django_db
+def test_bfs_depth_2_one_hop(view_browser_explorer_model) -> None:
+    """W13: depth=2 reaches llm/Backend but not Redis."""
+    scoped = browse_service.subgraph_from_roots(
+        model_slug="yggdrasil", stereotype="component", depth=2
+    )
+    slugs = {row["slug"] for row in scoped.node_summaries}
+    assert "llm" in slugs or "backend-web-celery" in slugs
+    assert "redis" not in slugs
+
+
+@pytest.mark.django_db
+def test_bfs_depth_3_two_hops(view_browser_explorer_model) -> None:
+    """W13: depth=3 from component roots reaches Redis."""
+    scoped = browse_service.subgraph_from_roots(
+        model_slug="yggdrasil", stereotype="component", depth=3
+    )
+    slugs = {row["slug"] for row in scoped.node_summaries}
+    assert "redis" in slugs
+
+
+@pytest.mark.django_db
+def test_bfs_cycle_visited_set(view_browser_user) -> None:
+    """W13: cycle does not cause infinite BFS expansion."""
+    from tests.fixtures.factories.model_factories import YggdrasilModelFactory
+
+    from yggdrasil.changeset.models import ChangeSetItem
+    from yggdrasil.graph.models import ensure_c4_metamodel
+    from yggdrasil.mcp.server import set_current_user_id, set_token_scope
+    from yggdrasil.mcp.tools.propose import propose_changeset
+
+    set_current_user_id(view_browser_user.pk)
+    set_token_scope("read-write")
+    mm = ensure_c4_metamodel()
+    model = YggdrasilModelFactory(name="Cycle", slug="cycle", metamodel=mm)
+    ops = [
+        {
+            "op_type": ChangeSetItem.OP_ADD_ELEMENT,
+            "detail": {"name": name, "stereotype_slug": "component", "package_slug": "application"},
+            "confidence": 0.9,
+        }
+        for name in ("A", "B", "C")
+    ]
+    ops.extend(
+        [
+            {
+                "op_type": ChangeSetItem.OP_ADD_RELATIONSHIP,
+                "detail": {
+                    "source_name": src,
+                    "target_name": tgt,
+                    "stereotype_slug": "depends_on",
+                },
+                "confidence": 0.9,
+            }
+            for src, tgt in [("A", "B"), ("B", "C"), ("C", "A")]
+        ]
+    )
+    propose_changeset(model="cycle", operations=ops, run_id="run-cycle-fixture")
+    from yggdrasil.graph.models import Element
+
+    element_a = Element.objects.get(model=model, name="A")
+    scoped = browse_service.bfs_from_element(element_a, direction="outgoing", depth=10)
+    assert len(scoped.node_summaries) == 3
+
+
+@pytest.mark.django_db
+def test_subgraph_edges_both_endpoints_in_scope(view_browser_explorer_model) -> None:
+    """W13: edges omitted when target is outside depth scope."""
+    scoped = browse_service.subgraph_from_roots(
+        model_slug="yggdrasil", stereotype="component", depth=1
+    )
+    id_set = {row["id"] for row in scoped.node_summaries}
+    for edge in scoped.cytoscape_edges:
+        assert int(edge["data"]["source"]) in id_set
+        assert int(edge["data"]["target"]) in id_set
+
+
+@pytest.mark.django_db
+def test_compute_max_depth_capped_at_20(view_browser_user, monkeypatch, caplog) -> None:
+    """W13: compute_max_depth respects MAX_DEPTH cap."""
+    from tests.fixtures.factories.model_factories import YggdrasilModelFactory
+
+    from yggdrasil.changeset.models import ChangeSetItem
+    from yggdrasil.graph.models import Element, ensure_c4_metamodel
+    from yggdrasil.mcp.server import set_current_user_id, set_token_scope
+    from yggdrasil.mcp.tools.propose import propose_changeset
+
+    monkeypatch.setattr(browse_service, "MAX_DEPTH", 3)
+    set_current_user_id(view_browser_user.pk)
+    set_token_scope("read-write")
+    mm = ensure_c4_metamodel()
+    model = YggdrasilModelFactory(name="Chain", slug="chain", metamodel=mm)
+    ops = [
+        {
+            "op_type": ChangeSetItem.OP_ADD_ELEMENT,
+            "detail": {
+                "name": f"N{i}",
+                "stereotype_slug": "component",
+                "package_slug": "application",
+            },
+            "confidence": 0.9,
+        }
+        for i in range(5)
+    ]
+    ops.extend(
+        [
+            {
+                "op_type": ChangeSetItem.OP_ADD_RELATIONSHIP,
+                "detail": {
+                    "source_name": f"N{i}",
+                    "target_name": f"N{i + 1}",
+                    "stereotype_slug": "depends_on",
+                },
+                "confidence": 0.9,
+            }
+            for i in range(4)
+        ]
+    )
+    propose_changeset(model="chain", operations=ops, run_id="run-chain-fixture")
+    root = Element.objects.get(model=model, name="N0")
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
+        result = browse_service.compute_max_depth(model, {root.pk})
+    assert result == 3
+    assert any("capped=" in record.message for record in caplog.records)
+
+
+@pytest.mark.django_db
+def test_bfs_subgraph_log_story_happy(view_browser_model, caplog) -> None:
+    """W13: BFS subgraph emits entry, branch, and exit beats."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
+        browse_service.subgraph_from_roots(model_slug="yggdrasil", depth=1)
+    assert_log_story(
+        caplog,
+        where="browse_service.subgraph_from_roots",
+        beats={
+            "entry": ["depth=", "direction=outgoing"],
+            "processing": ["node_count=", "edge_count="],
+            "exit": ["max_depth="],
+        },
+    )
+    assert_log_story(
+        caplog,
+        where="browse_service.resolve_root_element_ids",
+        beats={
+            "branch": ["reason=graph_sources", "root_count="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_bfs_subgraph_log_story_reject(view_browser_model, caplog) -> None:
+    """W13: invalid depth logs error beat."""
+    with (
+        caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"),
+        pytest.raises(ValueError, match="depth must be >= 1"),
+    ):
+        browse_service.subgraph_from_roots(model_slug="yggdrasil", depth=0)
+    assert_log_story(
+        caplog,
+        where="browse_service.subgraph_from_roots",
+        beats={"error": ["depth=0"]},
+    )
 
 
 @pytest.mark.django_db

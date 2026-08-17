@@ -34,3 +34,16 @@ Categories: `workflow-drift` | `tech-blocker` | `mockup-delta` | `decision`
 | 2026-08-17 | workflow-drift | Existing pytest/AT expected 200 on `/views/` after W12 alias | Default to canonical `/models/{slug}/views/…`; reserve alias assertions for scenarios 49/53 |
 | 2026-08-17 | tech-blocker | `make test` collection failed on unregistered `@pytest.mark.e2e_self` | Register new markers in `pyproject.toml` `[tool.pytest.ini_options].markers` before use |
 | 2026-08-17 | decision | W12 AT + E2E both cover scenario 51; separate step modules | AT: `docs/features/steps/`; E2E: `tests/e2e/steps/` + dedicated `.feature` under `tests/e2e/` |
+
+---
+
+## Documentation & PIP triage (2026-08-17)
+
+| Lesson | Yggdrasil docs | Edda PIP? |
+|--------|----------------|-----------|
+| E2E Django `sessionid` injection | SAO, test-architecture §6 | **Yes** — generic TFK skill |
+| AT Background idempotency | SAO, test-architecture §6 | **Yes** — generic BPE/rule |
+| Mode-scoped visibility | IA §6.2.1, test-architecture §6 | **No** — product IA; Edda gets abstract “confirm rendering context” only if needed |
+| RBAC factory + `owner_group` | tests/fixtures/CATALOG | **No** — project RBAC shape; one line in Skill 48 sufficient |
+| Pytest marker registration | — | **No** — trivial pyproject hygiene |
+| Canonical URL migration | — | **No** — one-time CR fallout |

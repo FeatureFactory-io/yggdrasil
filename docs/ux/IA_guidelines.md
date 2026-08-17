@@ -250,7 +250,7 @@ The navbar is `position: fixed; top: 0`. Add `padding-top: calc(56px + 1px)` to 
 | Pattern | Used by | Bootstrap structure |
 |---|---|---|
 | **Full-width table** | LIST+FIND screens | `table-responsive` inside `col-12` — table always fills 100% of its container |
-| **View Browser** | `VIEW-BROWSE-1` | Filter panel (top, collapsible) + results area (`col-12` → `col-lg-9` when drawer open) + inline detail drawer (`col-lg-3`, hidden by default) |
+| **View Browser** | `VIEW-BROWSE-1` | Three-panel explorer: left navigator (Model switcher + package tree) + centre canvas (filters + table/graph) + right inspector |
 | **Single-column form** | CREATE / EDIT screens | `col-md-8 col-lg-6`, centred in `row justify-content-center` |
 | **Detail 2-pane** | VIEW screens | `col-lg-8` (properties) + `col-lg-4` (ego-graph + state panel) |
 | **Chat 2-pane** | `CHAT-MUNIN-1` | `col-lg-8` (thread) + `col-lg-4` (context panel), fixed height with scroll |
@@ -290,7 +290,7 @@ The navbar is `position: fixed; top: 0`. Add `padding-top: calc(56px + 1px)` to 
 
 | Nav item | Route | Screen | Icon |
 |---|---|---|---|
-| View Browser | `/views/` | `VIEW-BROWSE-1` | `fa-solid fa-layer-group` |
+| View Browser | `/views/` (alias → `/models/{slug}/views/`) | `VIEW-BROWSE-1` | `fa-solid fa-layer-group` |
 | Elements | `/elements/` | `ELEMENT-LIST+FIND-1` | `fa-solid fa-circle-dot` |
 | Relationships | `/relationships/` | `RELATIONSHIP-LIST+FIND-1` | `fa-solid fa-link` |
 | ChangeSets | `/changesets/` | `CHANGESET-LIST+FIND-1` | `fa-solid fa-code-branch` |
@@ -314,7 +314,7 @@ Example:
 
 Tooltips are initialised globally in `base.html` via `bootstrap.Tooltip` on `DOMContentLoaded`. Placement defaults to `top` — no override needed on the navbar.
 
-**Default landing after login**: `VIEW-BROWSE-1` (View Browser).
+**Default landing after login**: `VIEW-BROWSE-1` (View Browser). `GET /views/` **302**s to `/models/{default-slug}/views/` (default Model: sole visible Model, else last-used cookie `yggdrasil_model`, else first by name).
 
 **Part II nav items** (not in MVP navbar, accessible via Settings/admin):
 
@@ -615,6 +615,7 @@ Standard across all entity list screens. Columns vary per entity; row actions ar
 
 | Screen | Copy | CTA |
 |---|---|---|
+| `VIEW-BROWSE-1` (zero Models) | No models yet — run `ratatosk bootstrap`. | — (CLI; switcher disabled) |
 | `ELEMENT-LIST+FIND-1` | No elements yet — run Ratatosk bootstrap or create manually. | Create Element |
 | `RELATIONSHIP-LIST+FIND-1` | No relationships yet. | Create Relationship |
 | `CHANGESET-LIST+FIND-1` | No pending ChangeSets. | — (no CTA) |
@@ -823,7 +824,49 @@ document.body.addEventListener("htmx:configRequest", (evt) => {
 });
 ```
 
-### 6.2 View Browser Filter Panel
+### 6.2 Model Switcher (View Browser navigator)
+
+The left-navigator header is a **dropdown**, not a static title. Current Model name stays visible (`browser-model-name`); the control is `browser-model-switcher`.
+
+```html
+<div class="dropdown mb-1">
+  <button class="yrg-nav-model-title dropdown-toggle border-0 bg-transparent p-0"
+          type="button"
+          data-bs-toggle="dropdown"
+          data-testid="browser-model-switcher"
+          aria-label="Switch model"
+          title="Enables you to switch which architecture Model the View Browser shows. Use it to move between landscapes without leaving the explorer.">
+    <i class="fa-solid fa-diagram-project me-1" aria-hidden="true"></i>
+    <span data-testid="browser-model-name">{model name}</span>
+  </button>
+  <ul class="dropdown-menu" data-testid="browser-model-menu">
+    <li>
+      <a class="dropdown-item active"
+         href="/models/{slug}/views/"
+         data-testid="browser-model-option-{slug}">{model name}</a>
+    </li>
+  </ul>
+</div>
+```
+
+Rules:
+
+- Options are Models the signed-in user may read (owner-group / RBAC). No “create model” item in MVP.
+- Selecting an option navigates to `/models/{slug}/views/` (filters reset).
+- Zero Models: show the empty-state copy; disable the dropdown.
+- Tooltip two-sentence pattern (§4.1) is required on the toggle.
+
+#### Mode-scoped controls (testability)
+
+Some interactive elements render only in one **view mode** (graph vs table, embed vs full page, collapsed vs expanded). When introducing a mode toggle:
+
+1. Document which modes expose each `data-testid` (feature file or `_implementation_notes.md` component map).
+2. Wrap mode-specific regions in a predictable CSS class (e.g. `yrg-graph-only`) so SSR/AT visibility checks stay deterministic.
+3. AT and E2E scenarios must open the URL/state that exposes the control under test. A missing `data-testid` in the wrong mode is a **spec/setup bug**, not a product defect.
+
+`VIEW-BROWSE-1` examples: model switcher, package traversal tree, and depth slider are **graph-mode only** (`?view=graph`); table mode shows results table without left-navigator chrome.
+
+### 6.3 View Browser Filter Panel
 
 The filter panel collapses to a single summary line when collapsed:
 
@@ -874,7 +917,40 @@ The filter panel collapses to a single summary line when collapsed:
 </div>
 ```
 
-### 6.3 Toast Notifications
+### 6.3.1 View Browser Depth Slider (graph mode)
+
+Controls how many **levels** of the relationship graph are in scope. Filters define **roots**; the slider sets `?depth=N` (outgoing BFS hops + 1).
+
+```html
+<div class="yrg-depth-control d-flex align-items-center gap-2"
+     data-testid="browser-depth-control">
+  <label for="depthSlider" class="form-label small mb-0 text-nowrap">
+    Show levels deep
+  </label>
+  <input type="range"
+         class="form-range flex-grow-1"
+         id="depthSlider"
+         min="1"
+         max="{max_depth}"
+         value="{current_depth}"
+         data-testid="browser-depth-slider"
+         aria-valuemin="1"
+         aria-valuemax="{max_depth}"
+         aria-valuenow="{current_depth}"
+         aria-label="Show levels deep">
+  <span class="badge bg-secondary text-nowrap"
+        data-testid="browser-depth-value">{current_depth} / {max_depth}</span>
+</div>
+```
+
+Rules:
+
+- Render in canvas toolbar when graph mode is active; hidden in table mode.
+- Changing the slider updates the URL (`depth=N`) and reloads navigator + graph JSON + table row set.
+- Max = min(longest hop from roots, 20).
+- Tooltip two-sentence pattern (§4.1): “Controls how many relationship levels appear from your filtered starting points. Increase to see dependencies further down the graph.”
+
+### 6.4 Toast Notifications
 
 ```html
 <div id="toast-container" class="toast-container position-fixed bottom-0 end-0 p-3"
@@ -907,7 +983,7 @@ The filter panel collapses to a single summary line when collapsed:
 </div>
 ```
 
-### 6.4 Confirmation Modals
+### 6.5 Confirmation Modals
 
 Used for destructive operations: Delete Element, Delete Relationship, Roll Back ChangeSet.
 
@@ -952,7 +1028,7 @@ Used for destructive operations: Delete Element, Delete Relationship, Roll Back 
 }
 ```
 
-### 6.5 Loading / Empty / Error States
+### 6.6 Loading / Empty / Error States
 
 Every list and data region must handle all three:
 
@@ -1218,7 +1294,7 @@ Grep-friendly: `grep -r "ELEMENT-LIST+FIND-1" .` finds every artefact for that s
 | `AUTH-LOGIN-1` | 0 | Login form | MVP |
 | `AUTH-TOKEN-1` | 0 | API token management | MVP |
 | `MUNIN-BRIEFING-1` | 1 | Post-run architectural briefing | MVP |
-| `VIEW-BROWSE-1` | 2 | View Browser — filter panel + table/graph results | MVP |
+| `VIEW-BROWSE-1` | 2 | View Browser — Model switcher + filter panel + table/graph results | MVP |
 | `EXPORT-BRIEFING-1` | 2 | Export modal (Mermaid / Markdown deck / JSON) | MVP |
 | `VIEW-HISTORY-1` | 2 | Model history timeline and A/B diff | MVP |
 | `ELEMENT-LIST+FIND-1` | 3 | Elements list & search | MVP |
@@ -1274,7 +1350,7 @@ The subtitle line (directly below the title) follows these conventions:
 | Screen | Subtitle pattern |
 |---|---|
 | LIST+FIND | `{N} elements · last synced {time}` |
-| VIEW-BROWSE-1 | `{N} results · model: {model name}` |
+| VIEW-BROWSE-1 | `{N} results · model: {model name}` (name is also the left-navigator switcher) |
 | CHANGESET-VIEW | `{N} operations · submitted {time} · mode: {Auto\|Manual}` |
 | MUNIN-BRIEFING-1 | `Run #{id} · {N} ops auto-applied · {M} queued` |
 
@@ -1367,7 +1443,7 @@ detailDrawer.style.display = 'none';
 
 Delete never gets a full page. It is always a Bootstrap modal triggered from a row action or the VIEW screen.
 
-Modal structure: see §6.4. The blast-radius panel is mandatory for Element deletion; optional for Relationship deletion.
+Modal structure: see §6.5. The blast-radius panel is mandatory for Element deletion; optional for Relationship deletion.
 
 After confirmation, Django returns `HX-Redirect` to the parent LIST+FIND URL with a success toast.
 

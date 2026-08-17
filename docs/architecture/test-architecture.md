@@ -112,7 +112,7 @@ When Background and a scenario both seed entities with stable natural keys (mode
 
 ### Mode-scoped visibility (`data-testid` assertions)
 
-Before asserting an element is visible, confirm which SSR mode renders it (e.g. graph vs table). Controls tagged `yrg-graph-only` are absent in table mode — AT/E2E URLs and setup must match the mode the scenario describes.
+Before asserting an element is visible, confirm which SSR mode renders it (e.g. graph vs table, embed vs full page). See `docs/ux/IA_guidelines.md` §6.2.1 for View Browser mode-scoped controls. Controls in a hidden mode are absent from the DOM — AT/E2E URLs and setup must match the mode the scenario describes.
 
 ### RBAC factory checks
 

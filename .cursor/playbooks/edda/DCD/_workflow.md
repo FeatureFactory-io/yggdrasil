@@ -1,11 +1,11 @@
 # Design & Deploy CICD
 
-**Playbook**: Edda v54.0 (Released)
+**Playbook**: Edda v66.0 (Released)
 **Workflow ID**: 13
 **Description**: Design and deploy CI/CD pipeline using GitHub Actions in the application monorepo. Create Helm chart with per-environment values, add container and deployment make targets, then wire them into GitHub Actions workflows for CI (test → build → push) and CD (deploy → smoke → approve → switch).
 **Phase Organization**: Uses phases
 **Total Activities**: 7
-**Export Date**: 2026-07-24 16:23 UTC
+**Export Date**: 2026-08-17 20:23 UTC
 
 ## Activities
 

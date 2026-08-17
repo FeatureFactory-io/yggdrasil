@@ -1,11 +1,11 @@
 # Build Feature
 
-**Playbook**: Edda v54.0 (Released)
+**Playbook**: Edda v66.0 (Released)
 **Workflow ID**: 15
 **Description**: Complete workflow for planning, implementing, and testing new pages/features. Covers backend (models, services, views), frontend (templates, HTMX), feature acceptance tests (Django test client), journey certification tests (Playwright), Definition of Done check, and feature finalization.
 **Phase Organization**: Uses phases
-**Total Activities**: 8
-**Export Date**: 2026-07-24 16:23 UTC
+**Total Activities**: 9
+**Export Date**: 2026-08-17 20:23 UTC
 
 ## Activities
 

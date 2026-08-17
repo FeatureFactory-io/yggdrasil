@@ -132,7 +132,7 @@ See **AWS CDK with Python** skill § EB Platform Settings Export.
 .PHONY: help synth deploy destroy status test provision
 
 help: ## Show help
-	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*?##/ { printf "  %-20s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*?##"} /^[a-zA-Z_-]+:.*?##/ { printf "  %-20s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
 synth: ## Synthesize CDK stacks
 	cdk synth

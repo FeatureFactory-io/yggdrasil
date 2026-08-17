@@ -1,11 +1,11 @@
 # Deploy Software Process
 
-**Playbook**: Edda v54.0 (Released)
+**Playbook**: Edda v66.0 (Released)
 **Workflow ID**: 10
 **Description**: Check prerequisite artifacts (ESM, DTA), choose target AI IDE, and generate configuration (CLAUDE.md / copilot-instructions.md / Windsurf/Cursor rules) so AI can consume docs/**, workflows, skills, and artifact templates to start building features.
 **Phase Organization**: Uses phases
 **Total Activities**: 6
-**Export Date**: 2026-07-24 16:23 UTC
+**Export Date**: 2026-08-17 20:23 UTC
 
 ## Activities
 

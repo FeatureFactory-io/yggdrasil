@@ -1,11 +1,11 @@
 # Design & Deploy Cloud Infra
 
-**Playbook**: Edda v54.0 (Released)
+**Playbook**: Edda v66.0 (Released)
 **Workflow ID**: 12
 **Description**: Design and deploy cloud infrastructure using AWS CDK with Python. Supports two deployment styles chosen in DCI-01: **Kubernetes/EKS** (separate infra repo, weighted Route53) or **Elastic Beanstalk** (monorepo or separate repo, EB CNAME swap). Establish Makefile targets for infra operations and GitHub Actions for CDK deploy. Blue/green switching is style-specific: Route53 weights (EKS) or EB swap-environment-cnames (EB).
 **Phase Organization**: Uses phases
 **Total Activities**: 7
-**Export Date**: 2026-07-24 16:23 UTC
+**Export Date**: 2026-08-17 20:23 UTC
 
 ## Activities
 

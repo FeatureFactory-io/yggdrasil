@@ -11,6 +11,8 @@ Write SAO.md
 
 ## Guidance
 
+**Position in workflow:** Terminal activity of Define Architecture (DTA) — order **20 of 20**. Run only after all prior DTA domain activities are complete (DTA-02 through DTA-17, and when applicable DTA-19 AI Agent Architecture and DTA-20 MCP Architecture).
+
 # Write SAO.md (System Architecture Overview)
 
 ## Objective

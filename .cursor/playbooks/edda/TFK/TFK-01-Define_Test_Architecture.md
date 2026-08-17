@@ -3,7 +3,7 @@
 **Activity ID**: 187
 **Order**: 1
 **Phase**: Inception
-**Dependencies**: Successor: Activity 188 (Bootstrap Test Harness)
+**Dependencies**: None
 
 ## Description
 

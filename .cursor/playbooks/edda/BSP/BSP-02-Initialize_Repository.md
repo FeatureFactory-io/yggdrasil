@@ -94,10 +94,10 @@ Adapt based on actual stack decisions in SAO.md.
 
 ## Quick Start
 
-\`\`\`bash
+```bash
 make provision   # Install prerequisites & dependencies
 make run         # Start development server
-\`\`\`
+```
 
 Then open http://localhost:8000 in your browser.
 

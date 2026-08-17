@@ -1,11 +1,11 @@
 # Estimate the Project
 
-**Playbook**: Edda v54.0 (Released)
+**Playbook**: Edda v66.0 (Released)
 **Workflow ID**: 11
 **Description**: Two-level estimation workflow for AI-assisted software development. Level 1 produces T-shirt-sized SWAG from BDD scenarios. Level 2 (Function Point decomposition) runs BPE-01 in estimation mode on each work package to produce a bottom-up artifact list with PERT triplets. Monte Carlo simulation produces P50/P80/P95 delivery forecasts. Sprint close loop rebaselines token estimates and calibrates $/FP rate after each iteration.
 **Phase Organization**: Uses phases
 **Total Activities**: 8
-**Export Date**: 2026-07-24 16:23 UTC
+**Export Date**: 2026-08-17 20:23 UTC
 
 ## Activities
 

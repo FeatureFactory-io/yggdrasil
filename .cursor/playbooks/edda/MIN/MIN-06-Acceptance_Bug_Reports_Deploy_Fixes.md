@@ -3,7 +3,7 @@
 **Activity ID**: 183
 **Order**: 6
 **Phase**: None
-**Dependencies**: None
+**Dependencies**: Predecessor: Activity 182 (Close Iteration)
 
 ## Description
 
@@ -11,8 +11,10 @@ Acceptance, Bug Reports & Deploy Fixes
 
 ## Guidance
 
+**Sequencing (authoritative):** Predecessor = Close Iteration (Activity 182 / MIN-05).
+
 ## Purpose
-User acceptance loop: demo the delivered iteration to the user guided by feature files, collect bugs, file them, fix them, and deploy a patch release.
+User acceptance loop: demo the delivered iteration to the user guided by feature files, collect bugs, file them, fix blockers via Fix Bug (BPE-09), and deploy a patch release.
 
 ## Steps
 
@@ -81,24 +83,19 @@ Link each filed issue to the current milestone:
 gh issue edit {bug_issue_number} --milestone {N}
 ```
 
-### Step 6: Triage and Fix
-For each bug:
+### Step 6: Triage and Route to Fix Bug
+For each filed Bug Report:
 
 **Blocker** (prevents core feature from working):
-- Fix immediately in the iteration branch
-- Re-run relevant BPE-04/BPE-05 checkpoints for the affected scenario
-- Commit:
-```bash
-git add -A
-git commit -m "fix({scope}): {bug title}"
-```
+- Invoke **Fix Bug** (Build Feature Activity — BPE-09) with the Bug Report as input
+- Complete all BPE-09 steps (test gap → red test → fix → green → full regression → user gate on integrate/PR/hotfix)
 
 **Major / Minor** (degraded experience, not blocking):
-- File the issue (Step 5) — defer to next iteration
+- Issue already filed in Step 5 — defer to next iteration
 - Do not hold the release
 
 ### Step 7: Deploy Patch Release
-After all blockers are fixed:
+After all blockers are fixed via BPE-09:
 ```bash
 gh release create "{ITER-slug}-patch.{N}" \
   --title "Patch: {iteration_goal}" \
@@ -121,7 +118,7 @@ gh issue comment {first_issue} --body "<!-- PATCH_RELEASE -->\nPatch: {tag}\nFix
 - App running locally; demo path derived from `feature_file_paths[]` in manifest (not from blind directory search)
 - All user-reported and log-observed defects captured
 - Each defect filed via `report_bug` MCP and linked to milestone
-- All blockers fixed, checkpoints re-run and passing
+- All blockers fixed via Fix Bug (BPE-09), full regression green
 - Patch release created (if any blockers were fixed)
 - Non-blocker issues deferred to next iteration backlog
 
@@ -139,7 +136,7 @@ None
 
 ## Artifacts Produced
 
-None
+- **Bug Report** (Document) - Required
 
 ## Artifacts Consumed
 

@@ -1,11 +1,11 @@
 # Bootstrap Project
 
-**Playbook**: Edda v54.0 (Released)
+**Playbook**: Edda v66.0 (Released)
 **Workflow ID**: 14
 **Description**: Bootstrap a greenfield project from SAO.md decisions. Install prerequisites, initialize repository, scaffold structure, configure tooling, create Makefile, verify with a welcome page, and configure three-tier observability logging (app, GUI, token consumption). Make-centric, *nix-oriented, idempotent.
 **Phase Organization**: Uses phases
 **Total Activities**: 8
-**Export Date**: 2026-07-24 16:23 UTC
+**Export Date**: 2026-08-17 20:23 UTC
 
 ## Activities
 

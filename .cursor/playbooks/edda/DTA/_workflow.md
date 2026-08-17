@@ -1,11 +1,11 @@
 # Define Architecture
 
-**Playbook**: Edda v54.0 (Released)
+**Playbook**: Edda v66.0 (Released)
 **Workflow ID**: 9
 **Description**: Analyze ESM artifacts, make architectural decisions across 16 domains (application structure through documentation strategy), scan available Skills for coverage, and compile all decisions into docs/architecture/SAO.md.
 **Phase Organization**: Uses phases
 **Total Activities**: 20
-**Export Date**: 2026-07-24 16:23 UTC
+**Export Date**: 2026-08-17 20:23 UTC
 
 ## Activities
 

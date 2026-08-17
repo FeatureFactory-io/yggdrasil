@@ -1,12 +1,3 @@
-# Pytest Log Story Assertions
-
-**Skill ID**: 49
-**Capability Domain**:
-**Technology Stack**:
-**Linked Activities**: 4
-
-## Content
-
 # Skill: Pytest Log Story Assertions
 
 **Capability Domain**: LOG_STORY_TESTING

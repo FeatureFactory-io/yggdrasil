@@ -1,12 +1,3 @@
-# GitHub Issue Operations
-
-**Skill ID**: 32
-**Capability Domain**: GITHUB_ISSUE
-**Technology Stack**: GitHub CLI
-**Linked Activities**: 1
-
-## Content
-
 # Skill: GitHub Issue Operations
 
 **Capability Domain**: GITHUB_ISSUE

@@ -153,6 +153,14 @@ Read these before starting this activity. They are produced earlier in the playb
 - **Feature Files** (Document, Required) — produced by Write Feature Files (#39).
 - **Implementation Plan Template** (Template, Required) — produced by Plan Feature (#96).
 
+## Defects Found During DoD
+
+When DoD review reveals a **defect** (behavior does not match feature files or acceptance criteria) — not a deferred cleanup item:
+
+1. File a **Bug Report** via `report_bug` MCP tool or Feedback UI (see Bug Report artifact for body structure)
+2. Invoke **Fix Bug** (BPE-09) with the Bug Report as input
+3. Do not mark the story done until blockers are resolved and BPE-09 success criteria are met
+
 ## Agent
 
 **Name**: Dr. Dobbs v2

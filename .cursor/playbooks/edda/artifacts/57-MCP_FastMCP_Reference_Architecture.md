@@ -1,3 +1,11 @@
+# MCP FastMCP Reference Architecture
+
+**Artifact ID**: 57
+**Type**: Document
+**Required**: False
+
+## Description
+
 # MCP / FastMCP Reference Architecture
 
 **Artifact ID**: 57

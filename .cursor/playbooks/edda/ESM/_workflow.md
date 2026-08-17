@@ -1,11 +1,11 @@
 # Envision the System
 
-**Playbook**: Edda v54.0 (Released)
+**Playbook**: Edda v66.0 (Released)
 **Workflow ID**: 8
 **Description**: Turn your vision into formal design artifacts - user journey, screen flow, mockups, feature files, and design system
 **Phase Organization**: Uses phases
 **Total Activities**: 7
-**Export Date**: 2026-07-24 16:23 UTC
+**Export Date**: 2026-08-17 20:23 UTC
 
 ## Activities
 

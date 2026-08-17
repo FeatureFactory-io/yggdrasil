@@ -1,6 +1,4 @@
----
-alwaysApply: false
----
+**Mimir metadata:** slug `do-github-issues`; `always_apply: true` (extended 2026-08-17 — BPE/MIN commit–issue traceability; was `false`).
 
 ## Issue Creation
 
@@ -33,6 +31,28 @@ Issues are updated during Activity "Execute" (MIN-04) of the Manage Iteration (M
 
 ---
 
+## BPE / MIN — Commit–issue traceability (execution)
+
+When GitHub issue **#N** tracks the work (BPE-01 handoff or MIN manifest scenario):
+
+### Hard gate — issue before code
+- Do **not** commit changes under the implementation footprint until issue #N exists with sections A–F inline (or manifest scenario body) and a handoff commit is on the branch: `docs(plan): … Refs #N` or equivalent plan/docs-only commit cited in the first issue comment.
+- Creating the issue **after** implementation is a process violation.
+
+### Per plan slice (not per wave)
+After **each** plan slice (or BPE step that maps to a slice):
+1. `git commit` with Angular convention; footer **`Refs #N`** on every slice commit.
+2. **`gh issue comment N`** immediately — must include: short commit SHA, what changed, reason if deviated, **next step/slice name**.
+3. Do **not** start the next slice until both commit and issue comment are done.
+4. Only the **final** slice commit for #N uses **`Closes #N`** (or close via MIN checkpoint after that commit).
+
+### Anti-patterns
+- Entire wave/feature in one commit with `Closes #N` at the end only.
+- Commits with no `#N` reference while issue is active.
+- Issue closed with no commit SHA in the closing comment.
+
+---
+
 ## Issue Closure
 
 Issues are closed during Activity "Execute" (MIN-04) of the Manage Iteration (MIN) Workflow, after the checkpoint command from the `<!-- SCENARIO -->` YAML block passes.
@@ -44,3 +64,4 @@ Issues are closed during Activity "Execute" (MIN-04) of the Manage Iteration (MI
 2. Include in the closing comment: "Lessons Learned reviewed — {N observations / none}."
 3. If the `## Lessons Learned` section contains architectural decisions not yet reflected in `docs/architecture/SAO.md`, state this explicitly in the closing comment: "SAO.md update required: {section}." These decisions must be applied to SAO.md before or immediately after closure — not deferred silently.
 4. An issue without a `## Lessons Learned` section in the body must not be closed.
+5. Closing comment must cite the **final commit SHA** that passed checkpoint (not close-only with no SHA).

@@ -104,29 +104,82 @@
 <!--
 Skip condition: write "Not applicable — no in-app LLM agent." and remove the subsections below
 if DTA-19 was not run.
-Reference: Playbook artifact AI Agent Reference Architecture — scenario index and capability table
+Reference: Playbook artifact AI Agent Reference Architecture — Parts 1–5 and Part 4 capability appendix
 -->
 
-### Scenario selection
+### Infra layer (Part 1 · Component 1)
 
-<!-- Read scenario cards in the AI Agent Reference Architecture before ticking -->
+| Setting | Value |
+|---------|-------|
+| LLM provider | |
+| Ollama host / model (if applicable) | |
+| API key storage | server env / secret manager |
+| Celery broker URL (if CAP-060) | |
+| Celery result backend | |
+| LLM readiness health check | Yes / No |
 
-| SC-ID | Name | When (summary) | Selected? | Rationale |
-|-------|------|----------------|-----------|-----------|
-| SC-01 | Conversational planner | User chat → tools → optional background plan/worker | | |
-| SC-02 | Field extractor / batch ingest | D0 pre-filter → D1 LLM canonicalize → propose writes; no chat loop | | |
-| SC-03 | Compiled pipeline | Trigger → known step graph; selective LLM steps | | |
-| SC-04 | Event-driven nudge | Domain event → proactive message/plan without user opening chat | | |
-| SC-05 | Governed mutations | Mutations/deletes need human approval before execute | | |
+### Vector tier (Part 1 · Component 3)
+
+| Decision | Value |
+|----------|-------|
+| Vector store used | Yes / No |
+| Backend | pgvector / dedicated / in-process |
+| Embedding model | |
+| CAP-090 search_knowledge | Yes / No |
+| CAP-094 reference library | Yes / No |
+
+### Design pattern & scenario selection
+
+<!-- Read Part 2 patterns in the AI Agent Reference Architecture before ticking -->
+
+| SC-ID | Pattern | Name | Selected? | Rationale |
+|-------|---------|------|-----------|-----------|
+| SC-01 | 4 | Conversational planner | | |
+| SC-02 | 2 | Field extractor / batch ingest | | |
+| SC-03 | 7 | Compiled pipeline | | |
+| SC-04 | 3 | Event-driven nudge | | |
+| SC-05 | 5 | Governed mutations | | |
+
+### Serving mode (Part 3)
+
+| Mode | Selected? | Notes |
+|------|-----------|-------|
+| Real-time (3.1) — sync chat, streaming | | CAP-040, CAP-003, CAP-100 |
+| Batch / queue (3.2) — worker, CI ingest | | CAP-060–066 |
+| Observability for serving (3.3) | | CAP-101, CAP-100 events |
+
+### Dual execution path (Pattern 4 / SC-01)
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Context snapshot in chat (CAP-037) | | |
+| Snapshot invalidation (CAP-038) | | |
+| Mutation-only conversation tools (CAP-039) | | |
+| Full tools in worker only | | |
+
+### Memory tiers (Part 1 · Component 5)
+
+| Tier | CAP-IDs | Selected? | Rationale |
+|------|---------|-----------|-----------|
+| 1 Hot snapshot | 037–039 | | |
+| 2 Semantic search | 091 | | |
+| 3 AI profile | 092 | | |
+| 4 Reference library | 094, 090 | | |
+| 5 Entity notes | 093 | | |
 
 ### Capability checklist
 
-<!-- Copy CAP rows from the reference artifact capability table for every CAP implemented -->
+<!-- Copy CAP rows from Part 4.1 for every CAP implemented -->
 
 | CAP-ID | Name | Implement? | Project module path |
 |--------|------|--------------|---------------------|
 | CAP-001 | LLM Port protocol | | |
 | CAP-004 | ScriptedLLM | | |
+| CAP-037 | Context snapshot hydration | | |
+| CAP-038 | Snapshot invalidation hooks | | |
+| CAP-039 | Dual tool exposure | | |
+| CAP-091 | Semantic context search | | |
+| CAP-101 | Agent interaction trace | | |
 | | | | |
 
 ### Assembly template
@@ -153,20 +206,39 @@ Reference: Playbook artifact AI Agent Reference Architecture — scenario index 
 
 - States: `pending → running → completed | failed | waiting_retry`
 - Hybrid step flags in use: {is_critical, is_planning, is_variable_assessment, data-only}
+- Worker uses LLM per step (CAP-054) — not mechanical tool-only execution
+
+### Worker failure bridge (if CAP-060 selected)
+
+- [ ] CAP-100 plan_failed event and/or chat context injection on worker failure
+- [ ] PRF-SC01-07 mapped to integration test file
+
+### Observability (Part 1 · Component 6 / CAP-101)
+
+| Field | Value |
+|-------|-------|
+| correlation_id header | |
+| Cost rate table location | |
+| PRF-OBS-01 test file | |
 
 ### Integration proof (DoD gate)
 
-<!-- Map PRF-SCxx-xx test IDs from the reference artifact integration proof table -->
+<!-- Map PRF-SCxx-xx test IDs from Part 4.5 -->
 
 | PRF ID | Scenario | Test file |
 |--------|----------|-----------|
 | PRF-SC02-01 | SC-02 thinking JSON | |
 | PRF-SC02-02 | SC-02 parse fail loud | |
-| PRF-SC02-03 | SC-02 D0 pre-filter | |
+| PRF-SC02-03 | SC-02 domain D0 pre-filter | |
 | PRF-SC02-04 | SC-02 D1 parse fail loud | |
 | PRF-SC01-01 | SC-01 plan handoff | |
 | PRF-SC01-02 | SC-01 429 retry | |
 | PRF-SC01-03 | SC-01 blackboard retain | |
+| PRF-SC01-04 | SC-01 dual tool exposure | |
+| PRF-SC01-05 | SC-01 snapshot invalidation | |
+| PRF-SC01-06 | SC-01 no mechanical worker | |
+| PRF-SC01-07 | SC-01 worker failure bridge | |
+| PRF-OBS-01 | all — correlation + usage trace | |
 | PRF-SC05-01 | SC-05 HITL | |
 | PRF-SC05-02 | SC-02+05 full rescan invariants | |
 
@@ -183,7 +255,7 @@ Complete when **both** SC-02 and SC-05 are selected:
 <!--
 Skip condition: write "Not applicable — no MCP interface." and remove the subsections below
 if DTA-20 was not run.
-Reference: docs/architecture/artifacts/57-MCP_FastMCP_Reference_Architecture.md
+Reference: Playbook artifact MCP FastMCP Reference Architecture
 -->
 
 ### Integration Case

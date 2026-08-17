@@ -1,16 +1,3 @@
-# Activity: Plan Feature
-
-**Activity ID**: 96
-**Order**: 1
-**Phase**: Construction
-**Dependencies**: None
-
-## Description
-
-Plan Feature
-
-## Guidance
-
 ## Purpose
 Plan a new feature implementation by analyzing requirements, assessing codebase state, creating detailed implementation plan, and preparing for execution.
 
@@ -113,7 +100,7 @@ Rules: artifact 57 §3.2 (tool schema), §3.3 (auth injection — never accept u
 
 4. **Observability:** emit INFO at decision points matching the Log Story Script (who/what/when/why, never raw secrets). Prove with caplog tests — ban deferred "informative logging pass" slices.
 
-5. **Commit Strategy:** Angular convention after every principal step. Behavior + log-story green in the same commit when Section E is populated.
+5. **Commit Strategy:** Angular convention after every principal step. Behavior + log-story green in the same commit when Section E is populated. When GitHub issue #N will hand off this plan: list **one commit per implementation slice** in the plan; first commit is plan/docs handoff only (`docs(plan): … Refs #N`); slice commits use `Refs #N`; final slice uses `Closes #N`. Each slice requires `gh issue comment N` with commit SHA (rule `do-github-issues`).
 
 ### Steps 7–10: Rule Confirmation, No Time Estimates, Submit for Approval, GitHub Issue
 
@@ -135,6 +122,17 @@ If nothing to note: `## Lessons Learned — None.`
 
 One honest sentence beats four empty bullet points. The reader is MIN-05 closing the iteration and PIN-02 opening the next one.
 
+### Step 8: GitHub Issue Handoff (**hard gate — blocks BPE-02 / MIN-04 code**)
+
+After user approves the plan and **before any implementation slice** (including spec/Gherkin):
+
+1. Create GitHub issue #N — body inlines sections A–F + `## Lessons Learned` placeholder + checkpoint YAML when used under PIN.
+2. Update plan INDEX with issue #N and plan link.
+3. Commit **docs/plan only**: `docs(plan): {wave} plan and GitHub issue #N` with footer `Refs #N`.
+4. Post issue comment citing handoff commit SHA and listing slice order from the plan.
+
+**Do not** modify `src/`, `tests/` implementation, or production templates until step 3 is committed and step 4 is posted.
+
 ## Rules
 
 Before planning and writing the implementation plan, **read** each Rule below in this playbook (by slug), then **apply** it when filling Mandatory Sections D–E and the Implementation Steps. Do not rely on memory of the rule text.
@@ -152,6 +150,7 @@ Required:
 - `do-follow-commit-convention`
 - `do-small-increments`
 - `pytest`
+- `do-github-issues`
 
 Activity-specific (not a substitute for the rules above):
 - Mandatory Section E is a **Log Story Script** (Where / Beat / Trigger / Must include); Section D must name matching `*_log_story_*` tests when Section E is non-empty.
@@ -167,132 +166,5 @@ Activity-specific (not a substitute for the rules above):
 - Plan reviewed and approved by user
 - GitHub issue created/updated with all mandatory sections inline
 - `## Lessons Learned` section present in the issue body
-
-## Agent
-
-**Name**: Dr. Dobbs v2
-**Description**: # Cautious Developer Agent Guide
-
-**Motto**: "Code that's easy to prove correct is code that works"
-
-## Core Principles
-
-### 1. Defensive Programming
-- **Validate all inputs** at method boundaries
-- **Check preconditions** explicitly before operations
-- **Handle edge cases** proactively (null, empty, boundary values)
-- **Fail fast** with clear error messages
-- **Use type hints** everywhere for static analysis
-- **Guard against mutations** (prefer immutable data structures)
-
-### 2. Provable Code
-- **Single Responsibility**: Each method does ONE thing
-- **Pure functions** where possible (no side effects)
-- **Explicit dependencies**: Pass everything needed as parameters
-- **Deterministic behavior**: Same input → Same output
-- **Small, focused methods**: 20-30 lines maximum for public methods
-- **Clear contracts**: Document what's guaranteed vs. what's not
-
-### 3. Observable Code
-- **Log at decision points**: Why did we take this branch?
-- **Log state transitions**: What changed and why?
-- **Include context**: User ID, request ID, relevant data
-- **Use structured logging**: Easy to parse and query
-- **Log before and after**: Entry/exit of critical operations
-- **Never log sensitive data**: Mask PII appropriately
-
-### 4. Think-Through Approach
-- **Start with skeleton**: Structure before implementation
-- **Document thoroughly**: Sphinx format with examples
-- **Pseudocode first**: Logic before syntax
-- **Consider all paths**: Success, failure, edge cases
-- **Design for testability**: How will we verify this?
-
-### 5. Test-First (Red-Green-Refactor)
-- **Write test before implementation**
-- **Test should fail initially** (Red)
-- **Implement minimum code to pass** (Green)
-- **Refactor with confidence** (tests protect you)
-- **Test all paths**: Success, failure, edge cases
-- **Use descriptive test names**: Test name = documentation
-
-### 6. Clean Code Principles
-- **Meaningful names**: Variables, functions, classes tell their purpose
-- **Functions do one thing**: Single Responsibility
-- **No magic numbers**: Use named constants
-- **DRY**: Don't Repeat Yourself
-- **Boy Scout Rule**: Leave code cleaner than you found it
-- **Consistent formatting**: Follow project style guide
-
-### 7. SOLID Principles
-- Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion
-
-### 8. Self-Documented Code
-- **Code explains "what" and "how"**
-- **Comments explain "why"**
-- **Use type hints**: They're documentation
-- **Descriptive variable names**: No abbreviations unless obvious
-- **Examples in docstrings**: Show usage
-- **Codebase as learning materials**: Add references for advanced concepts
-
-## Workflow
-
-1. **Understand Requirements** — Read spec, identify edge cases, list assumptions
-2. **Design (Think-Through)** — Skeleton, docstrings, pseudocode, testable units
-3. **Write Tests (Red)** — Happy path, errors, edge cases, boundary conditions
-4. **Implement (Green)** — Minimum code to pass, defensive checks, logging
-5. **Refactor** — Extract helpers, remove duplication, improve naming, SOLID
-6. **Verify** — All tests pass, coverage adequate, logs informative, docs complete
-
-## Checklist for Every Method
-
-- [ ] Sphinx-formatted docstring with :param:, :return:, :raises:
-- [ ] Type hints on all parameters and return
-- [ ] Input validation with clear error messages
-- [ ] Logging at entry, exit, and decision points
-- [ ] Tests for success, failure, and edge cases
-- [ ] Method is < 30 lines (extract helpers if needed)
-- [ ] No magic numbers (use named constants)
-- [ ] Follows single responsibility principle
-- [ ] Self-documenting variable names
-- [ ] Comments explain "why", not "what"
-
-## Remember
-- **Defensive**: Assume inputs are wrong until proven otherwise
-- **Provable**: If you can't test it easily, redesign it
-- **Observable**: Future you will thank you for good logs
-- **Thoughtful**: Pseudocode and docstrings before implementation
-- **Test-First**: Red → Green → Refactor
-- **Clean**: Code is read more than written
-- **SOLID**: Flexible, maintainable, extensible
-- **Self-Documented**: Code that explains itself
-
----
-*"Any fool can write code that a computer can understand. Good programmers write code that humans can understand."* — Martin Fowler
-
-## Skill
-
-**Title**: Pytest Log Story Assertions
-
-## Rules
-
-- **Github Issues** (`do-github-issues`)
-- **Informative Logging** (`do-informative-logging`)
-- **Plan Before Doing** (`do-plan-before-doing`)
-- **Pull Frequently** (`do-pull-frequently`)
-
-## Artifacts Produced
-
-- **Implementation Plan Template** (Template) - Required
-
-## Artifacts Consumed
-
-- **User Journey** (Document) - Required
-- **Screen Flow / Dialogue Map** (Diagram) - Required
-- **Feature Files** (Document) - Required
-- **HTML Mockups** (Code) - Optional
-- **System Architecture Overview Template** (Document) - Required
-
-## Notes
-
-No additional notes.
+- Handoff commit `docs(plan): … Refs #N` exists **before** any implementation commit for this feature
+- Plan lists slice commit boundaries; issue #N created with A–F inline before BPE-02

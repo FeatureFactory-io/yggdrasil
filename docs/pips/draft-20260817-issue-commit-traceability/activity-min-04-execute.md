@@ -1,16 +1,3 @@
-# Activity: Execute
-
-**Activity ID**: 181
-**Order**: 4
-**Phase**: None
-**Dependencies**: Predecessor: Activity 180 (Sequence from Manifest)
-
-## Description
-
-Execute
-
-## Guidance
-
 **Sequencing (authoritative):** Predecessor = Sequence from Manifest (Activity 180 / MIN-03).
 
 ## Purpose
@@ -51,6 +38,7 @@ Follow BPE-02 → BPE-05 to fill the skeleton.
 Run the behavior checkpoint from the issue SCENARIO / manifest.
 If log_story_command (or log_tests) is present, run it too — both must PASS in the same commit.
 Do not list other issues — get this one only.
+After every slice commit: gh issue comment {N} with commit SHA, summary, next step (Refs #N in commit footer).
 ```
 
 ### Step 3: Per-Issue Execution Loop
@@ -79,6 +67,8 @@ gh issue comment {N} --body "<!-- EXECUTION_START -->\nStarted: {timestamp}\n<!-
 - **BPE-04**: Feature acceptance tests
 - **BPE-05**: Journey certification tests (if applicable)
 
+**c1) Per-slice commit trail (when plan defines slices):** After each plan slice within the issue: commit with footer `Refs #N` → `gh issue comment N` with SHA and next slice **before** continuing. Do not batch the whole issue into one commit.
+
 Do NOT:
 - Change method signatures
 - Create files outside `codebase_footprint[]`
@@ -103,8 +93,10 @@ git commit -m "feat({scope}): {title}
 
 Implements {scenario_id} from ITER-{slug}
 Checkpoint: {command} — PASSED
-Log story: {log_story_command} — PASSED"
-gh issue close {N} --comment "<!-- CHECKPOINT_PASS -->\nPassed: {timestamp}\n<!-- /CHECKPOINT_PASS -->"
+Log story: {log_story_command} — PASSED
+
+Refs #{N}"
+gh issue close {N} --comment "<!-- CHECKPOINT_PASS -->\nPassed: {timestamp}\nCommit: {short-sha}\nLessons Learned reviewed — {N observations / none}.\n<!-- /CHECKPOINT_PASS -->"
 gh issue edit {N} --remove-label "status-in-progress" --add-label "status-done"
 ```
 
@@ -148,6 +140,7 @@ Required:
 - `do-follow-commit-convention`
 - `do-small-increments`
 - `pytest`
+- `do-github-issues`
 
 Activity-specific (not a substitute for the rules above):
 - When `checkpoint.log_story_command` is declared, Checkpoint PASS requires **both** behavior and log-story commands in the same commit.
@@ -159,29 +152,5 @@ Activity-specific (not a substitute for the rules above):
 - Parallel groups dispatched concurrently where possible
 - Each issue fetched one at a time (`gh issue view`, never list-all)
 - Escalations surfaced immediately; no autonomous action while awaiting human
+- Issue timeline shows one comment per slice commit with SHA (not close-only)
 - Ready to proceed to MIN-05
-
-## Agent
-
-None
-
-## Skill
-
-**Title**: Pytest Log Story Assertions
-
-## Rules
-
-- **Assert Log Story** (`assert-log-story`)
-- **Informative Logging** (`do-informative-logging`)
-
-## Artifacts Produced
-
-None
-
-## Artifacts Consumed
-
-None
-
-## Notes
-
-No additional notes.

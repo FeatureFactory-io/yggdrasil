@@ -165,9 +165,10 @@ class ViewBrowseView(LoginRequiredMixin, View):
             ymodel.slug,
         )
         logger.info(
-            "ViewBrowseView.get | exit | user_pk=%s element_count=%s package=%s stereotype=%s",
+            "ViewBrowseView.get | exit | user_pk=%s element_count=%s depth=%s package=%s stereotype=%s",
             request.user.pk,
             context["element_count"],
+            params.depth,
             params.package,
             params.stereotype,
         )
@@ -195,11 +196,13 @@ class ViewBrowseGraphJsonView(LoginRequiredMixin, View):
             stereotype=params.stereotype,
             package=params.package,
             health=params.health,
+            depth=params.depth,
             user_id=request.user.pk,
         )
         logger.info(
-            "ViewBrowseGraphJsonView.get | user_pk=%s nodes=%s edges=%s",
+            "ViewBrowseGraphJsonView.get | user_pk=%s depth=%s nodes=%s edges=%s",
             request.user.pk,
+            params.depth,
             len(payload["elements"]),
             len(payload["edges"]),
         )

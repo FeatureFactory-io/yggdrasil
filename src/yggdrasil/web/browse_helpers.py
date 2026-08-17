@@ -51,6 +51,7 @@ def enrich_confidence_fields(item: dict[str, Any]) -> dict[str, Any]:
 
 
 VALID_VIEW_MODES = frozenset({"table", "graph"})
+DEFAULT_VIEW_MODE = "graph"
 
 
 @dataclass(frozen=True)
@@ -74,8 +75,8 @@ def parse_view_browse_params(request: HttpRequest, model_slug: str) -> ViewBrows
     :param model_slug: Model slug from the URL path. Example: ``"yggdrasil"``.
     :return: Normalized browse parameters.
     """
-    raw_view = _blank_to_none(request.GET.get("view")) or "table"
-    view_mode = raw_view if raw_view in VALID_VIEW_MODES else "table"
+    raw_view = _blank_to_none(request.GET.get("view")) or DEFAULT_VIEW_MODE
+    view_mode = raw_view if raw_view in VALID_VIEW_MODES else DEFAULT_VIEW_MODE
     return ViewBrowseParams(
         model_slug=model_slug,
         stereotype=_blank_to_none(request.GET.get("stereotype")),
@@ -130,11 +131,11 @@ def build_empty_browse_context(request: HttpRequest) -> dict[str, Any]:
             package=None,
             health=None,
             as_of=None,
-            view_mode="table",
+            view_mode=DEFAULT_VIEW_MODE,
             depth=browse_service.DEFAULT_DEPTH,
         ),
         "model_slug": "",
-        "view_mode": "table",
+        "view_mode": DEFAULT_VIEW_MODE,
         "readable_models": readable_models,
         "switcher_disabled": True,
         "no_models": True,

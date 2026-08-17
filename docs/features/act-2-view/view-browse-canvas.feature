@@ -30,7 +30,7 @@ Feature: VIEW-BROWSE-1 View Browser — Graph Canvas (centre panel)
     And the element "results-container" should be visible
 
   Scenario: VIEW-BROWSE-1-37 Table mode shows element rows inside the canvas panel
-    When I GET "/models/yggdrasil/views/"
+    When I GET "/models/yggdrasil/views/?view=table"
     Then the response status is 200
     And the view browser is in table mode
     And the table view is active
@@ -39,7 +39,7 @@ Feature: VIEW-BROWSE-1 View Browser — Graph Canvas (centre panel)
     And the user should see "element-row-"
 
   Scenario: VIEW-BROWSE-1-45 Table mode hides graph canvas and explorer chrome
-    When I GET "/models/yggdrasil/views/"
+    When I GET "/models/yggdrasil/views/?view=table"
     Then the response status is 200
     And the view browser is in table mode
     And the graph-only panels are hidden
@@ -48,7 +48,7 @@ Feature: VIEW-BROWSE-1 View Browser — Graph Canvas (centre panel)
     And the element "browser-canvas-controls" should not be visible
 
   Scenario: VIEW-BROWSE-1-46 Graph mode shows canvas controls and cytoscape container
-    When I GET "/models/yggdrasil/views/?view=graph"
+    When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the view browser is in graph mode
     And the graph view is active
@@ -59,11 +59,11 @@ Feature: VIEW-BROWSE-1 View Browser — Graph Canvas (centre panel)
   # ── E2E: cytoscape interactions ─────────────────────────────────────────
 
   @wip
-  Scenario: VIEW-BROWSE-1-38 Table mode is the default view on first load
+  Scenario: VIEW-BROWSE-1-38 Graph mode is the default view on first load
     Given Priya is on the View Browser
-    Then the table view is active
-    And the cytoscape canvas is hidden
-    And the graph-only panels are hidden
+    Then the graph view is active
+    And the cytoscape canvas is visible
+    And the table view is hidden
 
   @wip
   Scenario: VIEW-BROWSE-1-39 Toggling to graph mode shows cytoscape and hides table rows

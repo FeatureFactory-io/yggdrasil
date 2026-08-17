@@ -650,7 +650,7 @@
     syncPanelTogglePositions();
 
     var root = getRoot();
-    var initial = root && root.getAttribute('data-initial-view') === 'graph' ? 'graph' : 'table';
+    var initial = (root && root.getAttribute('data-initial-view')) || 'graph';
     setView(initial);
   });
 })();

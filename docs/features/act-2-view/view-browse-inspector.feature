@@ -29,8 +29,14 @@ Feature: VIEW-BROWSE-1 View Browser — Property Inspector (right panel)
     Then the response status is 200
     And the element "browser-toggle-inspector-panel" should be visible
 
-  Scenario: VIEW-BROWSE-1-47 Inspector panel is hidden in default table mode
+  Scenario: VIEW-BROWSE-1-47 Inspector panel is visible in default graph mode
     When I GET "/models/yggdrasil/views/"
+    Then the response status is 200
+    And the view browser is in graph mode
+    And the element "browser-inspector-panel" should be visible
+
+  Scenario: VIEW-BROWSE-1-47b Inspector panel is hidden in table mode
+    When I GET "/models/yggdrasil/views/?view=table"
     Then the response status is 200
     And the view browser is in table mode
     And the element "browser-inspector-panel" should not be visible

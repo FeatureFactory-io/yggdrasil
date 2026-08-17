@@ -10,6 +10,7 @@ from tests.fixtures.factories import UserFactory
 from tests.support.log_story import assert_log_story
 
 from yggdrasil.web.browse_helpers import (
+    DEFAULT_VIEW_MODE,
     build_package_tree,
     build_traversal_tree,
     build_view_browse_context,
@@ -34,6 +35,14 @@ def test_parse_depth_defaults_to_1() -> None:
     request = RequestFactory().get("/models/yggdrasil/views/")
     params = parse_view_browse_params(request, "yggdrasil")
     assert params.depth == 1
+
+
+def test_parse_view_defaults_to_graph() -> None:
+    """Omitted view query param defaults to graph presentation."""
+    request = RequestFactory().get("/models/yggdrasil/views/")
+    params = parse_view_browse_params(request, "yggdrasil")
+    assert params.view_mode == DEFAULT_VIEW_MODE
+    assert params.view_mode == "graph"
 
 
 def test_build_traversal_tree_nests_children() -> None:

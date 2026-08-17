@@ -99,7 +99,7 @@ def test_table_mode_step(at_context) -> None:
         model, VIEW_BROWSER_ELEMENTS, _PAYMENT_RELATIONSHIPS, run_id="run-at-table-mode"
     )
     path = reverse("web:view_browse_model", kwargs={"model_slug": "yggdrasil"})
-    at_context.response = at_context.test.client.get(path)
+    at_context.response = at_context.test.client.get(path, {"view": "table"})
     view_browser_steps.step_view_browser_table_mode(at_context)
 
 

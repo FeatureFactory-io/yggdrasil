@@ -105,14 +105,14 @@ Feature: VIEW-BROWSE-1 View Browser
     And the element "view-browse-page" should be visible
     And the user should not see "Create Element"
 
-  Scenario: VIEW-BROWSE-1-13 Navbar shows all primary navigation links
+  Scenario: VIEW-BROWSE-1-13 Navbar shows View Browser only
     When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the element "nav-view-browser" should be visible
-    And the element "nav-elements" should be visible
-    And the element "nav-relationships" should be visible
-    And the element "nav-changesets" should be visible
-    And the element "nav-runs" should be visible
+    And the element "nav-elements" should not be visible
+    And the element "nav-relationships" should not be visible
+    And the element "nav-changesets" should not be visible
+    And the element "nav-runs" should not be visible
 
   Scenario: VIEW-BROWSE-1-14 Apply package filter returns matching rows only
     Given the model "yggdrasil" is loaded with the view browser fixture

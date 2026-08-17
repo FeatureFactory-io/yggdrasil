@@ -163,15 +163,13 @@ def test_viewer_sees_browser_without_create(client, view_browser_model):
 
 @pytest.mark.django_db
 def test_navbar_primary_links(client, view_browser_user, view_browser_model):
-    """VIEW-BROWSE-1-13: primary navbar testids visible."""
+    """VIEW-BROWSE-1-13: production navbar shows View Browser only."""
     client.force_login(view_browser_user)
     response = client.get(_browse_url())
     body = response.content.decode()
     assert 'data-testid="nav-view-browser"' in body
-    assert 'data-testid="nav-elements"' in body
-    assert 'data-testid="nav-relationships"' in body
-    assert 'data-testid="nav-changesets"' in body
-    assert 'data-testid="nav-runs"' in body
+    for dropped in ("nav-elements", "nav-relationships", "nav-changesets", "nav-runs"):
+        assert f'data-testid="{dropped}"' not in body
 
 
 @pytest.mark.django_db
@@ -207,12 +205,23 @@ def test_view_browser_full_height_layout(client, view_browser_user, view_browser
 
 
 @pytest.mark.django_db
+def test_view_browser_default_graph_mode(client, view_browser_user, view_browser_explorer_model):
+    """Default presentation is graph mode with full-height layout."""
+    client.force_login(view_browser_user)
+    response = client.get(_browse_url())
+    body = response.content.decode()
+    assert "yrg-mode-graph" in body
+    assert 'class="yrg-view-browser"' in body or 'class="yrg-view-browser ' in body
+    assert 'data-testid="browser-nav-panel"' in body
+
+
+@pytest.mark.django_db
 def test_view_browser_table_mode_hides_graph_panels(
     client, view_browser_user, view_browser_explorer_model
 ):
-    """Default table mode SSR hides graph-only panels via yrg-mode-table."""
+    """Explicit ?view=table SSR hides graph-only panels via yrg-mode-table."""
     client.force_login(view_browser_user)
-    response = client.get(_browse_url())
+    response = client.get(_browse_url(), {"view": "table"})
     body = response.content.decode()
     assert "yrg-mode-table" in body
     assert "yrg-graph-only" in body

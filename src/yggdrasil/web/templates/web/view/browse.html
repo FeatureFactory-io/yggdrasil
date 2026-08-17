@@ -375,7 +375,8 @@
           <i class="fa-solid fa-sliders me-1" aria-hidden="true"></i>Filters
         </button>
         <a href="{% if model_slug %}{% url 'web:view_browse_model' model_slug=model_slug %}{% else %}{% url 'web:view_browse' %}{% endif %}" class="btn btn-sm btn-outline-danger"
-           data-testid="clear-filters-btn">Clear</a>
+           data-testid="clear-filters-btn"
+           data-action="clear-filters">Clear</a>
       </div>
       <div class="d-flex align-items-center gap-2 flex-wrap">
         <div class="yrg-depth-control yrg-graph-only d-flex align-items-center gap-2 me-2"
@@ -393,7 +394,7 @@
                  aria-label="Show levels deep">
           <span class="badge bg-secondary" data-testid="browser-depth-value">{{ current_depth }} / {{ max_depth }}</span>
         </div>
-        <span style="font-size:0.82rem;color:var(--hg-ink-muted);">{{ element_count }} elements</span>
+        <span id="browserElementCount" style="font-size:0.82rem;color:var(--hg-ink-muted);">{{ element_count }} elements</span>
         <div class="yrg-view-toggle btn-group btn-group-sm" role="group" aria-label="View mode">
           <button class="btn btn-outline-secondary{% if view_mode == 'table' %} active{% endif %}"
                   id="tableViewBtn"
@@ -463,7 +464,8 @@
           </div>
           <div class="d-flex gap-2">
             <a href="{% if model_slug %}{% url 'web:view_browse_model' model_slug=model_slug %}{% else %}{% url 'web:view_browse' %}{% endif %}" class="btn btn-outline-secondary btn-sm"
-               data-testid="filter-panel-clear-btn">Clear</a>
+               data-testid="filter-panel-clear-btn"
+               data-action="clear-filters">Clear</a>
             <button class="btn btn-outline-secondary btn-sm" type="button" disabled>Save View</button>
             <button class="btn btn-primary btn-sm" type="submit" data-testid="apply-filters-btn">Apply Filters</button>
           </div>

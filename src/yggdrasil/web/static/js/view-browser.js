@@ -51,12 +51,108 @@
     }
   }
 
+  function updateElementCountLabel() {
+    var container = document.getElementById('results-container');
+    var countEl = document.getElementById('browserElementCount');
+    if (!container || !countEl) {
+      return;
+    }
+    var count = container.getAttribute('data-element-count');
+    if (count !== null) {
+      countEl.textContent = count + ' elements';
+    }
+  }
+
+  function refreshResultsContainer(params) {
+    var fetchParams = new URLSearchParams(params.toString());
+    fetchParams.set('partial', 'results');
+    var url = window.location.pathname + '?' + fetchParams.toString();
+    return fetch(url, { headers: { Accept: 'text/html' } })
+      .then(function (r) {
+        if (!r.ok) {
+          throw new Error('results partial failed status=' + r.status);
+        }
+        return r.text();
+      })
+      .then(function (html) {
+        var container = document.getElementById('results-container');
+        if (!container) {
+          return;
+        }
+        var temp = document.createElement('div');
+        temp.innerHTML = html.trim();
+        var fresh = temp.firstElementChild;
+        if (fresh) {
+          container.replaceWith(fresh);
+        }
+        updateElementCountLabel();
+        console.log('[view-browser] results container refreshed');
+      })
+      .catch(function (err) {
+        console.error('[view-browser] results refresh failed', err);
+      });
+  }
+
+  function resetFilterFormFields() {
+    var form = document.getElementById('filterForm');
+    if (!form) {
+      return;
+    }
+    form.querySelectorAll('select').forEach(function (sel) {
+      sel.selectedIndex = 0;
+    });
+    form.querySelectorAll('input[type="date"]').forEach(function (inp) {
+      inp.value = '';
+    });
+    var viewInput = document.getElementById('filterViewMode');
+    if (viewInput) {
+      viewInput.value = isGraphMode() ? 'graph' : 'table';
+    }
+    syncFilterFormDepth('1');
+  }
+
+  function buildParamsAfterClear() {
+    var params = new URLSearchParams();
+    if (isGraphMode()) {
+      params.set('view', 'graph');
+    }
+    return params;
+  }
+
+  function applyClearFilters(evt) {
+    if (evt && evt.preventDefault) {
+      evt.preventDefault();
+    }
+    var params = buildParamsAfterClear();
+    params.delete('partial');
+    var slider = document.getElementById('depthSlider');
+    if (slider) {
+      slider.value = slider.min || '1';
+      updateDepthBadge(slider);
+    }
+    resetFilterFormFields();
+    syncBrowseUrl(params);
+    Promise.all([
+      refreshNavigatorTree(params),
+      refreshResultsContainer(params)
+    ]).then(function () {
+      if (isGraphMode()) {
+        replotGraph();
+        clearSelection();
+      }
+      console.log(
+        '[view-browser] filters cleared in-place mode=%s',
+        isGraphMode() ? 'graph' : 'table'
+      );
+    });
+  }
+
   function refreshNavigatorTree(params) {
     var fetchParams = new URLSearchParams(params.toString());
     fetchParams.set('partial', 'navigator');
     fetchParams.delete('view');
     var url = window.location.pathname + '?' + fetchParams.toString();
-    fetch(url, { headers: { Accept: 'text/html' } })
+    return fetch(url, { headers: { Accept: 'text/html' } })
       .then(function (r) {
         if (!r.ok) {
           throw new Error('navigator partial failed status=' + r.status);
@@ -68,7 +164,7 @@
         if (tree) {
           tree.innerHTML = html;
         }
-        console.log('[view-browser] navigator tree refreshed for depth=%s', params.get('depth'));
+        console.log('[view-browser] navigator tree refreshed');
       })
       .catch(function (err) {
         console.error('[view-browser] navigator refresh failed', err);
@@ -506,6 +602,12 @@
     }
   }
 
+  function bindClearFilters() {
+    document.querySelectorAll('[data-action="clear-filters"]').forEach(function (link) {
+      link.addEventListener('click', applyClearFilters);
+    });
+  }
+
   function bindDepthSlider() {
     var slider = document.getElementById('depthSlider');
     if (!slider) {
@@ -544,6 +646,7 @@
     bindInspectorInteractions();
     bindZoomControls();
     bindDepthSlider();
+    bindClearFilters();
     syncPanelTogglePositions();
 
     var root = getRoot();

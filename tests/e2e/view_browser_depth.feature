@@ -10,3 +10,12 @@ Feature: View Browser depth slider in graph mode
     When she sets the view browser depth slider to "3"
     Then the view browser is in graph mode in the browser
     And the graph view is visible in the browser
+
+  Scenario: VIEW-BROWSE-1-61 Clearing filters in graph mode stays on graph view
+    Given Priya is logged in for View Browser E2E
+    And the view browser explorer fixture is seeded for E2E
+    And Priya is on the View Browser for model "yggdrasil"
+    When she applies package filter "technology" on the view browser
+    And she clears filters on the view browser
+    Then the view browser is in graph mode in the browser
+    And the graph view is visible in the browser

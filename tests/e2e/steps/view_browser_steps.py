@@ -208,6 +208,24 @@ def step_set_depth_slider_e2e(context, value: str) -> None:
     logger.info("E2E depth slider set to %s url=%s", value, context.page.url)
 
 
+@when('she applies package filter "{package}" on the view browser')
+def step_apply_package_filter_e2e(context, package: str) -> None:
+    """Select package filter and apply via in-page navigation."""
+    context.page.get_by_test_id("filters-toggle").click()
+    context.page.get_by_test_id("filter-package").select_option(package)
+    context.page.get_by_test_id("apply-filters-btn").click()
+    context.page.wait_for_load_state("networkidle")
+    logger.info("E2E applied package filter %s url=%s", package, context.page.url)
+
+
+@when("she clears filters on the view browser")
+def step_clear_filters_e2e(context) -> None:
+    """Click toolbar Clear filters (in-place when JS intercepts)."""
+    context.page.get_by_test_id("clear-filters-btn").click()
+    context.page.wait_for_timeout(800)
+    logger.info("E2E cleared filters url=%s", context.page.url)
+
+
 @then("the view browser is in graph mode in the browser")
 def step_graph_mode_in_browser_e2e(context) -> None:
     """Assert #browserRoot has yrg-mode-graph after client-side depth change."""

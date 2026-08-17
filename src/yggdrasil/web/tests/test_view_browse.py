@@ -618,3 +618,35 @@ def test_depth_change_with_view_graph_stays_in_graph_mode_ssr(
     assert 'class="yrg-browser-root yrg-mode-graph' in body or "yrg-mode-graph" in body
     assert 'data-testid="browser-depth-value"' in body
     assert "3 /" in body
+
+
+@pytest.mark.django_db
+def test_results_partial_via_query_param(client, view_browser_user, view_browser_model):
+    """Clear-filters refresh: partial=results returns results container only."""
+    client.force_login(view_browser_user)
+    response = client.get(
+        _browse_url("yggdrasil"),
+        {"partial": "results", "view": "graph"},
+    )
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'data-testid="results-container"' in body
+    assert 'data-element-count="' in body
+    assert 'data-testid="browser-nav-panel"' not in body
+
+
+@pytest.mark.django_db
+def test_cleared_filters_with_view_graph_stays_graph_mode(
+    client, view_browser_user, view_browser_explorer_model
+):
+    """Clear filters (full reload fallback) honours view=graph."""
+    client.force_login(view_browser_user)
+    response = client.get(
+        _browse_url("yggdrasil"),
+        {"view": "graph", "package": "technology"},
+    )
+    assert response.status_code == 200
+    response = client.get(_browse_url("yggdrasil"), {"view": "graph"})
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert "yrg-mode-graph" in body

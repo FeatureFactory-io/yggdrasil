@@ -155,6 +155,13 @@ class ViewBrowseView(LoginRequiredMixin, View):
                 params.depth,
             )
             return render(request, self.navigator_partial_template_name, context)
+        if request.GET.get("partial") == "results":
+            logger.info(
+                "ViewBrowseView.get | partial=results | user_pk=%s element_count=%s",
+                request.user.pk,
+                context["element_count"],
+            )
+            return render(request, self.partial_template_name, context)
         template = (
             self.partial_template_name if request.headers.get("HX-Request") else self.template_name
         )

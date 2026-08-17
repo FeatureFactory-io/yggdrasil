@@ -28,6 +28,8 @@ Scenarios **01–15** (except 11 @wip) covered by `test_view_browse.py`.
 | W9 | Inspector + `?embed=1` on Element/Relationship views | 25–34 | AT 27–28; E2E 29–34 |
 | W10 | Cytoscape full-height + selection bus JS | 38–42 | E2E |
 | W11 | Filter ↔ navigator ↔ graph URL sync | 43–44 | AT + E2E |
+| W12 | Model switcher | 48–54 | AT + E2E |
+| W13 | Depth traversal BFS + slider + element tree | 55–60 | AT + E2E · [#93](https://github.com/FeatureFactory-io/yggdrasil/issues/93) |
 
 **TFK-07 before W8:** gaps #7–17 in [`docs/features/CATALOG.md`](../../features/CATALOG.md#known-gaps--tfk-07).
 
@@ -42,3 +44,7 @@ VIEW-BROWSE-1-07 saved views · 09 export/history prod wiring · 11 time travel 
 ## Change request (BPE-08 closed, approved 2026-08-17)
 
 Model switcher in the left navigator; canonical URLs `/models/{slug}/views/…`. Specs: [`VIEW-BROWSE-1_MODEL_SWITCHER_CHANGE_RECONCILIATION.md`](VIEW-BROWSE-1_MODEL_SWITCHER_CHANGE_RECONCILIATION.md). **W12 shipped.**
+
+## Change request (BPE-08 closed, approved 2026-08-17)
+
+Depth traversal: filter roots + `?depth=N` BFS subgraph; canvas depth slider; navigator traversal tree. Specs: [`VIEW-BROWSE-1_DEPTH_TRAVERSAL_CHANGE_RECONCILIATION.md`](VIEW-BROWSE-1_DEPTH_TRAVERSAL_CHANGE_RECONCILIATION.md). Plan: [`BPE-W13-depth-traversal.md`](BPE-W13-depth-traversal.md). **W13 in progress** — [#93](https://github.com/FeatureFactory-io/yggdrasil/issues/93).

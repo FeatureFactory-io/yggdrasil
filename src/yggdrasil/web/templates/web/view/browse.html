@@ -7,6 +7,16 @@
 
 {% block extra_head %}
 <style>
+  :root {
+    --yrg-panel-header-padding: 0.5rem 0.75rem;
+    --yrg-panel-header-min-height: 2.5rem;
+  }
+  .yrg-panel-header {
+    padding: var(--yrg-panel-header-padding);
+    min-height: var(--yrg-panel-header-min-height);
+    display: flex;
+    align-items: center;
+  }
   /* ── Graph mode: full-height shell (page header + main must fit in viewport) ── */
   body.yrg-view-browser {
     overflow: hidden;
@@ -137,11 +147,8 @@
   }
   .yrg-canvas-toolbar {
     flex-shrink: 0;
-    display: flex;
-    align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding: 0.4rem 0.75rem;
     background: #fff;
     border-bottom: 1px solid var(--hg-border);
     flex-wrap: wrap;
@@ -178,10 +185,7 @@
   }
   .yrg-inspector-header {
     flex-shrink: 0;
-    padding: 0.6rem 0.75rem;
     border-bottom: 1px solid var(--hg-border);
-    display: flex;
-    align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
   }
@@ -359,7 +363,7 @@
           aria-label="Toggle navigator panel">‹</button>
 
   <section class="yrg-browser-canvas-wrap flex-grow-1 min-h-0" aria-label="View canvas">
-    <div class="yrg-canvas-toolbar">
+    <div class="yrg-canvas-toolbar yrg-panel-header" data-testid="browser-canvas-toolbar">
       <div class="d-flex gap-2 align-items-center flex-wrap">
         <button class="btn btn-sm btn-outline-secondary" type="button"
                 data-bs-toggle="collapse" data-bs-target="#filterPanel"

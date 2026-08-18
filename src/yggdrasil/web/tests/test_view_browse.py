@@ -90,6 +90,23 @@ def test_view_browser_shell_testids(client, view_browser_user, view_browser_mode
 
 
 @pytest.mark.django_db
+def test_view_browser_panel_headers_share_alignment_class(
+    client, view_browser_user, view_browser_model
+):
+    """Regression #97: canvas toolbar and inspector header share panel header styling."""
+    client.force_login(view_browser_user)
+    response = client.get(GRAPH_URL)
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'data-testid="browser-canvas-toolbar"' in body
+    assert 'data-testid="browser-inspector-header"' in body
+    assert 'class="yrg-canvas-toolbar yrg-panel-header"' in body
+    assert 'class="yrg-inspector-header yrg-panel-header"' in body
+    assert "--yrg-panel-header-padding" in body
+    assert "--yrg-panel-header-min-height" in body
+
+
+@pytest.mark.django_db
 def test_view_browser_toolbar_buttons_use_consistent_sizing(
     client, view_browser_user, view_browser_model
 ):

@@ -181,46 +181,53 @@ def build_table_columns(
     ]
 
 
+def _field_section(
+    *,
+    kind: str,
+    slug: str,
+    fields: list[dict[str, str]],
+    selected_fields: dict[str, list[str]],
+) -> dict[str, Any]:
+    """Build one stereotype field checklist section."""
+    checked = selected_fields.get(slug) or [row["path"] for row in fields]
+    label = slug.replace("_", " ").title() if kind == "element" else slug.replace("_", " ")
+    return {
+        "kind": kind,
+        "slug": slug,
+        "label": label,
+        "fields": fields,
+        "checked_paths": checked,
+    }
+
+
 def build_view_field_sections(
     element_stereotypes: list[str],
     relationship_stereotypes: list[str],
     selected_fields: dict[str, list[str]] | None = None,
 ) -> list[dict[str, Any]]:
-    """
-    Build stereotype-grouped field checklists for the Filters panel.
-
-    :param element_stereotypes: Selected element stereotype slugs.
-    :param relationship_stereotypes: Selected edge stereotype slugs.
-    :param selected_fields: Stereotype slug → checked field paths; defaults all on.
-    :return: Section dicts for template rendering.
-    """
+    """Build stereotype-grouped field checklists for the Filters panel."""
     selected_fields = selected_fields or {}
-    sections: list[dict[str, Any]] = []
-    for slug in element_stereotypes:
-        fields = STEREOTYPE_FIELD_SCHEMA.get(slug, [{"path": "name", "label": "Name"}])
-        checked = selected_fields.get(slug) or [row["path"] for row in fields]
-        sections.append(
-            {
-                "kind": "element",
-                "slug": slug,
-                "label": slug.replace("_", " ").title(),
-                "fields": fields,
-                "checked_paths": checked,
-            }
+    element_sections = [
+        _field_section(
+            kind="element",
+            slug=slug,
+            fields=STEREOTYPE_FIELD_SCHEMA.get(slug, [{"path": "name", "label": "Name"}]),
+            selected_fields=selected_fields,
         )
-    for slug in relationship_stereotypes:
-        fields = STEREOTYPE_FIELD_SCHEMA.get(slug, [{"path": "stereotype", "label": "Stereotype"}])
-        checked = selected_fields.get(slug) or [row["path"] for row in fields]
-        sections.append(
-            {
-                "kind": "relationship",
-                "slug": slug,
-                "label": slug.replace("_", " "),
-                "fields": fields,
-                "checked_paths": checked,
-            }
+        for slug in element_stereotypes
+    ]
+    relationship_sections = [
+        _field_section(
+            kind="relationship",
+            slug=slug,
+            fields=STEREOTYPE_FIELD_SCHEMA.get(
+                slug, [{"path": "stereotype", "label": "Stereotype"}]
+            ),
+            selected_fields=selected_fields,
         )
-    return sections
+        for slug in relationship_stereotypes
+    ]
+    return element_sections + relationship_sections
 
 
 def field_map_for_element(element: dict[str, Any], field_map: dict[str, list[str]]) -> list[str]:

@@ -179,15 +179,7 @@ def apply_browse_view_expansion(
     ymodel: YggdrasilModel,
     params: ViewBrowseParams,
 ) -> ViewBrowseParams:
-    """
-    Expand ``?browse_view=`` into filter params; explicit query values win.
-
-    :param request: Django HTTP request.
-    :param user: Authenticated user loading the View.
-    :param ymodel: Active YggdrasilModel instance.
-    :param params: Base parsed params (may include ``browse_view`` slug only).
-    :return: Params with filters/depth/mode from saved payload when resolved.
-    """
+    """Expand ``?browse_view=`` into filter params; explicit query values win."""
     browse_view_slug = _blank_to_none(request.GET.get("browse_view"))
     if not browse_view_slug:
         return params
@@ -202,7 +194,58 @@ def apply_browse_view_expansion(
     if saved is None:
         return params
 
+    merged = _expanded_browse_params(request, params, saved, browse_view_slug)
+    logger.info(
+        "browse_helpers.apply_browse_view_expansion | exit | browse_view=%s expanded=true depth=%s package=%s",
+        browse_view_slug,
+        merged.depth,
+        merged.package,
+    )
+    return merged
+
+
+def _expanded_browse_params(
+    request: HttpRequest,
+    params: ViewBrowseParams,
+    saved: BrowseView,
+    browse_view_slug: str,
+) -> ViewBrowseParams:
+    """Build merged params from a resolved saved View."""
     expanded = browse_view_service.expand_to_query_params(saved)
+    merged_filters = _merge_expanded_filters(request, expanded, params)
+    field_map, field_source = _resolve_field_map_from_expansion(request, expanded)
+    logger.info(
+        "browse_content.resolve_field_map | processing | source=%s field_stereotypes=%s field_path_count=%s",
+        field_source,
+        len(field_map),
+        sum(len(paths) for paths in field_map.values()),
+    )
+    viewport = params.viewport
+    if field_source == "payload":
+        viewport = _viewport_from_expanded(expanded) or viewport
+
+    return ViewBrowseParams(
+        model_slug=params.model_slug,
+        packages=merged_filters["packages"],
+        element_stereotypes=merged_filters["element_stereotypes"],
+        relationship_stereotypes=merged_filters["relationship_stereotypes"],
+        health=params.health,
+        as_of=params.as_of,
+        view_mode=merged_filters["view_mode"],
+        depth=merged_filters["depth"],
+        field_map=field_map,
+        viewport=viewport,
+        browse_view=browse_view_slug,
+        loaded_view_name=saved.name,
+    )
+
+
+def _merge_expanded_filters(
+    request: HttpRequest,
+    expanded: dict[str, list[str]],
+    params: ViewBrowseParams,
+) -> dict[str, Any]:
+    """Merge saved View filters with explicit query overrides."""
     packages = _get_query_list(request.GET, "package")
     if not packages and expanded.get("package"):
         packages = tuple(expanded["package"])
@@ -212,52 +255,30 @@ def apply_browse_view_expansion(
     relationship_stereotypes = _get_query_list(request.GET, "edge_stereotype")
     if not relationship_stereotypes and expanded.get("edge_stereotype"):
         relationship_stereotypes = tuple(expanded["edge_stereotype"])
-    health = params.health
-    as_of = params.as_of
     view_mode = _parse_view_mode(request)
     if request.GET.get("mode") is None and request.GET.get("view") is None:
         view_mode = expanded.get("mode", [params.view_mode])[0]
     depth = params.depth
     if request.GET.get("depth") is None:
         depth = int(expanded.get("depth", [str(params.depth)])[0])
+    return {
+        "packages": packages,
+        "element_stereotypes": element_stereotypes,
+        "relationship_stereotypes": relationship_stereotypes,
+        "view_mode": view_mode,
+        "depth": depth,
+    }
+
+
+def _resolve_field_map_from_expansion(
+    request: HttpRequest,
+    expanded: dict[str, list[str]],
+) -> tuple[dict[str, tuple[str, ...]], str]:
+    """Resolve field_map from query params or saved View payload."""
     query_field_map = _field_map_from_query(request.GET)
     if query_field_map:
-        field_map = query_field_map
-        field_source = "query"
-    else:
-        field_map = _field_map_from_expanded(expanded)
-        field_source = "payload"
-    logger.info(
-        "browse_content.resolve_field_map | processing | source=%s field_stereotypes=%s field_path_count=%s",
-        field_source,
-        len(field_map),
-        sum(len(paths) for paths in field_map.values()),
-    )
-    viewport = params.viewport
-    if not query_field_map:
-        viewport = _viewport_from_expanded(expanded) or viewport
-
-    merged = ViewBrowseParams(
-        model_slug=params.model_slug,
-        packages=packages,
-        element_stereotypes=element_stereotypes,
-        relationship_stereotypes=relationship_stereotypes,
-        health=health,
-        as_of=as_of,
-        view_mode=view_mode,
-        depth=depth,
-        field_map=field_map,
-        viewport=viewport,
-        browse_view=browse_view_slug,
-        loaded_view_name=saved.name,
-    )
-    logger.info(
-        "browse_helpers.apply_browse_view_expansion | exit | browse_view=%s expanded=true depth=%s package=%s",
-        browse_view_slug,
-        merged.depth,
-        merged.package,
-    )
-    return merged
+        return query_field_map, "query"
+    return _field_map_from_expanded(expanded), "payload"
 
 
 def _field_map_from_expanded(expanded: dict[str, list[str]]) -> dict[str, tuple[str, ...]]:
@@ -352,6 +373,11 @@ def build_empty_browse_context(request: HttpRequest) -> dict[str, Any]:
         request.user.pk,
         len(readable_models),
     )
+    return _empty_browse_context_payload(readable_models)
+
+
+def _empty_browse_context_payload(readable_models: list[YggdrasilModel]) -> dict[str, Any]:
+    """Return zero-model browse template context."""
     return {
         "elements": [],
         "element_count": 0,
@@ -418,19 +444,9 @@ def build_traversal_tree(
     parent_map: dict[int, int | None],
     root_ids: frozenset[int],
 ) -> list[dict[str, Any]]:
-    """
-    Build nested navigator tree from BFS parent map.
-
-    :param node_rows: Flat element row dicts with ``id`` and ``slug``.
-    :param parent_map: Child PK -> parent PK (roots map to None).
-    :param root_ids: Root element PKs from BFS.
-    :return: Root nodes with nested ``children`` lists.
-    """
+    """Build nested navigator tree from BFS parent map."""
     by_id = {row["id"]: row for row in node_rows}
-    children_map: dict[int, list[int]] = {}
-    for child_id, parent_id in parent_map.items():
-        if parent_id is not None and child_id in by_id and parent_id in by_id:
-            children_map.setdefault(parent_id, []).append(child_id)
+    children_map = _children_map_from_parent(parent_map, by_id)
 
     def build_node(pk: int) -> dict[str, Any]:
         row = dict(by_id[pk])
@@ -442,11 +458,7 @@ def build_traversal_tree(
         row["expanded"] = pk in root_ids
         return row
 
-    roots = sorted(
-        (pk for pk in root_ids if pk in by_id),
-        key=lambda pk: by_id[pk]["name"],
-    )
-    tree = [build_node(pk) for pk in roots]
+    tree = [build_node(pk) for pk in _sorted_root_ids(root_ids, by_id)]
     logger.info(
         "build_traversal_tree | tree_root_count=%s element_count=%s",
         len(tree),
@@ -455,23 +467,57 @@ def build_traversal_tree(
     return tree
 
 
-def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) -> dict[str, Any]:
-    """
-    Build template context for View Browser full page or HTMX partial.
+def _children_map_from_parent(
+    parent_map: dict[int, int | None],
+    by_id: dict[int, dict[str, Any]],
+) -> dict[int, list[int]]:
+    """Group child PKs by parent PK for tree building."""
+    children_map: dict[int, list[int]] = {}
+    for child_id, parent_id in parent_map.items():
+        if parent_id is not None and child_id in by_id and parent_id in by_id:
+            children_map.setdefault(parent_id, []).append(child_id)
+    return children_map
 
-    :param request: Authenticated request (for user_id in service logs).
-    :param params: Parsed browse parameters.
-    :return: Context dict[str, Any] with elements, packages, filter options, and active filters.
-    """
-    readable_models = list(
-        browse_service.list_readable_models(require_authenticated_user(request.user))
-    )
-    switcher_disabled = len(readable_models) <= 1
+
+def _sorted_root_ids(root_ids: frozenset[int], by_id: dict[int, dict[str, Any]]) -> list[int]:
+    """Return root PKs present in ``by_id``, sorted by display name."""
+    return sorted((pk for pk in root_ids if pk in by_id), key=lambda pk: by_id[pk]["name"])
+
+
+def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) -> dict[str, Any]:
+    """Build template context for View Browser full page or HTMX partial."""
     auth_user = require_authenticated_user(request.user)
-    model_name = params.model_slug.title()
-    ymodel = None
-    browse_views: list[BrowseView] = []
-    browse_view_entries: list[dict[str, Any]] = []
+    readable_models = list(browse_service.list_readable_models(auth_user))
+    field_sections, table_columns, field_map_dict = _content_panel_fields(params)
+    subgraph = _load_browse_subgraph(request, params, table_columns, field_map_dict)
+    browse_views, browse_view_entries, model_name = _browse_view_catalog(
+        auth_user, params, subgraph.ymodel
+    )
+    logger.info(
+        "build_view_browse_context | depth=%s element_count=%s tree_root_count=%s model_slug=%s",
+        subgraph.current_depth,
+        subgraph.element_count,
+        len(subgraph.traversal_roots),
+        params.model_slug,
+    )
+    return _browse_page_context(
+        params=params,
+        auth_user=auth_user,
+        readable_models=readable_models,
+        switcher_disabled=len(readable_models) <= 1,
+        view_field_sections=field_sections,
+        table_columns=table_columns,
+        subgraph=subgraph,
+        browse_views=browse_views,
+        browse_view_entries=browse_view_entries,
+        model_name=model_name,
+    )
+
+
+def _content_panel_fields(
+    params: ViewBrowseParams,
+) -> tuple[list[dict[str, Any]], list[dict[str, str]], dict[str, list[str]]]:
+    """Build Filters panel field sections and dynamic table columns."""
     field_map_dict = {slug: list(paths) for slug, paths in params.field_map.items()}
     view_field_sections = browse_content.build_view_field_sections(
         list(params.element_stereotypes),
@@ -482,64 +528,31 @@ def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) ->
         element_stereotypes=list(params.element_stereotypes),
         field_map=field_map_dict,
     )
+    return view_field_sections, table_columns, field_map_dict
 
-    try:
-        ymodel = browse_service.resolve_model(params.model_slug)
-        model_name = ymodel.name
-        browse_views = list(browse_view_service.list_views(auth_user, ymodel))
-        browse_view_entries = [_browse_view_entry(params.model_slug, view) for view in browse_views]
-        scoped = browse_service.subgraph_from_roots(
-            model_slug=params.model_slug,
-            stereotype=params.stereotype,
-            package=params.package,
-            health=params.health,
-            packages=params.packages,
-            stereotypes=params.element_stereotypes,
-            relationship_stereotypes=params.relationship_stereotypes,
-            depth=params.depth,
-            user_id=request.user.pk,
-            field_map={slug: list(paths) for slug, paths in params.field_map.items()},
-        )
-        options = browse_service.list_filter_options(model_slug=params.model_slug)
-        if params.packages:
-            options = browse_service.build_package_scoped_filter_options(
-                model_slug=params.model_slug,
-                packages=params.packages,
-            )
-        elements = [
-            _row_from_summary(item, table_columns, field_map_dict) for item in scoped.node_summaries
-        ]
-        element_count = len(elements)
-        traversal_roots = build_traversal_tree(
-            elements,
-            scoped.parent_map,
-            scoped.root_ids,
-        )
-        max_depth = scoped.max_depth
-        current_depth = params.depth
-    except ValueError:
-        elements = []
-        element_count = 0
-        traversal_roots = []
-        max_depth = 1
-        current_depth = params.depth
-        options = {"packages": [], "stereotypes": [], "relationship_stereotypes": [], "health": []}
 
-    logger.info(
-        "build_view_browse_context | depth=%s element_count=%s tree_root_count=%s model_slug=%s",
-        current_depth,
-        element_count,
-        len(traversal_roots),
-        params.model_slug,
-    )
+def _browse_page_context(
+    *,
+    params: ViewBrowseParams,
+    auth_user: User,
+    readable_models: list[YggdrasilModel],
+    switcher_disabled: bool,
+    view_field_sections: list[dict[str, Any]],
+    table_columns: list[dict[str, str]],
+    subgraph: _BrowseSubgraphContext,
+    browse_views: list[BrowseView],
+    browse_view_entries: list[dict[str, Any]],
+    model_name: str,
+) -> dict[str, Any]:
+    """Assemble final browse template context dict."""
     return {
-        "elements": elements,
-        "element_count": element_count,
-        "traversal_roots": traversal_roots,
-        "max_depth": max_depth,
-        "current_depth": current_depth,
+        "elements": subgraph.elements,
+        "element_count": subgraph.element_count,
+        "traversal_roots": subgraph.traversal_roots,
+        "max_depth": subgraph.max_depth,
+        "current_depth": subgraph.current_depth,
         "model_name": model_name,
-        "filter_options": options,
+        "filter_options": subgraph.filter_options,
         "active_filters": params,
         "model_slug": params.model_slug,
         "view_mode": params.view_mode,
@@ -553,6 +566,91 @@ def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) ->
         "table_columns": table_columns,
         "loaded_viewport_json": params.viewport if params.view_mode == "graph" else None,
     }
+
+
+@dataclass(frozen=True)
+class _BrowseSubgraphContext:
+    """Subgraph-derived browse template fields."""
+
+    elements: list[dict[str, Any]]
+    element_count: int
+    traversal_roots: list[dict[str, Any]]
+    max_depth: int
+    current_depth: int
+    filter_options: dict[str, Any]
+    ymodel: YggdrasilModel | None
+
+
+def _load_browse_subgraph(
+    request: HttpRequest,
+    params: ViewBrowseParams,
+    table_columns: list[dict[str, str]],
+    field_map_dict: dict[str, list[str]],
+) -> _BrowseSubgraphContext:
+    """Load depth-scoped subgraph rows and navigator tree for browse context."""
+    try:
+        ymodel = browse_service.resolve_model(params.model_slug)
+        scoped = browse_service.subgraph_from_roots(
+            model_slug=params.model_slug,
+            stereotype=params.stereotype,
+            package=params.package,
+            health=params.health,
+            packages=params.packages,
+            stereotypes=params.element_stereotypes,
+            relationship_stereotypes=params.relationship_stereotypes,
+            depth=params.depth,
+            user_id=request.user.pk,
+            field_map=field_map_dict,
+        )
+        options = browse_service.list_filter_options(model_slug=params.model_slug)
+        if params.packages:
+            options = browse_service.build_package_scoped_filter_options(
+                model_slug=params.model_slug,
+                packages=params.packages,
+            )
+        elements = [
+            _row_from_summary(item, table_columns, field_map_dict) for item in scoped.node_summaries
+        ]
+        return _BrowseSubgraphContext(
+            elements=elements,
+            element_count=len(elements),
+            traversal_roots=build_traversal_tree(elements, scoped.parent_map, scoped.root_ids),
+            max_depth=scoped.max_depth,
+            current_depth=params.depth,
+            filter_options=options,
+            ymodel=ymodel,
+        )
+    except ValueError:
+        return _BrowseSubgraphContext(
+            elements=[],
+            element_count=0,
+            traversal_roots=[],
+            max_depth=1,
+            current_depth=params.depth,
+            filter_options={
+                "packages": [],
+                "stereotypes": [],
+                "relationship_stereotypes": [],
+                "health": [],
+            },
+            ymodel=None,
+        )
+
+
+def _browse_view_catalog(
+    auth_user: User,
+    params: ViewBrowseParams,
+    ymodel: YggdrasilModel | None,
+) -> tuple[list[BrowseView], list[dict[str, Any]], str]:
+    """Resolve model display name and saved View catalog entries."""
+    model_name = params.model_slug.title()
+    browse_views: list[BrowseView] = []
+    browse_view_entries: list[dict[str, Any]] = []
+    if ymodel is None:
+        return browse_views, browse_view_entries, model_name
+    browse_views = list(browse_view_service.list_views(auth_user, ymodel))
+    browse_view_entries = [_browse_view_entry(params.model_slug, view) for view in browse_views]
+    return browse_views, browse_view_entries, ymodel.name
 
 
 def _browse_view_entry(model_slug: str, view: Any) -> dict[str, Any]:

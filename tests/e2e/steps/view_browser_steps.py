@@ -28,6 +28,7 @@ from tests.fixtures.view_browser import (
     _seed_view_browser,
 )
 
+from yggdrasil.graph import browse_view_service
 from yggdrasil.graph.models import Element, YggdrasilModel, ensure_c4_metamodel
 from yggdrasil.mcp.server import set_current_user_id, set_token_scope
 
@@ -322,3 +323,142 @@ def step_graph_element_visible_in_viewport_e2e(context, slug: str) -> None:
     )
     assert visible, f"Expected {slug!r} visible in canvas viewport"
     logger.info("E2E graph element %s visible in viewport", slug)
+
+
+_FIELD_PATHS = {
+    "Name": "name",
+    "Owner": "owner",
+    "Health": "health",
+    "Jira key": "properties.jira_key",
+}
+
+
+@when('she selects element stereotype "{stereotype}" in the filter panel')
+def step_select_element_stereotype_e2e(context, stereotype: str) -> None:
+    """Open filters, select element stereotype, and wait for field sections."""
+    context.page.get_by_test_id("filters-toggle").click()
+    stereotype_select = context.page.get_by_test_id("filter-stereotype")
+    stereotype_select.select_option(stereotype)
+    stereotype_select.dispatch_event("change")
+    context.page.get_by_test_id(f"view-fields-{stereotype}").wait_for(
+        state="visible", timeout=10_000
+    )
+    logger.info("E2E selected element stereotype %s", stereotype)
+
+
+@when('she checks visible field "{field_label}" for stereotype "{stereotype}" in the browser')
+def step_check_visible_field_e2e(context, field_label: str, stereotype: str) -> None:
+    """Toggle one field checkbox in the Filters panel."""
+    path = _FIELD_PATHS.get(field_label, field_label.lower().replace(" ", "_"))
+    checkbox = context.page.get_by_test_id(f"view-field-{stereotype}-{path}")
+    checkbox.wait_for(state="visible", timeout=10_000)
+    checkbox.check()
+    logger.info("E2E checked field %s for stereotype %s", field_label, stereotype)
+
+
+@when("she applies browse filters in the browser")
+def step_apply_browse_filters_e2e(context) -> None:
+    """Submit Filters panel Apply Filters."""
+    context.page.get_by_test_id("apply-filters-btn").click()
+    context.page.wait_for_load_state("networkidle")
+    logger.info("E2E applied browse filters url=%s", context.page.url)
+
+
+@when("she toggles to table mode in the browser")
+def step_toggle_table_mode_e2e(context) -> None:
+    """Switch presentation to table mode via toolbar (updates hidden mode field)."""
+    context.page.get_by_test_id("toggle-table").click()
+    context.page.wait_for_timeout(300)
+    logger.info("E2E toggled table mode url=%s", context.page.url)
+
+
+@then("the table view is active in the browser")
+def step_table_view_active_e2e(context) -> None:
+    """Assert #browserRoot has yrg-mode-table."""
+    root = context.page.locator("#browserRoot")
+    classes = root.get_attribute("class") or ""
+    assert "yrg-mode-table" in classes, f"Expected table mode classes, got {classes!r}"
+    table = context.page.locator("#tableView")
+    assert "d-none" not in (table.get_attribute("class") or ""), "Table view is hidden"
+    logger.info("E2E table view active")
+
+
+@then('the table includes column "{column_label}" in the browser')
+def step_table_includes_column_e2e(context, column_label: str) -> None:
+    """Assert table header includes column by label or data-col-key."""
+    col_key = column_label.lower().replace(" ", "_")
+    header = context.page.locator("#browseTableHeadRow")
+    header.wait_for(state="visible", timeout=10_000)
+    if header.locator(f'[data-col-key="{col_key}"]').count():
+        logger.info("E2E table includes column key %s", col_key)
+        return
+    assert column_label in header.inner_text(), f"Column {column_label!r} not found in table head"
+    logger.info("E2E table includes column %s", column_label)
+
+
+@given('Priya has saved a View named "{name}" with field_map for "{stereotype}"')
+def step_saved_view_with_field_map_e2e(context, name: str, stereotype: str) -> None:
+    """Seed BrowseView with field_map before Playwright navigation."""
+    if not getattr(context, "current_user", None):
+        step_priya_logged_in_e2e(context)
+    architect_group, _ = Group.objects.get_or_create(name="architect")
+    context.current_user.groups.add(architect_group)
+    mm = ensure_c4_metamodel()
+    ymodel, _ = YggdrasilModel.objects.get_or_create(
+        slug="yggdrasil",
+        defaults={"name": "Yggdrasil", "metamodel": mm, "owner_group": architect_group},
+    )
+    browse_view_service.save_view(
+        context.current_user,
+        ymodel,
+        name=name,
+        payload={
+            "filters": {
+                "packages": [],
+                "element_stereotypes": [stereotype],
+                "relationship_stereotypes": [],
+            },
+            "levels": {"depth": 2},
+            "presentation": "graph",
+            "content": {"field_map": {stereotype: ["name", "owner"]}},
+        },
+    )
+    logger.info("E2E seeded saved View %s with field_map for %s", name, stereotype)
+
+
+@when('she selects View "{name}" from the Views dropdown')
+def step_select_view_from_dropdown_e2e(context, name: str) -> None:
+    """Load named View from canvas toolbar dropdown."""
+    slug = slugify(name)
+    context.page.get_by_test_id("views-dropdown").click()
+    context.page.get_by_test_id(f"view-option-{slug}").click()
+    context.page.wait_for_load_state("networkidle")
+    context.page.wait_for_function(
+        "window.cyInstance && document.querySelector('[data-testid=\"graph-json-loaded\"]')",
+        timeout=15_000,
+    )
+    logger.info("E2E selected View %s from dropdown", name)
+
+
+@then('graph node "{slug}" displays label containing "{text}" in the browser')
+def step_graph_node_label_contains_e2e(context, slug: str, text: str) -> None:
+    """Assert Cytoscape node label contains expected Key: value fragment."""
+    context.page.wait_for_function(
+        "window.cyInstance && document.querySelector('[data-testid=\"graph-json-loaded\"]')",
+        timeout=15_000,
+    )
+    matched = context.page.evaluate(
+        """({ slug, text }) => {
+            const cy = window.cyInstance;
+            if (!cy) return false;
+            const node = cy.nodes().filter(n => {
+              const label = String(n.data('label') || '');
+              return label.toLowerCase().includes(slug.toLowerCase());
+            });
+            if (!node.length) return false;
+            return String(node.data('label') || '').includes(text);
+        }""",
+        {"slug": slug, "text": text},
+    )
+    assert matched, f"Expected graph node {slug!r} label to contain {text!r}"
+    logger.info("E2E graph node %s label contains %s", slug, text)

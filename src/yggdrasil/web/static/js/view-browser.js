@@ -532,7 +532,8 @@
     }
 
     var urlParams = new URLSearchParams(window.location.search);
-    urlParams.set('view', mode);
+    urlParams.set('mode', mode);
+    urlParams.delete('view');
     urlParams.delete('partial');
     syncBrowseUrl(urlParams);
 

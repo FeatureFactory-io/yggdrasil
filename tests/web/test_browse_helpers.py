@@ -38,11 +38,35 @@ def test_parse_depth_defaults_to_1() -> None:
 
 
 def test_parse_view_defaults_to_graph() -> None:
-    """Omitted view query param defaults to graph presentation."""
+    """Omitted mode/view query param defaults to graph presentation."""
     request = RequestFactory().get("/models/yggdrasil/views/")
     params = parse_view_browse_params(request, "yggdrasil")
     assert params.view_mode == DEFAULT_VIEW_MODE
     assert params.view_mode == "graph"
+
+
+def test_parse_mode_query_param_table() -> None:
+    """W14-0: ``?mode=table`` selects table presentation."""
+    request = RequestFactory().get("/models/yggdrasil/views/", {"mode": "table"})
+    params = parse_view_browse_params(request, "yggdrasil")
+    assert params.view_mode == "table"
+
+
+def test_parse_mode_prefers_mode_over_legacy_view() -> None:
+    """W14-0: ``?mode=`` wins when both ``mode`` and legacy ``view`` are present."""
+    request = RequestFactory().get(
+        "/models/yggdrasil/views/",
+        {"mode": "table", "view": "graph"},
+    )
+    params = parse_view_browse_params(request, "yggdrasil")
+    assert params.view_mode == "table"
+
+
+def test_parse_legacy_view_query_param_fallback() -> None:
+    """W14-0: legacy ``?view=`` still works as alias for ``?mode=``."""
+    request = RequestFactory().get("/models/yggdrasil/views/", {"view": "table"})
+    params = parse_view_browse_params(request, "yggdrasil")
+    assert params.view_mode == "table"
 
 
 def test_build_traversal_tree_nests_children() -> None:

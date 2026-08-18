@@ -67,6 +67,19 @@ class ViewBrowseParams:
     depth: int
 
 
+def _parse_view_mode(request: HttpRequest) -> str:
+    """
+    Parse presentation mode from ``?mode=`` with legacy ``?view=`` fallback.
+
+    :param request: Django HTTP request.
+    :return: ``graph`` or ``table``.
+    """
+    raw = _blank_to_none(request.GET.get("mode")) or _blank_to_none(request.GET.get("view"))
+    if raw in VALID_VIEW_MODES:
+        return raw
+    return DEFAULT_VIEW_MODE
+
+
 def parse_view_browse_params(request: HttpRequest, model_slug: str) -> ViewBrowseParams:
     """
     Parse filter query parameters from a View Browser request.
@@ -75,8 +88,7 @@ def parse_view_browse_params(request: HttpRequest, model_slug: str) -> ViewBrows
     :param model_slug: Model slug from the URL path. Example: ``"yggdrasil"``.
     :return: Normalized browse parameters.
     """
-    raw_view = _blank_to_none(request.GET.get("view")) or DEFAULT_VIEW_MODE
-    view_mode = raw_view if raw_view in VALID_VIEW_MODES else DEFAULT_VIEW_MODE
+    view_mode = _parse_view_mode(request)
     return ViewBrowseParams(
         model_slug=model_slug,
         stereotype=_blank_to_none(request.GET.get("stereotype")),

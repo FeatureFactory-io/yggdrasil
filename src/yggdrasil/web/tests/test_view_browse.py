@@ -34,7 +34,7 @@ def _browse_graph_url(model_slug: str = "yggdrasil") -> str:
     return reverse("web:view_browse_graph_model", kwargs={"model_slug": model_slug})
 
 
-GRAPH_URL = _browse_url("yggdrasil") + "?view=graph"
+GRAPH_URL = _browse_url("yggdrasil") + "?mode=graph"
 
 
 @pytest.fixture
@@ -219,13 +219,26 @@ def test_view_browser_default_graph_mode(client, view_browser_user, view_browser
 def test_view_browser_table_mode_hides_graph_panels(
     client, view_browser_user, view_browser_explorer_model
 ):
-    """Explicit ?view=table SSR hides graph-only panels via yrg-mode-table."""
+    """Explicit ?mode=table SSR hides graph-only panels via yrg-mode-table."""
     client.force_login(view_browser_user)
-    response = client.get(_browse_url(), {"view": "table"})
+    response = client.get(_browse_url(), {"mode": "table"})
     body = response.content.decode()
     assert "yrg-mode-table" in body
     assert "yrg-graph-only" in body
     assert 'class="yrg-view-browser"' not in body
+
+
+@pytest.mark.django_db
+def test_mode_query_param_replaces_view(client, view_browser_user, view_browser_explorer_model):
+    """W14-0: ?mode=table works; legacy ?view= remains aliased."""
+    client.force_login(view_browser_user)
+    mode_response = client.get(_browse_url(), {"mode": "table"})
+    view_response = client.get(_browse_url(), {"view": "table"})
+    assert mode_response.status_code == 200
+    assert view_response.status_code == 200
+    assert "yrg-mode-table" in mode_response.content.decode()
+    assert "yrg-mode-table" in view_response.content.decode()
+    assert 'name="mode"' in mode_response.content.decode()
 
 
 @pytest.mark.django_db
@@ -360,7 +373,7 @@ def test_inspector_relationship_partial_renders_endpoints(
 def test_view_browse_switcher_lists_models(client, view_browser_user, two_model_fixture):
     """VIEW-BROWSE-1-48: switcher lists readable models."""
     client.force_login(view_browser_user)
-    response = client.get(_browse_url("yggdrasil") + "?view=graph")
+    response = client.get(_browse_url("yggdrasil") + "?mode=graph")
     body = response.content.decode()
     assert response.status_code == 200
     assert 'data-testid="browser-model-switcher"' in body
@@ -383,7 +396,7 @@ def test_view_browse_redirect_302_to_default(client, view_browser_user, view_bro
 def test_view_browse_canonical_200(client, view_browser_user, view_browser_explorer_model):
     """VIEW-BROWSE-1-50: canonical browse URL includes model slug."""
     client.force_login(view_browser_user)
-    response = client.get(_browse_url("yggdrasil") + "?view=graph")
+    response = client.get(_browse_url("yggdrasil") + "?mode=graph")
     body = response.content.decode()
     assert response.status_code == 200
     assert 'data-testid="browser-nav-panel"' in body
@@ -418,7 +431,7 @@ def test_view_browse_zero_models_empty_state(client, db):
 def test_view_browse_switcher_no_create_action(client, view_browser_user, two_model_fixture):
     """VIEW-BROWSE-1-54: switcher has no create-model action."""
     client.force_login(view_browser_user)
-    response = client.get(_browse_url("yggdrasil") + "?view=graph")
+    response = client.get(_browse_url("yggdrasil") + "?mode=graph")
     body = response.content.decode()
     assert response.status_code == 200
     assert "Create model" not in body

@@ -109,7 +109,7 @@ def step_priya_on_view_browser_model_e2e(context, slug: str) -> None:
     if not getattr(context, "current_user", None):
         step_priya_logged_in_e2e(context)
     path = reverse("web:view_browse_model", kwargs={"model_slug": slug})
-    url = _live_server_base(context) + path + "?view=graph"
+    url = _live_server_base(context) + path + "?mode=graph"
     context.page.goto(url, wait_until="networkidle")
     context.current_path = path
     logger.info("E2E opened View Browser model=%s at %s", slug, url)

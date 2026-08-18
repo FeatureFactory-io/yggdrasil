@@ -416,7 +416,7 @@
 
     <div class="collapse" id="filterPanel">
       <form method="get" action="{% if model_slug %}{% url 'web:view_browse_model' model_slug=model_slug %}{% else %}{% url 'web:view_browse' %}{% endif %}" id="filterForm">
-        <input type="hidden" name="view" id="filterViewMode" value="{{ view_mode }}">
+        <input type="hidden" name="mode" id="filterViewMode" value="{{ view_mode }}">
         <input type="hidden" name="depth" value="{{ current_depth }}">
         <div class="hg-filter-panel">
           <div class="row g-3 mb-3">

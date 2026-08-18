@@ -1,5 +1,7 @@
 # Change Reconciliation — VIEW-BROWSE-1 Views v2 (Content + Viewport)
 
+> **Approved UX:** [`VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md`](VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md) § Approved target state. Design history: same doc § Archive.
+
 **Feature:** `VIEW-BROWSE-1` (Act 2 View Browser)
 **Activity:** BPE-08 Process Change Request
 **Status:** Approved — 2026-08-18 (Q1–Q4 accepted; mockup validated — see [`VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md`](VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md))
@@ -91,9 +93,7 @@ Ephemeral UI still excluded: inspector selection, panel collapse, Munin open sta
 - **Table:** columns = union of element field_map paths (Name + Stereotype always first).
 - **Inspector:** **Visible fields** section mirrors active field_map; full properties remain under Other properties / Provenance.
 
-Built-in Content presets may seed `field_map` in W15 service helpers — there is **no preset picker** in the validated mockup UI.
-
-**Superseded (do not implement without new CR):** Content preset dropdown, Content editor panel, separate Apply content button, `?content=` live URL.
+Built-in helpers may seed default `field_map` in W15 service layer — **no preset picker** in the validated mockup UI.
 
 ### Viewport model (graph-only)
 
@@ -152,8 +152,6 @@ Viewport is **not** in live URL.
 | Filters panel | Clear · Save View · **Apply Filters** (primary) | `filter-panel-clear-btn`, `save-view-btn`, `apply-filters-btn` |
 | Save View modal | Include graph viewport checkbox | `save-view-include-viewport` |
 
-**Superseded:** `content-dropdown`, `content-editor-*`, `results-container`, `graph-node-count`, Views dropdown in page header.
-
 ### API / graph.json
 
 `GET /models/{slug}/views/graph.json` accepts resolved `field_map` (from URL params or named View expansion); response node `data.label` includes server-formatted multiline **`Key: value`** text for Cytoscape.
@@ -164,7 +162,7 @@ New file: `docs/features/act-2-view/view-browse-content.feature`
 
 | ID | Scenario | Runner |
 |----|----------|--------|
-| 69 | Filters panel shows field sections when stereotypes selected; no Content dropdown | AT |
+| 69 | Filters panel shows field sections when stereotypes selected | AT |
 | 70 | Default field_map labels nodes with name only | AT + E2E |
 | 71 | Toggling owner field shows `Owner: …` inside node label | AT + E2E @wip |
 | 72 | `field_component=owner` in URL applies without named View | AT |

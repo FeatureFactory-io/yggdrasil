@@ -15,7 +15,7 @@
 | Filters panel | **View editor** — package/stereotype scope + per-stereotype field checklists (Content) | `filter-package`, `filter-stereotype`, `filter-edge-stereotype`, `view-field-sections`, `view-field-{slug}-{path}`, `filter-panel-clear-btn`, `save-view-btn`, `apply-filters-btn` | `view-browse-content.feature` |
 | Page shell | Header Export/History/Munin; save dialog | `export-btn`, `history-btn`, `open-munin-btn`, `save-view-confirm-btn`, `save-view-include-viewport`, `view-option-{slug}` | `view-browse.feature`, `view-browse-views.feature` |
 
-**Superseded in mockup (do not port to W15 without new CR):** `content-dropdown`, `content-editor-*`, `results-container`, `graph-node-count`, header-placed Views dropdown.
+**UX authority:** [`VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md) § Approved target state.
 
 ---
 

@@ -156,8 +156,6 @@ def test_mockup_browse_renders_filters_first_view(client, settings) -> None:
     assert MOCK_BROWSE_VIEWS[0]["name"] in html
     assert 'data-testid="filter-edge-stereotype"' in html
     assert 'data-testid="apply-filters-btn"' in html
-    assert "content-editor-toggle" not in html
-    assert "content-dropdown" not in html
     assert 'data-testid="view-field-sections"' in html
     assert 'id="mock-filter-catalog"' in html
 

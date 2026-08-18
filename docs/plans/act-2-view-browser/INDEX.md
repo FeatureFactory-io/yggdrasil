@@ -13,7 +13,7 @@
 | [`view-browse-inspector.feature`](../../features/act-2-view/view-browse-inspector.feature) | 25–34 | Right property panel + embed partials |
 | [`view-browse-canvas.feature`](../../features/act-2-view/view-browse-canvas.feature) | 35–44 | Graph/table canvas + filter sync |
 | [`view-browse-views.feature`](../../features/act-2-view/view-browse-views.feature) | 61–68 | Named Views save/load (W14) |
-| [`view-browse-content.feature`](../../features/act-2-view/view-browse-content.feature) | 69–76 | Content presets + viewport (W15) |
+| [`view-browse-content.feature`](../../features/act-2-view/view-browse-content.feature) | 69–79 | Filters-first field_map + viewport (W15) |
 | [`_implementation_notes.md`](../../features/act-2-view/_implementation_notes.md) | — | Component map, waves, embed contract |
 
 ## v0.2 status (shipped)
@@ -32,8 +32,8 @@ Scenarios **01–15** (except 11 @wip) covered by `test_view_browse.py`.
 | W11 | Filter ↔ navigator ↔ graph URL sync | 43–44 | AT + E2E |
 | W12 | Model switcher | 48–54 | AT + E2E |
 | W13 | Depth traversal BFS + slider + element tree | 55–60 | AT + E2E · [#93](https://github.com/FeatureFactory-io/yggdrasil/issues/93) |
-| W14 | **Views v1** — `BrowseView`, save/load, `browse_view=`, `mode=` migration | 61–68 | Plan: BPE-W14 (after BPE-01) |
-| W15 | **Views v2** — Content presets, `content=`, viewport in payload | 69–76 | Plan: BPE-W15 (after W14) |
+| W14 | **Views v1** — `BrowseView`, save/load, `browse_view=`, `mode=` migration | 61–68 | [`BPE-W14-W15-views-implementation.md`](BPE-W14-W15-views-implementation.md) · [#94](https://github.com/FeatureFactory-io/yggdrasil/issues/94) |
+| W15 | **Views v2** — Filters-first `field_map`, viewport, in-node labels | 69–79 | Same plan · [#95](https://github.com/FeatureFactory-io/yggdrasil/issues/95) blocked on W14 |
 
 **TFK-07 before W8:** gaps #7–17 in [`docs/features/CATALOG.md`](../../features/CATALOG.md#known-gaps--tfk-07).
 

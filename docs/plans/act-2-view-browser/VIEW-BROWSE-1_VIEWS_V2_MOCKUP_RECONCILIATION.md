@@ -1,5 +1,7 @@
 # Change Reconciliation — VIEW-BROWSE-1 Views v2 (Mockup → Spec)
 
+> **Implement only [§ Approved target state](#approved-target-state-mockup-aligned) below.** Rejected pre-mockup design is archived in [§ Archive](#archive--rejected-pre-mockup-design-2026-08-18) — do not implement from Archive.
+
 **Feature:** `VIEW-BROWSE-1` (Act 2 View Browser)
 **Activity:** BPE-08 Process Change Request (post-mockup back-propagation)
 **Status:** Approved — mockup validated 2026-08-18 (`ca42ea7`)
@@ -45,7 +47,7 @@ This document back-propagates the **as-built mockup** into journey, features, IA
 | **Canvas toolbar (left)** | Filters toggle; active View name badge when `browse_view` loaded | `filters-toggle`, `active-view-name` |
 | **Canvas toolbar (right)** | Depth slider; **Views** dropdown; Table / Graph toggle | `browser-depth-control`, `views-dropdown`, `toggle-table`, `toggle-graph` |
 
-No element-count informer. No Content dropdown. No separate Edit content control.
+No element-count informer in the canvas toolbar.
 
 ### Filters panel = View editor
 
@@ -93,7 +95,7 @@ Built-in Content **presets** (`minimal`, `current-state`, …) may seed field_ma
 | `depth`, `mode` | unchanged | Levels + presentation |
 | `browse_view` | slug | Named View expansion (field_map from payload unless `field_*` overrides) |
 
-**Not in live URL:** viewport; deprecated in mockup: `?content=preset-slug` (superseded by explicit field params + named Views).
+**Not in live URL:** viewport.
 
 ### Graph layout
 
@@ -108,14 +110,9 @@ Opt-in **Include graph viewport** on Save View modal (`save-view-include-viewpor
 
 ---
 
-## Superseded (do not implement in W15 without new CR)
+## Archive — rejected pre-mockup design (2026-08-18)
 
-- Content preset dropdown (`content-dropdown`)
-- Content editor collapse panel (`content-editor-*`)
-- Separate **Apply content** button
-- Toolbar element / node count badge (`results-container`, `graph-node-count`)
-- Views dropdown in **page header** (moved to canvas toolbar)
-- Node labels below shape as `(owner: …)` secondary lines
+Historical record only. BPE-08 replaced a separate Content toolbar (preset dropdown + editor panel + `?content=` URL) with Filters-first `field_map`. W14/W15 implement **Approved target state** above.
 
 ---
 

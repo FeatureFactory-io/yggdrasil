@@ -29,12 +29,12 @@ Feature: VIEW-BROWSE-1 View Browser — Content via Filters panel (Views v2)
     Then the response status is 200
     And the element "view-fields-component" should be visible
 
-  Scenario: VIEW-BROWSE-1-77 No separate Content editor or dropdown in toolbar
-    When I GET "/models/yggdrasil/views/?mode=graph"
+  Scenario: VIEW-BROWSE-1-77 Canvas toolbar exposes Filters-first controls
+    When I GET "/models/yggdrasil/views/?mode=graph&stereotype=component"
     Then the response status is 200
-    And the element "content-dropdown" should not be visible
-    And the element "content-editor-toggle" should not be visible
     And the element "filters-toggle" should be visible
+    And the element "apply-filters-btn" should be visible
+    And the element "view-field-sections" should be visible
 
   @wip
   Scenario: VIEW-BROWSE-1-76 Table mode does not restore graph viewport from saved View

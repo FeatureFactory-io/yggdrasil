@@ -58,12 +58,17 @@ Every Screen ID must appear in:
 REST and MCP expose graph views via semantic paths:
 
 ```
-/models/{model_slug}/views/{package_slug}/{stereotype}?filter={json}&depth={n}
+/models/{model_slug}/views/{package_slug}/{stereotype}?filter={json}&depth={n}&mode={graph|table}
+/models/{model_slug}/views/?browse_view={slug}
 /elements/{id}
 /traverse?from={id}&depth={n}&as_of={iso8601}
 ```
 
 **`depth` (View Browser):** integer ≥ 1. Filters define the **root set** (matching elements). `depth=N` includes nodes reachable within **N − 1 outgoing hops** from any root (BFS, visited set for cycles). Default when omitted: `1` (roots only). When no element-narrowing filter is applied, roots = **graph sources** (nodes with zero incoming edges). Graph JSON, navigator tree, and table rows all use the same depth-scoped subgraph.
+
+**`mode` (View Browser presentation):** `graph` (three-panel explorer, default) or `table` (results grid). Replaces legacy `view=` query param (W14 migration).
+
+**`browse_view` (named View):** slug of a persisted `graph.BrowseView` for the current Model and signed-in user. Server expands to equivalent filter + depth + mode query string. Scoped to `(model, owner)` — not carried across Models.
 
 ### Important Guidelines
 

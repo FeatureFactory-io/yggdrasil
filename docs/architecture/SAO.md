@@ -31,7 +31,7 @@ Yggdrasil is an AI-augmented architecture knowledge-graph platform that keeps a 
 | App | Responsibility |
 |---|---|
 | `auth` | Session auth, personal access tokens (hashed), RBAC roles |
-| `graph` | Metamodel (type catalog: Stereotype, Package), Model (instance graph: Element, Relationship, Diagram) — Model.metamodel is immutable after create; Stereotype/Package CRUD is Django admin in MVP |
+| `graph` | Metamodel (type catalog: Stereotype, Package), Model (instance graph: Element, Relationship, Diagram, **BrowseView**) — Model.metamodel is immutable after create; Stereotype/Package CRUD is Django admin in MVP; BrowseView = named View Browser snapshot (user preference, ORM) |
 | `changeset` | ChangeSet, ChangeSetItem, LEARNED (MuninRule) — all write operations go through here |
 | `munin` | Agentic planner: reads ChangeSet candidates, produces graph operations, maintains blackboard |
 | `ratatosk` | RataskRun model, CLI integration models, run history |
@@ -1235,7 +1235,9 @@ Before any MCP slice is merged:
 
 **E2E session auth (Playwright + Django):** Do not hand-roll session keys. Authenticate Playwright by `Client.force_login(user)` on the Django test client, read the `sessionid` cookie, and inject it into the browser context before navigation. Reference: `tests/e2e/steps/view_browser_steps.py::_force_login_playwright`.
 
-**Mode-scoped UI visibility:** Some controls (e.g. View Browser navigator / model switcher) render only in graph mode (`?view=graph`, elements with `yrg-graph-only`). E2E and visibility assertions must match the mode the spec assumes — table mode hides graph chrome.
+**Mode-scoped UI visibility:** Some controls (e.g. View Browser navigator / model switcher) render only in graph mode (`?mode=graph`, elements with `yrg-graph-only`). E2E and visibility assertions must match the mode the spec assumes — table mode hides graph chrome.
+
+**Named Views (Views v1, W14):** Persisted browse snapshots are `graph.BrowseView` records — user preference, scoped to `(YggdrasilModel, User)`, payload JSON `{ filters, levels: { depth }, presentation }`. Loaded via header dropdown or `?browse_view={slug}`. ORM writes; not ChangeSet-governed. Delete/rename: owner only; viewers load-only. Presentation query param is `mode=graph|table` (replaces legacy `view=`). Content annotations and viewport snapshot deferred to Views v2 CR.
 
 **AT fixture idempotency:** behave Background + scenario-specific Given steps that seed the same natural keys (e.g. `(model_id, slug)`) must use `get_or_create` or update-in-place, not blind `create`.
 

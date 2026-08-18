@@ -864,7 +864,7 @@ Some interactive elements render only in one **view mode** (graph vs table, embe
 2. Wrap mode-specific regions in a predictable CSS class (e.g. `yrg-graph-only`) so SSR/AT visibility checks stay deterministic.
 3. AT and E2E scenarios must open the URL/state that exposes the control under test. A missing `data-testid` in the wrong mode is a **spec/setup bug**, not a product defect.
 
-`VIEW-BROWSE-1` examples: model switcher, package traversal tree, and depth slider are **graph-mode only** (`?view=graph`); table mode shows results table without left-navigator chrome.
+`VIEW-BROWSE-1` examples: model switcher, package traversal tree, and depth slider are **graph-mode only** (`?mode=graph`); table mode shows results table without left-navigator chrome.
 
 ### 6.3 View Browser Filter Panel
 
@@ -916,6 +916,51 @@ The filter panel collapses to a single summary line when collapsed:
   <a href="{history-url}" class="btn btn-sm btn-outline-warning">Compare with now →</a>
 </div>
 ```
+
+### 6.4 View Browser Views dropdown (named snapshots)
+
+Header control for loading and saving **Views** (Filters + Levels/depth + presentation mode) scoped to the current Model.
+
+```html
+<div class="dropdown">
+  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+          data-bs-toggle="dropdown" aria-expanded="false" data-testid="views-dropdown">
+    Views
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><a class="dropdown-item" href="…" data-testid="view-option-payment-review">Payment capability review</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><button class="dropdown-item" type="button" data-bs-toggle="modal"
+                data-bs-target="#saveViewModal">Save current view…</button></li>
+  </ul>
+</div>
+```
+
+**Save View modal** (shared with filter-panel `save-view-btn`):
+
+```html
+<div class="modal fade" id="saveViewModal" tabindex="-1" aria-labelledby="saveViewModalLabel">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="saveViewModalLabel">Save View</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <label for="saveViewName" class="form-label">Name</label>
+        <input type="text" class="form-control form-control-sm" id="saveViewName"
+               data-testid="save-view-name-input" placeholder="Payment capability review">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-sm btn-primary" data-testid="save-view-confirm-btn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+Owner may **delete** a named View from a manage affordance on the dropdown or a context menu (`delete-view-btn`). Viewers see the dropdown but not save/delete/rename actions.
 
 ### 6.3.1 View Browser Depth Slider (graph mode)
 
@@ -1339,7 +1384,7 @@ Every page that is not a full-bleed canvas (View Browser graph mode, Cytoscape e
 | CREATE | ✓ parent list | "Create {Entity}" + [Cancel] | ✗ |
 | EDIT | ✓ parent list + entity name | "Edit {Entity Name}" + [Cancel] | ✗ |
 | DELETE (modal) | (inside modal header) | — | — |
-| VIEW-BROWSE-1 | ✗ | "View Browser" + saved-views dropdown + [Export] | ✗ |
+| VIEW-BROWSE-1 | ✗ | "View Browser" + Views dropdown + [Export] | ✗ |
 | MUNIN-BRIEFING-1 | ✗ | "Ratatosk Run #{id}" + [Review ChangeSet →] | Run metadata (source, timestamp) |
 | CHANGESET-VIEW | ✓ changesets list | "ChangeSet #{id}" + [Accept All] [Reject All] [Roll Back] | Source · Mode badge · Submitted |
 

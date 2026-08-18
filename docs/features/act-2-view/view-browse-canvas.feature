@@ -30,7 +30,7 @@ Feature: VIEW-BROWSE-1 View Browser — Graph Canvas (centre panel)
     And the element "results-container" should be visible
 
   Scenario: VIEW-BROWSE-1-37 Table mode shows element rows inside the canvas panel
-    When I GET "/models/yggdrasil/views/?view=table"
+    When I GET "/models/yggdrasil/views/?mode=table"
     Then the response status is 200
     And the view browser is in table mode
     And the table view is active
@@ -39,7 +39,7 @@ Feature: VIEW-BROWSE-1 View Browser — Graph Canvas (centre panel)
     And the user should see "element-row-"
 
   Scenario: VIEW-BROWSE-1-45 Table mode hides graph canvas and explorer chrome
-    When I GET "/models/yggdrasil/views/?view=table"
+    When I GET "/models/yggdrasil/views/?mode=table"
     Then the response status is 200
     And the view browser is in table mode
     And the graph-only panels are hidden
@@ -117,7 +117,7 @@ Feature: VIEW-BROWSE-1 View Browser — Graph Canvas (centre panel)
   # ── Depth traversal (CR: VIEW-BROWSE-1 depth BFS) ─────────────────────────
 
   Scenario: VIEW-BROWSE-1-55 Depth slider renders in graph mode canvas toolbar
-    When I GET "/models/yggdrasil/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?mode=graph"
     Then the response status is 200
     And the element "browser-depth-slider" should be visible
     And the element "browser-depth-value" should be visible
@@ -137,7 +137,7 @@ Feature: VIEW-BROWSE-1 View Browser — Graph Canvas (centre panel)
     And the user should see "Redis"
 
   Scenario: VIEW-BROWSE-1-57 Depth query param syncs with slider default
-    When I GET "/models/yggdrasil/views/?view=graph&depth=3"
+    When I GET "/models/yggdrasil/views/?mode=graph&depth=3"
     Then the response status is 200
     And the depth slider value is 3
 

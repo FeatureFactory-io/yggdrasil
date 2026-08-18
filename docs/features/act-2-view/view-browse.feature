@@ -68,10 +68,11 @@ Feature: VIEW-BROWSE-1 View Browser
     Then the response status is 200
     And the element "clear-filters-btn" should be visible
 
-  Scenario: VIEW-BROWSE-1-07 Saved views dropdown is visible
+  Scenario: VIEW-BROWSE-1-07 Views dropdown is visible
     When I GET "/models/yggdrasil/views/"
     Then the response status is 200
-    And the element "saved-views-dropdown" should be visible
+    And the element "views-dropdown" should be visible
+    And the element "save-view-btn" should be visible
 
   Scenario: VIEW-BROWSE-1-08 View Browser has clickable links to each element's detail view
     Given the model "yggdrasil" is loaded with the view browser fixture
@@ -131,7 +132,7 @@ Feature: VIEW-BROWSE-1 View Browser
   # ── v0.3 three-panel shell ─────────────────────────────────────────
 
   Scenario: VIEW-BROWSE-1-16 Three-panel explorer layout renders below page header
-    When I GET "/models/yggdrasil/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?mode=graph"
     Then the response status is 200
     And the element "browser-nav-panel" should be visible
     And the element "graph-cy-container" should be visible

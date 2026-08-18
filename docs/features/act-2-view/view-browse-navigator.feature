@@ -20,7 +20,7 @@ Feature: VIEW-BROWSE-1 View Browser — Element Navigator (left panel)
   # ── AT: shell + static HTML ───────────────────────────────────────────────
 
   Scenario: VIEW-BROWSE-1-17 Navigator panel renders with model name and element tree
-    When I GET "/models/yggdrasil/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?mode=graph"
     Then the response status is 200
     And the element "browser-nav-panel" should be visible
     And the element "browser-model-name" should be visible
@@ -29,7 +29,7 @@ Feature: VIEW-BROWSE-1 View Browser — Element Navigator (left panel)
     And the user should see "Yggdrasil"
 
   Scenario: VIEW-BROWSE-1-18 Traversal tree at depth 1 shows filter roots only
-    When I GET "/models/yggdrasil/views/?view=graph&stereotype=component&depth=1"
+    When I GET "/models/yggdrasil/views/?mode=graph&stereotype=component&depth=1"
     Then the response status is 200
     And the element "nav-element-auth" should be visible
     And the element "nav-element-graph" should be visible
@@ -37,7 +37,7 @@ Feature: VIEW-BROWSE-1 View Browser — Element Navigator (left panel)
     And the element "nav-element-redis" should not be visible
 
   Scenario: VIEW-BROWSE-1-19 Depth 2 expands navigator with one-hop dependents
-    When I GET "/models/yggdrasil/views/?view=graph&stereotype=component&depth=2"
+    When I GET "/models/yggdrasil/views/?mode=graph&stereotype=component&depth=2"
     Then the response status is 200
     And the user should see "auth"
     And the user should see "graph"
@@ -45,12 +45,12 @@ Feature: VIEW-BROWSE-1 View Browser — Element Navigator (left panel)
     And the user should see "llm"
 
   Scenario: VIEW-BROWSE-1-19b Depth 3 reaches infrastructure dependents
-    When I GET "/models/yggdrasil/views/?view=graph&stereotype=component&depth=3"
+    When I GET "/models/yggdrasil/views/?mode=graph&stereotype=component&depth=3"
     Then the response status is 200
     And the user should see "Redis"
 
   Scenario: VIEW-BROWSE-1-20 Navigator collapse toggle control is present
-    When I GET "/models/yggdrasil/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?mode=graph"
     Then the response status is 200
     And the element "browser-toggle-nav-panel" should be visible
 
@@ -97,7 +97,7 @@ Feature: VIEW-BROWSE-1 View Browser — Element Navigator (left panel)
 
   Scenario: ✅ VIEW-BROWSE-1-48 Model switcher lists Models the user can read
     Given the models "yggdrasil" and "payments" exist and the architect can read both
-    When I GET "/models/yggdrasil/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?mode=graph"
     Then the response status is 200
     And the element "browser-model-switcher" should be visible
     And the element "browser-model-name" should be visible
@@ -111,7 +111,7 @@ Feature: VIEW-BROWSE-1 View Browser — Element Navigator (left panel)
     And the Location header starts with "/models/yggdrasil/views/"
 
   Scenario: ✅ VIEW-BROWSE-1-50 Canonical browse URL includes the Model slug
-    When I GET "/models/yggdrasil/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?mode=graph"
     Then the response status is 200
     And the element "browser-nav-panel" should be visible
     And the user should see "Yggdrasil"
@@ -138,7 +138,7 @@ Feature: VIEW-BROWSE-1 View Browser — Element Navigator (left panel)
 
   Scenario: ✅ VIEW-BROWSE-1-54 Model switcher has no create-model action
     Given the models "yggdrasil" and "payments" exist and the architect can read both
-    When I GET "/models/yggdrasil/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?mode=graph"
     Then the response status is 200
     And the user should not see "Create model"
 
@@ -153,7 +153,7 @@ Feature: VIEW-BROWSE-1 View Browser — Element Navigator (left panel)
 
   @wip
   Scenario: VIEW-BROWSE-1-60 Traversal tree nests children under root nodes
-    When I GET "/views/?view=graph&stereotype=container&depth=2"
+    When I GET "/views/?mode=graph&stereotype=container&depth=2"
     Then the response status is 200
     And the element "browser-element-tree" should be visible
     And the navigator nests "auth" under a root container node

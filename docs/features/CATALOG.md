@@ -162,7 +162,7 @@ And the element "element-list-page" should be visible
 | `Given the user is on the "view-browse" page with query "{query}"` | AT | Query-string navigation |
 | `Then the page uses the full-height view browser layout` | AT | Asserts `yrg-view-browser` on `<body>` |
 | `Then the response is an embed partial` | AT | No navigator chrome (W9 routes pending) |
-| `Given Priya is on the View Browser in graph mode` | AT+E2E | AT: GET `/views/?view=graph`; E2E: Playwright |
+| `Given Priya is on the View Browser in graph mode` | AT+E2E | AT: GET `/views/?mode=graph`; E2E: Playwright |
 | `Then the view browser is in table mode` | AT | Asserts `yrg-mode-table` on `#browserRoot` |
 | `Then the view browser is in graph mode` | AT | Asserts `yrg-mode-graph` on `#browserRoot` |
 | `Then the graph-only panels are hidden` | AT | Navigator, inspector, panel toggles SSR-hidden |
@@ -182,6 +182,13 @@ And the element "element-list-page" should be visible
 | `Given the architect can read no models` | AT stub | W12 empty-state |
 | `Then the Location header starts with "{path}"` | AT stub | 302 alias `/views/` → `/models/{slug}/views/` |
 | `Then the element "browser-model-switcher" is disabled` | AT stub | Zero-model empty state |
+| **Named Views (W14 — @wip)** | | |
+| `When Priya saves the current browse session as View "{name}"` | AT + E2E | Opens save modal; POST BrowseView |
+| `Given Priya has saved a View named "{name}" for model "{slug}"` | AT stub | Fixture BrowseView record |
+| `When Priya selects View "{name}" from the Views dropdown` | AT + E2E | Loads named View; URL sync |
+| `When I GET "/models/{slug}/views/?browse_view={view_slug}"` | AT | Semantic URL expansion |
+| `When Priya deletes View "{name}"` | AT + E2E | Owner-only; removes from dropdown |
+| `Then a BrowseView "{slug}" exists for model "{slug}" owned by Priya` | AT | ORM assertion on payload |
 
 ---
 
@@ -291,7 +298,12 @@ assertions and in form step fields.
 | Open Munin panel | `open-munin-btn` |
 | Export button | `export-btn` |
 | History button | `history-btn` |
-| Saved views dropdown | `saved-views-dropdown` |
+| Views dropdown | `views-dropdown` |
+| Save View (filter panel) | `save-view-btn` |
+| Save View name input | `save-view-name-input` |
+| Save View confirm | `save-view-confirm-btn` |
+| Named View menu item | `view-option-{slug}` |
+| Delete View | `delete-view-btn` |
 | Toggle filters | `filters-toggle` |
 | Clear filters | `clear-filters-btn` |
 | Package filter | `filter-package` |

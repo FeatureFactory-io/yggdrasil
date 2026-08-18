@@ -49,7 +49,7 @@ def is_element_ssr_hidden(content: str, test_id: str) -> bool:
     Decide whether an element is hidden by server-rendered markup.
 
     Covers ``d-none`` on the element, ``yrg-graph-only`` panels in table mode,
-    and graph canvas controls that only render for ``view=graph``.
+    and graph canvas controls that only render for ``mode=graph``.
     """
     tag = opening_tag_for_testid(content, test_id)
     if tag is None:

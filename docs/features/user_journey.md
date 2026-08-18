@@ -194,7 +194,7 @@ Priya follows the printed link to `MUNIN-BRIEFING-1` — Munin's post-run archit
 
 **Layout:**
 
-- **Header:** "View Browser" with saved-views dropdown
+- **Header:** "View Browser" with **Views** dropdown (named browse snapshots for the current Model)
 - **Left navigator (content-browser panel):**
   - **Model switcher** (navigator header — not a static title): dropdown showing the current Model name (`browser-model-name`) and listing every Model the signed-in user may read (`browser-model-switcher`). Selecting another Model navigates to `/models/{slug}/views/` and **reloads** package tree, filters, canvas, and inspector for that graph. Filters, time-travel, and selection are **not** carried across Models.
   - The switcher does **not** create Models. New Models are created by `ratatosk bootstrap` / MCP `ensure_model` (Act 1 / Act 5).
@@ -204,7 +204,19 @@ Priya follows the printed link to `MUNIN-BRIEFING-1` — Munin's post-run archit
   - Stereotype multi-select (Application, Capability, …)
   - **Advanced filter builder:** compound AND/OR rules over any element property (see below)
   - **Time Travel:** date picker (defaults to "now"); selecting a past date sets `?as_of=` in the URL and re-runs the query against the historical snapshot — a banner "Viewing model as of 2026-01-15" appears; [Compare with now →] opens `VIEW-HISTORY-1`
-  - [Apply Filters] [Clear] [Save View]
+  - [Apply Filters] [Clear] [Save View] — Save View opens the same dialog as **Save current view…** in the Views dropdown (two entry points, one dialog)
+
+**Views (named browse snapshots):**
+
+A **View** captures **Filters** (scope) + **Levels** (`depth`) + **presentation** (`graph` or `table`) for the current Model. It does **not** include inspector selection, panel collapse, or Munin panel state.
+
+- **Live URL:** bookmark/share without saving — query params encode filters, `depth`, and `mode=graph|table`.
+- **Named View:** persisted per `(Model, User)` as `graph.BrowseView` — load from the Views dropdown or `?browse_view={slug}`.
+- **Save:** Priya clicks Save View (filter panel) or Save current view… (header dropdown), enters a name, confirms — current filters + depth + mode are stored.
+- **Load:** selecting a named View navigates to the equivalent live URL (filters, depth, mode restored).
+- **Delete/rename:** owner only; viewers may load but not save, delete, or rename.
+
+Content annotations on nodes/edges and graph viewport (zoom/pan) are **deferred** (Views v2 CR).
 - **Results (center, under filters):**
   - **Depth slider (graph mode):** “Show N levels deep” — N = 1 is filter roots only; each increment adds one **outgoing** hop (max = longest reachable path from roots, cap 20). Synced to `?depth=N` in the URL.
   - Table mode: columns Name, Stereotype, Owner, Health, Package — rows = flat list of nodes in the **current depth-scoped subgraph**
@@ -256,13 +268,15 @@ Every filter state is encoded as a JSON query object appended to the URL — sha
 | Rule                   | `{"field": "<prop>", "op": "<operator>", "value": <scalar or array>}`                    |
 | Operators              | `eq` `neq` `gt` `gte` `lt` `lte` `contains` `not_contains` `starts` `ends` `in` `not_in` |
 | Depth (traversal)      | `?depth=N` — N ≥ 1; filters define roots; N = 1 → roots only; each +1 adds one outgoing hop (BFS). Default: `1`. Unfiltered browse uses graph sources as roots. |
+| Presentation mode      | `?mode=graph` \| `?mode=table` — graph shows three-panel explorer; table shows results grid only. Default: `graph`. |
+| Named View             | `?browse_view={slug}` — expands to stored filters + depth + mode for the current user on the current Model |
 | Time travel            | `?as_of=2026-06-01`                                                                      |
 | Pre-filled create form | `/elements/new?prefill={"name":"X","stereotype":"Container","package":"technology"}`     |
 
 
 Munin (`Act 8`) and any MCP client can construct these URLs from natural language without touching the GUI (Key Feature 1). The filter builder always reflects the current URL state — paste a URL, restore the exact view.
 
-Priya switches the navigator to Model "Yggdrasil", selects Stereotype "Capability", sets depth **1** — she sees only capabilities. She moves the slider to **3** — apps that realize those capabilities and stacks they depend on appear in the navigator tree and graph. She adds rule `name contains "payment"` — URL updates live; she copies it to Slack. Marcus clicks it and lands on the identical subgraph of the same Model at the same depth.
+Priya switches the navigator to Model "Yggdrasil", selects Stereotype "Capability", sets depth **1** — she sees only capabilities. She moves the slider to **3** — apps that realize those capabilities and stacks they depend on appear in the navigator tree and graph. She adds rule `name contains "payment"` — URL updates live; she copies it to Slack. Marcus clicks it and lands on the identical subgraph of the same Model at the same depth. Priya **saves** the session as View "Payment capability review" and shares `?browse_view=payment-capability-review` with Elena, who loads the same filters and depth without re-entering them.
 
 #### Screen: EXPORT-BRIEFING-1
 

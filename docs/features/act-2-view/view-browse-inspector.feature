@@ -18,14 +18,14 @@ Feature: VIEW-BROWSE-1 View Browser — Property Inspector (right panel)
   # ── AT: shell ─────────────────────────────────────────────────────────────
 
   Scenario: VIEW-BROWSE-1-25 Inspector panel renders with empty-state prompt in graph mode
-    When I GET "/models/yggdrasil/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?mode=graph"
     Then the response status is 200
     And the element "browser-inspector-panel" should be visible
     And the element "inspector-empty" should be visible
     And the user should see "Select an element or relationship"
 
   Scenario: VIEW-BROWSE-1-26 Inspector collapse toggle control is present in graph mode
-    When I GET "/models/yggdrasil/views/?view=graph"
+    When I GET "/models/yggdrasil/views/?mode=graph"
     Then the response status is 200
     And the element "browser-toggle-inspector-panel" should be visible
 
@@ -36,7 +36,7 @@ Feature: VIEW-BROWSE-1 View Browser — Property Inspector (right panel)
     And the element "browser-inspector-panel" should be visible
 
   Scenario: VIEW-BROWSE-1-47b Inspector panel is hidden in table mode
-    When I GET "/models/yggdrasil/views/?view=table"
+    When I GET "/models/yggdrasil/views/?mode=table"
     Then the response status is 200
     And the view browser is in table mode
     And the element "browser-inspector-panel" should not be visible

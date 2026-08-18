@@ -170,8 +170,8 @@ def step_priya_on_view_browser(context) -> None:
 
 @given("Priya is on the View Browser in graph mode")
 def step_priya_on_view_browser_graph_mode(context) -> None:
-    """GET View Browser with ``?view=graph`` (follows alias redirect)."""
-    path = reverse("web:view_browse") + "?view=graph"
+    """GET View Browser with ``?mode=graph`` (follows alias redirect)."""
+    path = reverse("web:view_browse") + "?mode=graph"
     context.response = get_client(context).get(path, follow=True)
     logger.info("Priya on View Browser graph mode GET %s -> %s", path, context.response.status_code)
 

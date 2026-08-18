@@ -44,16 +44,14 @@ Feature: VIEW-BROWSE-1 View Browser — Content via Filters panel (Views v2)
     And the view browser is in table mode
     And the graph canvas controls are hidden
 
-  # ── AT + E2E: field_map rendering (W15 — @wip until step defs ship) ───────
+  # ── AT + E2E: field_map rendering (W15) ───────────────────────────────────
 
-  @wip
   Scenario: VIEW-BROWSE-1-70 Graph node displays Key value lines for visible fields
     Given Priya is on the View Browser in graph mode
     And Priya has applied filters with element stereotype "component" and fields "Name" and "Owner"
     Then graph node "munin" displays label containing "Name: munin"
     And graph node "munin" displays label containing "Owner: platform-team"
 
-  @wip
   Scenario: VIEW-BROWSE-1-71 Apply Filters updates table columns from field_map
     Given Priya is on the View Browser with element stereotype "component" selected
     And Priya has checked visible fields "Name", "Owner", and "Health"
@@ -62,7 +60,6 @@ Feature: VIEW-BROWSE-1 View Browser — Content via Filters panel (Views v2)
     Then the table view is active
     And the table includes column "Owner"
 
-  @wip
   Scenario: VIEW-BROWSE-1-73 Save View persists field_map in payload
     Given Priya is on the View Browser in graph mode
     And Priya has applied filters with element stereotype "component" and field "Owner" visible
@@ -70,7 +67,6 @@ Feature: VIEW-BROWSE-1 View Browser — Content via Filters panel (Views v2)
     Then a BrowseView "owners-visible" exists for model "yggdrasil" owned by Priya
     And the stored View payload includes field_map for stereotype "component"
 
-  @wip
   Scenario: VIEW-BROWSE-1-74 Load named View restores field_map labels
     Given Priya has saved a View named "Application components" with field_map for "component"
     When Priya selects View "Application components" from the Views dropdown

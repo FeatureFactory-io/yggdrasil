@@ -29,6 +29,7 @@ from urllib.parse import urlencode
 
 from behave import given, then, when
 from django.contrib.auth.models import Group
+from django.http import QueryDict
 from django.urls import reverse
 from django.utils.text import slugify
 from steps.common_steps import get_client
@@ -499,15 +500,18 @@ def step_priya_applied_package(context, package: str) -> None:
 @when('Priya saves the current browse session as View "{name}"')
 def step_priya_saves_current_view(context, name: str) -> None:
     """POST save endpoint with current filter state from context."""
+
     model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
     package = getattr(context, "active_package_filter", "")
     depth = str(getattr(context, "active_depth", 2))
-    post_data = {
-        "name": name,
-        "package": package,
-        "depth": depth,
-        "mode": "graph",
-    }
+    post_data = QueryDict(mutable=True)
+    post_data.update({"name": name, "depth": depth, "mode": "graph"})
+    if package:
+        post_data.setlist("package", [package])
+    query = _browse_query_params(context)
+    for key, values in query.items():
+        if key.startswith("field_") or key in {"stereotype", "edge_stereotype", "package"}:
+            post_data.setlist(key, values)
     path = reverse("web:view_browse_save", kwargs={"model_slug": model_slug})
     context.response = get_client(context).post(path, post_data)
     context.last_url = context.response.headers.get("Location", path)
@@ -526,6 +530,7 @@ def step_priya_selects_view(context, name: str) -> None:
     path = reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
     context.response = get_client(context).get(path, expanded)
     context.last_url = path + "?" + urlencode(expanded, doseq=True)
+    context.browse_query_params = expanded
     logger.info("Selected View %s", name)
 
 
@@ -592,3 +597,181 @@ def step_browser_url_includes(context, fragment: str) -> None:
     url = getattr(context, "last_url", "")
     assert fragment in url, f"Expected {fragment!r} in URL {url!r}"
     logger.info("URL includes %s", fragment)
+
+
+def _browse_query_params(context) -> dict[str, list[str]]:
+    """Return mutable browse query params accumulated on context."""
+    params = getattr(context, "browse_query_params", None)
+    if params is None:
+        params = {}
+        context.browse_query_params = params
+    return params
+
+
+def _append_param(context, key: str, value: str) -> None:
+    """Append one repeated query param value on context."""
+    params = _browse_query_params(context)
+    params.setdefault(key, []).append(value)
+
+
+@given('Priya is on the View Browser with element stereotype "{stereotype}" selected')
+def step_priya_on_browser_with_stereotype(context, stereotype: str) -> None:
+    """GET browse URL with element stereotype filter."""
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    _append_param(context, "stereotype", stereotype)
+    path = reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+    query = _browse_query_params(context)
+    context.response = get_client(context).get(path, query)
+    context.last_url = path + "?" + urlencode(query, doseq=True)
+    logger.info("Priya on browser stereotype=%s", stereotype)
+
+
+@given(
+    'Priya has applied filters with element stereotype "{stereotype}" and fields "{field_a}" and "{field_b}"'
+)
+def step_priya_applied_filters_two_fields(
+    context, stereotype: str, field_a: str, field_b: str
+) -> None:
+    """Record filters + field_map and GET browse page."""
+    field_paths = {
+        "Name": "name",
+        "Owner": "owner",
+        "Health": "health",
+        "Jira key": "properties.jira_key",
+    }
+    _append_param(context, "stereotype", stereotype)
+    for label in (field_a, field_b):
+        path = field_paths.get(label, label.lower().replace(" ", "_"))
+        _append_param(context, f"field_{stereotype}", path)
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    path = reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+    query = {**_browse_query_params(context), "mode": ["graph"], "depth": ["2"]}
+    context.response = get_client(context).get(path, query)
+    context.last_url = path + "?" + urlencode(query, doseq=True)
+    logger.info("Applied filters stereotype=%s fields=%s,%s", stereotype, field_a, field_b)
+
+
+@given(
+    'Priya has applied filters with element stereotype "{stereotype}" and field "{field_label}" visible'
+)
+def step_priya_applied_filters_one_field(context, stereotype: str, field_label: str) -> None:
+    """Record single visible field and GET browse page."""
+    field_paths = {
+        "Owner": "owner",
+        "Name": "name",
+        "Health": "health",
+        "Jira key": "properties.jira_key",
+    }
+    _append_param(context, "stereotype", stereotype)
+    _append_param(context, f"field_{stereotype}", field_paths.get(field_label, field_label.lower()))
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    path = reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+    query = {**_browse_query_params(context), "mode": ["graph"], "depth": ["2"]}
+    context.response = get_client(context).get(path, query)
+    context.last_url = path + "?" + urlencode(query, doseq=True)
+
+
+@given('Priya has checked visible fields "{f1}", "{f2}", and "{f3}"')
+def step_priya_checked_three_fields(context, f1: str, f2: str, f3: str) -> None:
+    """Record three field checkboxes for next apply step."""
+    context.pending_field_labels = [f1, f2, f3]
+
+
+@when("Priya applies browse filters")
+def step_priya_applies_browse_filters(context) -> None:
+    """GET browse URL with accumulated filter params (simulates Apply Filters)."""
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    path = reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+    query = dict(_browse_query_params(context))
+    for label in getattr(context, "pending_field_labels", []):
+        field_paths = {"Name": "name", "Owner": "owner", "Health": "health"}
+        stereotype = query.get("stereotype", ["component"])[0]
+        query.setdefault(f"field_{stereotype}", []).append(field_paths.get(label, label.lower()))
+    query.setdefault("mode", ["graph"])
+    query.setdefault("depth", ["2"])
+    context.response = get_client(context).get(path, query)
+    context.last_url = path + "?" + urlencode(query, doseq=True)
+    context.browse_query_params = query
+    logger.info("Priya applied browse filters")
+
+
+@when('Priya selects element stereotype "{stereotype}"')
+def step_priya_selects_element_stereotype(context, stereotype: str) -> None:
+    """Select element stereotype in filter panel (pre-apply)."""
+    _append_param(context, "stereotype", stereotype)
+
+
+@when('Priya checks visible field "{field_label}" for stereotype "{stereotype}"')
+def step_priya_checks_visible_field(context, field_label: str, stereotype: str) -> None:
+    """Check one visible field path before apply."""
+    field_paths = {"Jira key": "properties.jira_key", "Owner": "owner", "Name": "name"}
+    _append_param(context, f"field_{stereotype}", field_paths.get(field_label, field_label.lower()))
+
+
+@when("Priya toggles to table mode")
+def step_priya_toggles_table_mode(context) -> None:
+    """GET same filters with table presentation mode."""
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    path = reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+    query = dict(_browse_query_params(context))
+    query["mode"] = ["table"]
+    context.response = get_client(context).get(path, query)
+    context.last_url = path + "?" + urlencode(query, doseq=True)
+
+
+@then('graph node "{slug}" displays label containing "{text}"')
+def step_graph_node_label_contains(context, slug: str, text: str) -> None:
+    """Assert graph JSON label for element slug contains text fragment."""
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    element = Element.objects.get(model__slug=model_slug, slug=slug)
+    graph_path = reverse("web:view_browse_graph_model", kwargs={"model_slug": model_slug})
+    query = dict(_browse_query_params(context))
+    query.setdefault("depth", ["2"])
+    response = get_client(context).get(graph_path, query)
+    assert response.status_code == 200, response.content
+    payload = response.json()
+    label = next(
+        node["data"]["label"]
+        for node in payload["elements"]
+        if node["data"]["id"] == str(element.pk)
+    )
+    assert text in label, f"Expected {text!r} in label {label!r}"
+    logger.info("Graph node %s label contains %s", slug, text)
+
+
+@then('the table includes column "{column_label}"')
+def step_table_includes_column(context, column_label: str) -> None:
+    """Assert SSR table header includes column label."""
+    body = context.response.content.decode()
+    assert (
+        f">{column_label}</th>" in body or f">{column_label}</th" in body
+    ), f"Column {column_label!r} not found"
+
+
+@then('the stored View payload includes field_map for stereotype "{stereotype}"')
+def step_stored_payload_includes_field_map(context, stereotype: str) -> None:
+    """Assert last saved View has field_map entry for stereotype."""
+    user = _current_user(context)
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    view = BrowseView.objects.filter(model__slug=model_slug, owner=user).latest("created_at")
+    field_map = view.payload.get("content", {}).get("field_map", {})
+    assert field_map.get(stereotype), f"Missing field_map for {stereotype}"
+
+
+@given('Priya has saved a View named "{name}" with field_map for "{stereotype}"')
+def step_priya_saved_view_with_field_map(context, name: str, stereotype: str) -> None:
+    """Seed BrowseView with field_map for one stereotype."""
+    user = _current_user(context)
+    model = _model_for_slug(getattr(context, "view_browser_model_slug", "yggdrasil"))
+    payload = {
+        "filters": {
+            "packages": [],
+            "element_stereotypes": [stereotype],
+            "relationship_stereotypes": [],
+        },
+        "levels": {"depth": 2},
+        "presentation": "graph",
+        "content": {"field_map": {stereotype: ["name", "owner"]}},
+    }
+    browse_view_service.save_view(user, model, name=name, payload=payload)
+    logger.info("Saved View %s with field_map for %s", name, stereotype)

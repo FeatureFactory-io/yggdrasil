@@ -130,6 +130,29 @@ def test_expand_browse_view_to_query_string(browse_view_model) -> None:
 
 
 @pytest.mark.django_db
+def test_expand_payload_includes_field_map(browse_view_model) -> None:
+    """W15: expand_to_query_params emits field_{stereotype} lists."""
+    owner = UserFactory(is_architect=True)
+    saved = browse_view_service.save_view(
+        owner,
+        browse_view_model,
+        name="Fields",
+        payload={
+            "filters": {
+                "packages": [],
+                "element_stereotypes": ["component"],
+                "relationship_stereotypes": [],
+            },
+            "levels": {"depth": 1},
+            "presentation": "graph",
+            "content": {"field_map": {"component": ["name", "owner"]}},
+        },
+    )
+    params = browse_view_service.expand_to_query_params(saved)
+    assert params["field_component"] == ["name", "owner"]
+
+
+@pytest.mark.django_db
 def test_delete_browse_view_owner_only(browse_view_model) -> None:
     """W14-1: only the owner may delete their saved View."""
     owner = UserFactory(is_architect=True)

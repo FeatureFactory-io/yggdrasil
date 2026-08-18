@@ -1,19 +1,26 @@
 {% extends "mockups/base.html" %}
+{% load static %}
 {% block screen_id %}VIEW-BROWSE-1{% endblock %}
 {% block title %}View Browser{% endblock %}
 {% block nav_browse %}active{% endblock %}
 
 {% block extra_head %}
 <style>
-  /* Full-height three-panel shell — pattern from Mimir Content Browser */
+  /* Full-height three-panel shell — aligned with production browse.html */
   body.yrg-view-browser {
     overflow: hidden;
-    padding-top: 81px;
+    padding-top: 81px; /* mockup banner + navbar */
+    height: 100vh;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
   }
   body.yrg-view-browser main.container-fluid {
     padding: 0 !important;
     max-width: 100%;
-    height: calc(100vh - 81px);
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -34,6 +41,28 @@
     position: relative;
     overflow: hidden;
     border-top: 1px solid var(--hg-border);
+  }
+
+  /* Graph-only panels hidden in table mode */
+  .yrg-mode-table .yrg-graph-only {
+    display: none !important;
+  }
+
+  .yrg-mode-table .yrg-canvas-body {
+    overflow: auto;
+    background: #fff;
+  }
+
+  .yrg-mode-graph #graphCy {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .yrg-browser-btn-compact {
+    font-size: 0.65rem;
+    padding: 2px 6px;
   }
 
   /* Left navigator */
@@ -324,18 +353,12 @@
     </div>
     <div class="dropdown">
       <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
-              data-bs-toggle="dropdown" aria-expanded="false" data-testid="views-dropdown">
+              data-bs-toggle="dropdown" aria-expanded="false" data-testid="views-dropdown"
+              aria-label="Named Views">
         Views
       </button>
-      <ul class="dropdown-menu dropdown-menu-end">
-        <li><a class="dropdown-item" href="?stereotype=component&amp;depth=2&amp;mode=graph"
-               data-testid="view-option-application-components">Application / Components</a></li>
-        <li><a class="dropdown-item" href="?package=technology&amp;depth=3&amp;mode=graph"
-               data-testid="view-option-technology-infrastructure">Technology / Infrastructure</a></li>
-        <li><hr class="dropdown-divider"></li>
-        <li><button class="dropdown-item" type="button"
-                    data-bs-toggle="modal" data-bs-target="#saveViewModal"
-                    data-testid="save-view-btn">Save current view…</button></li>
+      <ul class="dropdown-menu dropdown-menu-end" id="viewsDropdownMenu" aria-label="Saved Views">
+        {# Populated by mockup-view-browser.js from server + sessionStorage #}
       </ul>
     </div>
   </div>
@@ -343,11 +366,18 @@
 {% endblock %}
 
 {% block content %}
-<div data-testid="view-browse-page" class="yrg-browser-root" id="browserRoot">
+{{ browse_views|json_script:"mock-server-views" }}
+<div data-testid="view-browse-page"
+     class="yrg-browser-root yrg-mode-{{ view_mode }} flex-grow-1"
+     id="browserRoot"
+     data-model-slug="{{ model_slug }}"
+     data-browse-url="{{ mock_browse_url }}"
+     data-max-depth="{{ max_depth }}"
+     data-can-save="true">
 
   {# ── Left: package + element navigator ── #}
   <aside id="browserNavPanel"
-         class="yrg-browser-nav"
+         class="yrg-browser-nav yrg-graph-only"
          data-testid="browser-nav-panel"
          aria-label="Package and element navigator">
 
@@ -457,7 +487,7 @@
   </aside>
 
   <button type="button"
-          class="yrg-panel-toggle yrg-panel-toggle-left btn btn-sm btn-outline-secondary"
+          class="yrg-panel-toggle yrg-panel-toggle-left yrg-graph-only btn btn-sm btn-outline-secondary"
           id="toggleNavBtn"
           data-testid="browser-toggle-nav-panel"
           title="Toggle navigator"
@@ -466,94 +496,125 @@
   {# ── Center: graph / table canvas ── #}
   <section class="yrg-browser-canvas-wrap" aria-label="Graph canvas">
     <div class="yrg-canvas-toolbar">
-      <div class="yrg-filter-chips">
+      <div class="d-flex gap-2 align-items-center flex-wrap">
         <button class="btn btn-sm btn-outline-secondary"
                 data-bs-toggle="collapse" data-bs-target="#filterPanel"
-                aria-expanded="false" data-testid="filters-toggle">
+                aria-expanded="false" aria-controls="filterPanel"
+                data-testid="filters-toggle">
           <i class="fa-solid fa-sliders me-1" aria-hidden="true"></i>Filters
         </button>
-        <span class="yrg-filter-chip">
-          Package: <strong>All</strong>
-        </span>
-        <button class="btn btn-sm btn-link text-danger p-0"
-                data-testid="clear-filters-btn"
-                onclick="console.log('[mockup:view-browse-1] clear filters')">Clear</button>
+        {% for chip in filter_chips %}
+        <span class="badge bg-light text-dark border">{{ chip.label }}</span>
+        {% empty %}
+        <span class="text-muted small">No filters active</span>
+        {% endfor %}
+        <a href="{{ mock_browse_url }}?mode={{ view_mode }}&amp;depth={{ current_depth }}"
+           class="btn btn-sm btn-outline-danger"
+           data-testid="clear-filters-btn"
+           data-action="clear-filters">Clear</a>
       </div>
-      <div class="d-flex align-items-center gap-2">
-        <div class="yrg-depth-control d-flex align-items-center gap-2 me-2"
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <div class="yrg-depth-control yrg-graph-only d-flex align-items-center gap-2 me-2"
              data-testid="browser-depth-control"
-             title="Controls how many relationship levels appear from your filtered starting points. Increase to see dependencies further down the graph.">
+             title="Controls how many relationship levels appear from your filtered starting points.">
           <label for="depthSlider" class="form-label small mb-0 text-nowrap">Levels</label>
           <input type="range"
                  class="form-range"
                  style="width:6rem;"
                  id="depthSlider"
                  min="1"
-                 max="3"
-                 value="2"
+                 max="{{ max_depth }}"
+                 value="{{ current_depth }}"
                  data-testid="browser-depth-slider"
                  aria-label="Show levels deep">
-          <span class="badge bg-secondary" data-testid="browser-depth-value">2 / 3</span>
+          <span class="badge bg-secondary" data-testid="browser-depth-value">{{ current_depth }} / {{ max_depth }}</span>
         </div>
-        <span style="font-size:0.72rem;color:var(--hg-ink-muted);" data-testid="results-container">
-          {{ element_count }} elements
-        </span>
+        <span id="browserElementCount" style="font-size:0.82rem;color:var(--hg-ink-muted);"
+              data-testid="results-container">{{ element_count }} elements</span>
         <div class="yrg-view-toggle btn-group btn-group-sm" role="group" aria-label="View mode">
-          <button class="btn btn-outline-secondary" id="tableViewBtn"
-                  data-testid="toggle-table" onclick="setView('table')">
+          <button class="btn btn-outline-secondary{% if view_mode == 'table' %} active{% endif %}"
+                  id="tableViewBtn"
+                  data-testid="toggle-table"
+                  type="button"
+                  onclick="mockupSetView('table')">
             <i class="fa-solid fa-table me-1" aria-hidden="true"></i>Table
           </button>
-          <button class="btn btn-outline-secondary active" id="graphViewBtn"
-                  data-testid="toggle-graph" onclick="setView('graph')">
+          <button class="btn btn-outline-secondary{% if view_mode == 'graph' %} active{% endif %}"
+                  id="graphViewBtn"
+                  data-testid="toggle-graph"
+                  type="button"
+                  onclick="mockupSetView('graph')">
             <i class="fa-solid fa-diagram-project me-1" aria-hidden="true"></i>Graph
           </button>
         </div>
       </div>
     </div>
 
-    <div class="collapse border-bottom" id="filterPanel">
-      <div class="p-3 bg-white">
-        <div class="row g-2">
-          <div class="col-md-3">
-            <label class="form-label small fw-semibold">Package</label>
-            <select class="form-select form-select-sm" data-testid="filter-package">
-              <option>All packages</option>
-              {% for pkg in packages %}
-              <option>{{ pkg.name }}</option>
-              {% endfor %}
-            </select>
+    <div class="collapse" id="filterPanel">
+      <form method="get" action="{{ mock_browse_url }}" id="filterForm">
+        <input type="hidden" name="mode" id="filterViewMode" value="{{ view_mode }}">
+        <input type="hidden" name="depth" value="{{ current_depth }}">
+        <div class="hg-filter-panel p-3 bg-white border-bottom">
+          <div class="row g-3 mb-3">
+            <div class="col-md-3">
+              <label class="form-label" style="font-size:0.78rem;font-weight:600;">Package</label>
+              <select name="package" class="form-select form-select-sm" data-testid="filter-package"
+                      aria-label="Filter by package">
+                <option value="">All packages</option>
+                {% for pkg in filter_options.packages %}
+                <option value="{{ pkg.slug }}" {% if active_filters.package == pkg.slug %}selected{% endif %}>
+                  {{ pkg.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" style="font-size:0.78rem;font-weight:600;">Stereotype</label>
+              <select name="stereotype" class="form-select form-select-sm" data-testid="filter-stereotype"
+                      aria-label="Filter by stereotype">
+                <option value="">All stereotypes</option>
+                {% for st in filter_options.stereotypes %}
+                <option value="{{ st.slug }}" {% if active_filters.stereotype == st.slug %}selected{% endif %}>
+                  {{ st.name }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" style="font-size:0.78rem;font-weight:600;">Health</label>
+              <select name="health" class="form-select form-select-sm" data-testid="filter-health"
+                      aria-label="Filter by health">
+                <option value="">All</option>
+                {% for h in filter_options.health %}
+                <option value="{{ h.value }}" {% if active_filters.health == h.value %}selected{% endif %}>
+                  {{ h.label }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" style="font-size:0.78rem;font-weight:600;">Time travel</label>
+              <input type="date" name="as_of" class="form-control form-control-sm" data-testid="filter-as-of"
+                     aria-label="View model as of date" value="{{ active_filters.as_of|default:'' }}">
+            </div>
           </div>
-          <div class="col-md-3">
-            <label class="form-label small fw-semibold">Stereotype</label>
-            <select class="form-select form-select-sm" data-testid="filter-stereotype">
-              <option>All stereotypes</option>
-              <option>System</option><option>Container</option><option>Component</option><option>Person</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small fw-semibold">Health</label>
-            <select class="form-select form-select-sm" data-testid="filter-health">
-              <option>All</option><option>OK</option><option>Warning</option><option>Error</option>
-            </select>
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small fw-semibold">Time travel</label>
-            <input type="date" class="form-control form-control-sm" data-testid="filter-as-of">
+          <div class="d-flex gap-2">
+            <a href="{{ mock_browse_url }}?mode={{ view_mode }}&amp;depth={{ current_depth }}"
+               class="btn btn-outline-secondary btn-sm"
+               data-testid="filter-panel-clear-btn"
+               data-action="clear-filters">Clear</a>
+            <button class="btn btn-outline-secondary btn-sm" data-testid="save-view-btn"
+                    type="button" data-bs-toggle="modal" data-bs-target="#saveViewModal">Save View</button>
+            <button class="btn btn-primary btn-sm" type="submit" data-testid="apply-filters-btn">Apply Filters</button>
           </div>
         </div>
-        <div class="d-flex gap-2 mt-2">
-          <button class="btn btn-outline-secondary btn-sm" data-testid="filter-panel-clear-btn">Clear</button>
-          <button class="btn btn-outline-secondary btn-sm" data-testid="save-view-btn"
-                  type="button" data-bs-toggle="modal" data-bs-target="#saveViewModal">Save View</button>
-          <button class="btn btn-primary btn-sm" data-testid="apply-filters-btn">Apply Filters</button>
-        </div>
-      </div>
+      </form>
     </div>
 
-    <div class="yrg-canvas-body" id="canvasBody">
-      <div id="graphCy" data-testid="graph-cy-container"></div>
+    <div class="yrg-canvas-body flex-grow-1 position-relative min-h-0 overflow-hidden" id="canvasBody">
+      <div id="graphCy" data-testid="graph-cy-container"{% if view_mode != 'graph' %} style="display:none;"{% endif %}></div>
 
-      <div id="tableViewPanel" class="d-none">
+      <div id="tableViewPanel" class="{% if view_mode != 'table' %}d-none{% endif %}">
         <table class="table table-hover mb-0" aria-label="Elements">
           <thead>
             <tr>
@@ -578,16 +639,34 @@
         </table>
       </div>
 
-      <div class="yrg-canvas-controls">
-        <button class="btn btn-outline-secondary" type="button" onclick="zoomGraph('in')" title="Zoom in">+</button>
-        <button class="btn btn-outline-secondary" type="button" onclick="zoomGraph('out')" title="Zoom out">−</button>
-        <button class="btn btn-outline-secondary" type="button" onclick="zoomGraph('fit')" title="Fit">⊡</button>
+      <div class="yrg-canvas-controls position-absolute bottom-0 end-0 mb-3 me-3 z-3 yrg-graph-only{% if view_mode != 'graph' %} d-none{% endif %}"
+           id="graphZoomControls"
+           data-testid="browser-canvas-controls"
+           aria-label="Graph zoom controls">
+        <div class="text-end mb-1">
+          <span class="badge bg-secondary" data-testid="graph-node-count">{{ element_count }} nodes</span>
+        </div>
+        <div class="d-flex gap-1">
+          <button class="yrg-browser-btn-compact btn btn-outline-secondary" type="button"
+                  data-testid="graph-replot-btn"
+                  title="Re-plot graph" aria-label="Re-plot graph"
+                  onclick="replotGraph()">↺</button>
+          <button class="yrg-browser-btn-compact btn btn-outline-secondary" type="button"
+                  data-testid="graph-zoom-in" title="Zoom in" aria-label="Zoom in"
+                  onclick="zoomGraph('in')">+</button>
+          <button class="yrg-browser-btn-compact btn btn-outline-secondary" type="button"
+                  data-testid="graph-zoom-out" title="Zoom out" aria-label="Zoom out"
+                  onclick="zoomGraph('out')">−</button>
+          <button class="yrg-browser-btn-compact btn btn-outline-secondary" type="button"
+                  data-testid="graph-zoom-fit" title="Fit graph" aria-label="Fit graph"
+                  onclick="zoomGraph('fit')">⊡</button>
+        </div>
       </div>
     </div>
   </section>
 
   <button type="button"
-          class="yrg-panel-toggle yrg-panel-toggle-right btn btn-sm btn-outline-secondary"
+          class="yrg-panel-toggle yrg-panel-toggle-right yrg-graph-only btn btn-sm btn-outline-secondary"
           id="toggleInspectorBtn"
           data-testid="browser-toggle-inspector-panel"
           title="Toggle inspector"
@@ -595,7 +674,7 @@
 
   {# ── Right: property inspector ── #}
   <aside id="browserInspectorPanel"
-         class="yrg-browser-inspector"
+         class="yrg-browser-inspector yrg-graph-only"
          data-testid="browser-inspector-panel"
          aria-label="Property inspector">
 
@@ -635,8 +714,19 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn btn-primary btn-sm" data-testid="save-view-confirm-btn"
-                onclick="console.log('[mockup:view-browse-1] save-view confirmed')">Save</button>
+                id="saveViewConfirmBtn">Save</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1300;">
+  <div id="viewSaveToast" class="toast align-items-center text-bg-success border-0" role="status"
+       aria-live="polite" aria-atomic="true">
+    <div class="d-flex">
+      <div class="toast-body"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+              aria-label="Close"></button>
     </div>
   </div>
 </div>
@@ -644,6 +734,7 @@
 
 {% block extra_js %}
 <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+<script src="{% static 'js/mockup-view-browser.js' %}"></script>
 <script>
   document.body.classList.add('yrg-view-browser');
 
@@ -958,6 +1049,17 @@
     else if (action === 'out') cyInstance.zoom(cyInstance.zoom() / 1.2);
     else cyInstance.fit(undefined, 40);
   }
+
+  function replotGraph() {
+    if (!cyInstance) return;
+    cyInstance.layout({ name: 'cose', animate: false, padding: 40 }).run();
+    console.log('[mockup:view-browse-1] graph replotted');
+  }
+
+  /* Fallback until mockup-view-browser.js assigns mockupSetView */
+  window.mockupSetView = window.mockupSetView || function (mode) {
+    setView(mode);
+  };
 
   function bindNavSearch() {
     var input = document.getElementById('navSearchInput');

@@ -1,10 +1,26 @@
 import logging
+import re
+from typing import Any
 
 from django.shortcuts import render
 
 from yggdrasil.web.browse_helpers import build_package_tree as _build_package_tree
 
 logger = logging.getLogger(__name__)
+
+MOCK_MODEL_SLUG = "yggdrasil"
+MOCK_MAX_DEPTH = 5
+MOCK_DEFAULT_MODE = "graph"
+MOCK_DEFAULT_DEPTH = 2
+
+HEALTH_FILTER_MAP = {
+    "ok": "green",
+    "warning": "yellow",
+    "error": "red",
+    "green": "green",
+    "yellow": "yellow",
+    "red": "red",
+}
 
 # ─── Confidence banding — IA_guidelines.md §15.6 ─────────────────────────────
 # Bands: >=0.85 high, 0.60-0.84 medium, 0.40-0.59 low, <0.40 vlow.
@@ -624,6 +640,213 @@ MOCK_VIEW_BROWSER_RELATIONSHIPS = [
 annotate_confidence(MOCK_VIEW_BROWSER_ELEMENTS)
 annotate_confidence(MOCK_VIEW_BROWSER_RELATIONSHIPS)
 
+# Named Views (Views v1 prototype) — persisted snapshots per Model + owner in W14.
+MOCK_BROWSE_VIEWS: list[dict[str, Any]] = [
+    {
+        "name": "Application / Components",
+        "slug": "application-components",
+        "model_slug": MOCK_MODEL_SLUG,
+        "payload": {
+            "filters": {
+                "package": "application",
+                "stereotype": "component",
+                "health": None,
+                "as_of": None,
+            },
+            "levels": {"depth": 2},
+            "presentation": "graph",
+        },
+    },
+    {
+        "name": "Technology / Infrastructure",
+        "slug": "technology-infrastructure",
+        "model_slug": MOCK_MODEL_SLUG,
+        "payload": {
+            "filters": {
+                "package": "technology",
+                "stereotype": "",
+                "health": None,
+                "as_of": None,
+            },
+            "levels": {"depth": 3},
+            "presentation": "graph",
+        },
+    },
+    {
+        "name": "Payment capability review",
+        "slug": "payment-capability-review",
+        "model_slug": MOCK_MODEL_SLUG,
+        "payload": {
+            "filters": {
+                "package": "",
+                "stereotype": "component",
+                "health": None,
+                "as_of": None,
+            },
+            "levels": {"depth": 2},
+            "presentation": "graph",
+        },
+    },
+]
+
+
+def slugify_view_name(name: str) -> str:
+    """Derive a URL-safe slug from a display name.
+
+    :param name: Human-readable View label.
+    :return: Lowercase hyphenated slug.
+    """
+    slug = re.sub(r"[^\w\s-]", "", name.lower())
+    slug = re.sub(r"[\s_]+", "-", slug.strip())
+    return slug[:64] or "view"
+
+
+def _blank_to_none(value: str | None) -> str | None:
+    if value is None or not str(value).strip():
+        return None
+    return str(value).strip()
+
+
+def _find_browse_view(slug: str, model_slug: str) -> dict[str, Any] | None:
+    for view in MOCK_BROWSE_VIEWS:
+        if view["slug"] == slug and view["model_slug"] == model_slug:
+            return view
+    return None
+
+
+def parse_mock_browse_params(request, model_slug: str = MOCK_MODEL_SLUG) -> dict[str, Any]:
+    """Parse mock View Browser query params; expand ``browse_view`` when present.
+
+    :param request: Incoming HTTP request.
+    :param model_slug: Active Model slug for View catalog scoping.
+    :return: Normalized browse state dict for template + filtering.
+    """
+    browse_view_slug = _blank_to_none(request.GET.get("browse_view"))
+    if browse_view_slug:
+        saved = _find_browse_view(browse_view_slug, model_slug)
+        if saved:
+            payload = saved["payload"]
+            filters = payload.get("filters", {})
+            return {
+                "package": filters.get("package") or "",
+                "stereotype": filters.get("stereotype") or "",
+                "health": filters.get("health") or "",
+                "as_of": filters.get("as_of") or "",
+                "depth": int(payload.get("levels", {}).get("depth", MOCK_DEFAULT_DEPTH)),
+                "mode": payload.get("presentation", MOCK_DEFAULT_MODE),
+                "browse_view": browse_view_slug,
+                "loaded_view_name": saved["name"],
+            }
+        logger.warning(
+            "Mockup: unknown browse_view slug=%s model=%s",
+            browse_view_slug,
+            model_slug,
+        )
+
+    mode = request.GET.get("mode") or request.GET.get("view") or MOCK_DEFAULT_MODE
+    if mode not in ("graph", "table"):
+        mode = MOCK_DEFAULT_MODE
+
+    try:
+        depth = int(request.GET.get("depth", MOCK_DEFAULT_DEPTH))
+    except (TypeError, ValueError):
+        depth = MOCK_DEFAULT_DEPTH
+    depth = max(1, min(depth, MOCK_MAX_DEPTH))
+
+    return {
+        "package": request.GET.get("package", "").strip(),
+        "stereotype": request.GET.get("stereotype", "").strip(),
+        "health": request.GET.get("health", "").strip(),
+        "as_of": request.GET.get("as_of", "").strip(),
+        "depth": depth,
+        "mode": mode,
+        "browse_view": "",
+        "loaded_view_name": "",
+    }
+
+
+def filter_mock_elements(elements: list[dict], params: dict[str, Any]) -> list[dict]:
+    """Apply mock browse filters to the element list.
+
+    :param elements: Full mock element catalog.
+    :param params: Parsed browse params from :func:`parse_mock_browse_params`.
+    :return: Filtered element list (client graph uses same subset).
+    """
+    filtered = list(elements)
+    package = params.get("package") or ""
+    if package:
+        pkg_lower = package.lower()
+        filtered = [
+            el
+            for el in filtered
+            if el.get("package", "").lower() == pkg_lower
+            or el.get("package_slug", "").lower() == pkg_lower
+        ]
+
+    stereotype = params.get("stereotype") or ""
+    if stereotype:
+        st_lower = stereotype.lower()
+        filtered = [el for el in filtered if el.get("stereotype", "").lower() == st_lower]
+
+    health = params.get("health") or ""
+    if health:
+        health_val = HEALTH_FILTER_MAP.get(health.lower(), health.lower())
+        filtered = [el for el in filtered if el.get("health", "").lower() == health_val]
+
+    return filtered
+
+
+def build_mock_filter_options(elements: list[dict]) -> dict[str, list[dict[str, str]]]:
+    """Build filter dropdown options from mock elements."""
+    packages: dict[str, str] = {}
+    stereotypes: dict[str, str] = {}
+    for el in elements:
+        pkg = el.get("package", "")
+        if pkg:
+            packages[pkg.lower()] = pkg
+        st = el.get("stereotype", "")
+        if st:
+            stereotypes[st.lower()] = st
+    return {
+        "packages": [{"slug": slug, "name": name} for slug, name in sorted(packages.items())],
+        "stereotypes": [{"slug": slug, "name": name} for slug, name in sorted(stereotypes.items())],
+        "health": [
+            {"value": "ok", "label": "OK"},
+            {"value": "warning", "label": "Warning"},
+            {"value": "error", "label": "Error"},
+        ],
+    }
+
+
+def build_mock_filter_chips(
+    params: dict[str, Any], options: dict[str, list]
+) -> list[dict[str, str]]:
+    """Human-readable active filter chips for the canvas toolbar."""
+    chips: list[dict[str, str]] = []
+    if params.get("package"):
+        label = next(
+            (p["name"] for p in options["packages"] if p["slug"] == params["package"]),
+            params["package"],
+        )
+        chips.append({"key": "package", "label": f"Package: {label}"})
+    if params.get("stereotype"):
+        label = next(
+            (s["name"] for s in options["stereotypes"] if s["slug"] == params["stereotype"]),
+            params["stereotype"],
+        )
+        chips.append({"key": "stereotype", "label": f"Stereotype: {label}"})
+    if params.get("health"):
+        label = next(
+            (h["label"] for h in options["health"] if h["value"] == params["health"]),
+            params["health"],
+        )
+        chips.append({"key": "health", "label": f"Health: {label}"})
+    if params.get("as_of"):
+        chips.append({"key": "as_of", "label": f"As of: {params['as_of']}"})
+    if params.get("loaded_view_name"):
+        chips.append({"key": "view", "label": f"View: {params['loaded_view_name']}"})
+    return chips
+
 
 def build_package_tree(elements: list[dict]) -> list[dict]:
     """Adapt mock element dicts (``package`` display name) for shared tree builder."""
@@ -826,17 +1049,42 @@ def munin_briefing(request):
 def view_browse(request):
     """VIEW-BROWSE-1: View Browser — three-panel explorer (navigator + canvas + inspector)."""
     logger.info("Mockup: view_browse | user=%s", getattr(request.user, "username", "anonymous"))
-    elements = MOCK_VIEW_BROWSER_ELEMENTS
+    elements_all = MOCK_VIEW_BROWSER_ELEMENTS
+    params = parse_mock_browse_params(request, MOCK_MODEL_SLUG)
+    elements = filter_mock_elements(elements_all, params)
+    options = build_mock_filter_options(elements_all)
+    chips = build_mock_filter_chips(params, options)
+    views_for_model = [v for v in MOCK_BROWSE_VIEWS if v["model_slug"] == MOCK_MODEL_SLUG]
+
+    logger.info(
+        "Mockup: view_browse state | mode=%s depth=%s filters=%s visible=%s browse_view=%s",
+        params["mode"],
+        params["depth"],
+        {k: params[k] for k in ("package", "stereotype", "health", "as_of") if params.get(k)},
+        len(elements),
+        params.get("browse_view") or "-",
+    )
+
     return render(
         request,
         "mockups/view/browse.html",
         {
             "elements": elements,
+            "elements_all": elements_all,
             "relationships": MOCK_VIEW_BROWSER_RELATIONSHIPS,
             "packages": build_package_tree(elements),
             "model_name": "Yggdrasil",
+            "model_slug": MOCK_MODEL_SLUG,
             "element_count": len(elements),
             "relationship_count": len(MOCK_VIEW_BROWSER_RELATIONSHIPS),
+            "view_mode": params["mode"],
+            "current_depth": params["depth"],
+            "max_depth": MOCK_MAX_DEPTH,
+            "active_filters": params,
+            "filter_options": options,
+            "filter_chips": chips,
+            "browse_views": views_for_model,
+            "mock_browse_url": request.path,
         },
     )
 

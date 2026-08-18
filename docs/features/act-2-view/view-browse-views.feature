@@ -25,16 +25,14 @@ Feature: VIEW-BROWSE-1 View Browser — Named Views (Filters + Levels + Content)
     And the element "save-view-btn" should be visible
     And the element "filters-toggle" should be visible
 
-  @wip
   Scenario: VIEW-BROWSE-1-67 Clear filters does not remove named Views from catalog
     Given Priya has saved a View named "Tech stack" for model "yggdrasil"
     When I GET "/models/yggdrasil/views/?package=technology"
     And Priya clears all browse filters in the View Browser
     Then the element "view-option-tech-stack" should be visible
 
-  # ── AT + E2E: persistence (W14 — @wip until step defs ship) ─────────────
+  # ── AT + E2E: persistence (W14) ───────────────────────────────────────────
 
-  @wip
   Scenario: VIEW-BROWSE-1-62 Save current View persists filters and depth
     Given Priya is on the View Browser in graph mode with depth 2
     And Priya has applied package filter "technology"
@@ -43,7 +41,6 @@ Feature: VIEW-BROWSE-1 View Browser — Named Views (Filters + Levels + Content)
     And the stored View payload includes package "technology" and depth 2
     # W15: same step also asserts content preset and optional viewport when checked
 
-  @wip
   Scenario: VIEW-BROWSE-1-63 Load named View restores URL params and depth badge
     Given Priya has saved a View named "App components" with stereotype "component" and depth 3
     When Priya selects View "App components" from the Views dropdown
@@ -52,14 +49,12 @@ Feature: VIEW-BROWSE-1 View Browser — Named Views (Filters + Levels + Content)
     And the element "browser-depth-value" should be visible
     # W15: restores content preset labels and viewport when saved with include-viewport
 
-  @wip
   Scenario: VIEW-BROWSE-1-64 browse_view slug expands to equivalent query string
     Given Priya has saved a View named "Payment review" with package "technology" and depth 2
     When I GET "/models/yggdrasil/views/?browse_view=payment-review"
     Then the response status is 200
     And the user should see "Payment API"
 
-  @wip
   Scenario: VIEW-BROWSE-1-65 View catalog is scoped to current Model
     Given Priya has saved a View named "Ygg view" for model "yggdrasil"
     And a View named "Payments view" exists for model "payments"
@@ -67,13 +62,11 @@ Feature: VIEW-BROWSE-1 View Browser — Named Views (Filters + Levels + Content)
     Then the element "view-option-ygg-view" should be visible
     And the element "view-option-payments-view" should not be visible
 
-  @wip
   Scenario: VIEW-BROWSE-1-66 Owner can delete a saved View
     Given Priya has saved a View named "Temporary" for model "yggdrasil"
     When Priya deletes View "Temporary"
     Then the element "view-option-temporary" should not be visible
 
-  @wip
   Scenario: VIEW-BROWSE-1-68 Viewer can load but not save or delete Views
     Given the user is logged in as "viewer"
     And an architect has saved a View named "Shared review" for model "yggdrasil"

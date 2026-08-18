@@ -7,9 +7,16 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from django.contrib.auth.models import AbstractBaseUser
     from django.http import HttpRequest
 
-from yggdrasil.graph import browse_service
+    from yggdrasil.graph.models import YggdrasilModel
+
+from urllib.parse import urlencode
+
+from django.urls import reverse
+
+from yggdrasil.graph import browse_service, browse_view_service
 
 logger = logging.getLogger("yggdrasil.web")
 
@@ -65,6 +72,8 @@ class ViewBrowseParams:
     as_of: str | None
     view_mode: str
     depth: int
+    browse_view: str | None = None
+    loaded_view_name: str | None = None
 
 
 def _parse_view_mode(request: HttpRequest) -> str:
@@ -98,6 +107,102 @@ def parse_view_browse_params(request: HttpRequest, model_slug: str) -> ViewBrows
         view_mode=view_mode,
         depth=_parse_depth(request.GET.get("depth")),
     )
+
+
+def apply_browse_view_expansion(
+    request: HttpRequest,
+    user: AbstractBaseUser,
+    ymodel: YggdrasilModel,
+    params: ViewBrowseParams,
+) -> ViewBrowseParams:
+    """
+    Expand ``?browse_view=`` into filter params; explicit query values win.
+
+    :param request: Django HTTP request.
+    :param user: Authenticated user loading the View.
+    :param ymodel: Active YggdrasilModel instance.
+    :param params: Base parsed params (may include ``browse_view`` slug only).
+    :return: Params with filters/depth/mode from saved payload when resolved.
+    """
+    browse_view_slug = _blank_to_none(request.GET.get("browse_view"))
+    if not browse_view_slug:
+        return params
+
+    logger.info(
+        "browse_helpers.apply_browse_view_expansion | entry | browse_view=%s model_slug=%s user_pk=%s",
+        browse_view_slug,
+        ymodel.slug,
+        user.pk,
+    )
+    saved = browse_view_service.resolve_view_for_load(user, ymodel, browse_view_slug)
+    if saved is None:
+        return params
+
+    expanded = browse_view_service.expand_to_query_params(saved)
+    package = _blank_to_none(request.GET.get("package"))
+    if package is None and expanded.get("package"):
+        package = expanded["package"][0]
+    stereotype = _blank_to_none(request.GET.get("stereotype"))
+    if stereotype is None and expanded.get("stereotype"):
+        stereotype = expanded["stereotype"][0]
+    health = params.health
+    as_of = params.as_of
+    view_mode = _parse_view_mode(request)
+    if request.GET.get("mode") is None and request.GET.get("view") is None:
+        view_mode = expanded.get("mode", [params.view_mode])[0]
+    depth = params.depth
+    if request.GET.get("depth") is None:
+        depth = int(expanded.get("depth", [str(params.depth)])[0])
+
+    merged = ViewBrowseParams(
+        model_slug=params.model_slug,
+        stereotype=stereotype,
+        package=package,
+        health=health,
+        as_of=as_of,
+        view_mode=view_mode,
+        depth=depth,
+        browse_view=browse_view_slug,
+        loaded_view_name=saved.name,
+    )
+    logger.info(
+        "browse_helpers.apply_browse_view_expansion | exit | browse_view=%s expanded=true depth=%s package=%s",
+        browse_view_slug,
+        merged.depth,
+        merged.package,
+    )
+    return merged
+
+
+def user_can_save_views(user: AbstractBaseUser) -> bool:
+    """
+    Return whether ``user`` may save or delete named Views (architect role).
+
+    :param user: Authenticated user.
+    :return: True when user is superuser or in the architect group.
+    """
+    if user.is_superuser:
+        return True
+    return user.groups.filter(name="architect").exists()
+
+
+def build_payload_from_browse_params(params: ViewBrowseParams) -> dict:
+    """
+    Build a BrowseView payload v1 from current browse params.
+
+    :param params: Active browse parameters.
+    :return: Payload dict for ``browse_view_service.save_view``.
+    """
+    filters: dict[str, list[str]] = {
+        "packages": [params.package] if params.package else [],
+        "element_stereotypes": [params.stereotype] if params.stereotype else [],
+        "relationship_stereotypes": [],
+    }
+    return {
+        "filters": filters,
+        "levels": {"depth": params.depth},
+        "presentation": params.view_mode,
+    }
 
 
 def _parse_depth(raw: str | None) -> int:
@@ -151,6 +256,9 @@ def build_empty_browse_context(request: HttpRequest) -> dict[str, Any]:
         "readable_models": readable_models,
         "switcher_disabled": True,
         "no_models": True,
+        "browse_views": [],
+        "browse_view_entries": [],
+        "can_save_views": False,
     }
 
 
@@ -238,9 +346,14 @@ def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) ->
     readable_models = list(browse_service.list_readable_models(request.user))
     switcher_disabled = len(readable_models) <= 1
     model_name = params.model_slug.title()
+    ymodel = None
+    browse_views: list = []
+    browse_view_entries: list[dict[str, Any]] = []
     try:
         ymodel = browse_service.resolve_model(params.model_slug)
         model_name = ymodel.name
+        browse_views = list(browse_view_service.list_views(request.user, ymodel))
+        browse_view_entries = [_browse_view_entry(params.model_slug, view) for view in browse_views]
         scoped = browse_service.subgraph_from_roots(
             model_slug=params.model_slug,
             stereotype=params.stereotype,
@@ -288,7 +401,40 @@ def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) ->
         "readable_models": readable_models,
         "switcher_disabled": switcher_disabled,
         "no_models": False,
+        "browse_views": browse_views,
+        "browse_view_entries": browse_view_entries,
+        "can_save_views": user_can_save_views(request.user),
     }
+
+
+def _browse_view_entry(model_slug: str, view: Any) -> dict[str, Any]:
+    """Build template entry with expanded load URL for a saved View."""
+    expanded = browse_view_service.expand_to_query_params(view)
+    expanded["browse_view"] = [view.slug]
+    base = reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+    load_url = base + "?" + urlencode(expanded, doseq=True)
+    return {"view": view, "load_url": load_url}
+
+
+def parse_browse_params_from_post(request: HttpRequest, model_slug: str) -> ViewBrowseParams:
+    """
+    Parse browse filter fields from a save-view POST body.
+
+    :param request: Django HTTP request with POST data.
+    :param model_slug: Model slug from the URL path.
+    :return: Normalized browse parameters for payload construction.
+    """
+    raw_mode = request.POST.get("mode") or DEFAULT_VIEW_MODE
+    view_mode = raw_mode if raw_mode in VALID_VIEW_MODES else DEFAULT_VIEW_MODE
+    return ViewBrowseParams(
+        model_slug=model_slug,
+        stereotype=_blank_to_none(request.POST.get("stereotype")),
+        package=_blank_to_none(request.POST.get("package")),
+        health=_blank_to_none(request.POST.get("health")),
+        as_of=_blank_to_none(request.POST.get("as_of")),
+        view_mode=view_mode,
+        depth=_parse_depth(request.POST.get("depth")),
+    )
 
 
 def _row_from_summary(item: dict[str, Any]) -> dict[str, Any]:

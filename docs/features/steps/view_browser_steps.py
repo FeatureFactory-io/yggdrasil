@@ -25,10 +25,12 @@ from __future__ import annotations
 
 import logging
 import re
+from urllib.parse import urlencode
 
 from behave import given, then, when
 from django.contrib.auth.models import Group
 from django.urls import reverse
+from django.utils.text import slugify
 from steps.common_steps import get_client
 from support.visibility import (
     browser_ssr_mode,
@@ -46,7 +48,14 @@ from tests.fixtures.view_browser import (
     _seed_view_browser,
 )
 
-from yggdrasil.graph.models import Element, Relationship, ensure_c4_metamodel
+from yggdrasil.graph import browse_view_service
+from yggdrasil.graph.models import (
+    BrowseView,
+    Element,
+    Relationship,
+    YggdrasilModel,
+    ensure_c4_metamodel,
+)
 from yggdrasil.mcp.server import set_current_user_id, set_token_scope
 
 logger = logging.getLogger(__name__)
@@ -149,6 +158,7 @@ def step_architect_can_read_no_models(context) -> None:
 
 
 @given('Priya is on the View Browser for model "{slug}"')
+@when('Priya is on the View Browser for model "{slug}"')
 def step_priya_on_view_browser_for_model(context, slug: str) -> None:
     """GET canonical browse URL for a specific model."""
     path = reverse("web:view_browse_model", kwargs={"model_slug": slug})
@@ -382,3 +392,203 @@ def step_table_view_active(context) -> None:
 def step_navigator_row_highlighted(context, name: str) -> None:
     """Cross-panel sync — implement in W10."""
     raise NotImplementedError(f"Navigator highlight for {name!r} — implement in W10")
+
+
+def _current_user(context):
+    user = getattr(context, "current_user", None)
+    assert user is not None, "No current user — log in first"
+    return user
+
+
+def _model_for_slug(slug: str) -> YggdrasilModel:
+    mm = ensure_c4_metamodel()
+    model, _ = YggdrasilModel.objects.get_or_create(
+        slug=slug,
+        defaults={"name": slug.title(), "metamodel": mm},
+    )
+    return model
+
+
+def _save_browse_view(
+    context, *, name: str, model_slug: str, package: str = "", stereotype: str = "", depth: int = 1
+):
+    user = _current_user(context)
+    model = _model_for_slug(model_slug)
+    payload = {
+        "filters": {
+            "packages": [package] if package else [],
+            "element_stereotypes": [stereotype] if stereotype else [],
+            "relationship_stereotypes": [],
+        },
+        "levels": {"depth": depth},
+        "presentation": "graph",
+    }
+    browse_view_service.save_view(user, model, name=name, payload=payload)
+    logger.info("Saved BrowseView name=%s model=%s", name, model_slug)
+
+
+@given('Priya has saved a View named "{name}" for model "{model_slug}"')
+def step_priya_saved_view_for_model(context, name: str, model_slug: str) -> None:
+    """Seed a BrowseView owned by the current architect user."""
+    _save_browse_view(context, name=name, model_slug=model_slug)
+
+
+@given('Priya has saved a View named "{name}" with package "{package}" and depth {depth:d}')
+def step_priya_saved_view_package_depth(context, name: str, package: str, depth: int) -> None:
+    """Seed BrowseView with package filter and depth."""
+    _save_browse_view(
+        context,
+        name=name,
+        model_slug=getattr(context, "view_browser_model_slug", "yggdrasil"),
+        package=package,
+        depth=depth,
+    )
+
+
+@given('Priya has saved a View named "{name}" with stereotype "{stereotype}" and depth {depth:d}')
+def step_priya_saved_view_stereotype_depth(context, name: str, stereotype: str, depth: int) -> None:
+    """Seed BrowseView with stereotype filter and depth."""
+    _save_browse_view(
+        context,
+        name=name,
+        model_slug=getattr(context, "view_browser_model_slug", "yggdrasil"),
+        stereotype=stereotype,
+        depth=depth,
+    )
+
+
+@given('a View named "{name}" exists for model "{model_slug}"')
+def step_view_exists_for_model(context, name: str, model_slug: str) -> None:
+    """Seed BrowseView on another model (same owner as current user)."""
+    _save_browse_view(context, name=name, model_slug=model_slug)
+
+
+@given('an architect has saved a View named "{name}" for model "{model_slug}"')
+def step_architect_saved_view(context, name: str, model_slug: str) -> None:
+    """Seed BrowseView as architect while viewer may be logged in later."""
+    architect = UserFactory(is_architect=True)
+    Group.objects.get_or_create(name="architect")
+    architect.groups.add(Group.objects.get(name="architect"))
+    model = _model_for_slug(model_slug)
+    payload = {
+        "filters": {"packages": [], "element_stereotypes": [], "relationship_stereotypes": []},
+        "levels": {"depth": 1},
+        "presentation": "graph",
+    }
+    browse_view_service.save_view(architect, model, name=name, payload=payload)
+    logger.info("Architect saved shared View name=%s", name)
+
+
+@given("Priya is on the View Browser in graph mode with depth {depth:d}")
+def step_priya_on_browser_graph_depth(context, depth: int) -> None:
+    """GET browse URL with graph mode and depth."""
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    path = reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+    context.response = get_client(context).get(path, {"mode": "graph", "depth": str(depth)})
+    context.active_depth = depth
+    context.last_url = path + "?" + urlencode({"mode": "graph", "depth": str(depth)})
+    logger.info("Priya on graph mode depth=%s", depth)
+
+
+@given('Priya has applied package filter "{package}"')
+def step_priya_applied_package(context, package: str) -> None:
+    """Record active package filter on context for save step."""
+    context.active_package_filter = package
+
+
+@when('Priya saves the current browse session as View "{name}"')
+def step_priya_saves_current_view(context, name: str) -> None:
+    """POST save endpoint with current filter state from context."""
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    package = getattr(context, "active_package_filter", "")
+    depth = str(getattr(context, "active_depth", 2))
+    post_data = {
+        "name": name,
+        "package": package,
+        "depth": depth,
+        "mode": "graph",
+    }
+    path = reverse("web:view_browse_save", kwargs={"model_slug": model_slug})
+    context.response = get_client(context).post(path, post_data)
+    context.last_url = context.response.headers.get("Location", path)
+    logger.info("Saved view %s -> %s", name, context.response.status_code)
+
+
+@when('Priya selects View "{name}" from the Views dropdown')
+def step_priya_selects_view(context, name: str) -> None:
+    """GET expanded load URL for named View."""
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    user = _current_user(context)
+    model = _model_for_slug(model_slug)
+    view = browse_view_service.get_view(user, model, slugify(name))
+    expanded = browse_view_service.expand_to_query_params(view)
+    expanded["browse_view"] = [view.slug]
+    path = reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+    context.response = get_client(context).get(path, expanded)
+    context.last_url = path + "?" + urlencode(expanded, doseq=True)
+    logger.info("Selected View %s", name)
+
+
+@when('Priya deletes View "{name}"')
+def step_priya_deletes_view(context, name: str) -> None:
+    """POST delete for named View."""
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    user = _current_user(context)
+    view = browse_view_service.get_view(user, _model_for_slug(model_slug), slugify(name))
+    path = reverse(
+        "web:view_browse_delete",
+        kwargs={"model_slug": model_slug, "view_slug": view.slug},
+    )
+    context.response = get_client(context).post(path)
+    context.response = get_client(context).get(
+        reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+    )
+    logger.info("Deleted View %s", name)
+
+
+@when("Priya clears all browse filters in the View Browser")
+def step_priya_clears_filters(context) -> None:
+    """GET unfiltered browse URL (simulates Clear)."""
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    path = reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+    context.response = get_client(context).get(path, {"mode": "graph"})
+    context.last_url = path + "?mode=graph"
+    logger.info("Cleared browse filters")
+
+
+@when('the viewer loads View "{name}" from the Views dropdown')
+def step_viewer_loads_view(context, name: str) -> None:
+    """GET browse_view slug as viewer."""
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    slug = slugify(name)
+    path = reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+    context.response = get_client(context).get(path, {"browse_view": slug})
+    logger.info("Viewer loaded View %s", name)
+
+
+@then('a BrowseView "{slug}" exists for model "{model_slug}" owned by Priya')
+def step_browseview_exists(context, slug: str, model_slug: str) -> None:
+    """Assert ORM row exists for current user."""
+    user = _current_user(context)
+    view = browse_view_service.get_view(user, _model_for_slug(model_slug), slug)
+    assert view.slug == slug
+    logger.info("BrowseView %s exists", slug)
+
+
+@then('the stored View payload includes package "{package}" and depth {depth:d}')
+def step_stored_payload_package_depth(context, package: str, depth: int) -> None:
+    """Assert last saved View payload fields."""
+    user = _current_user(context)
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    view = BrowseView.objects.filter(model__slug=model_slug, owner=user).latest("created_at")
+    assert view.payload["filters"]["packages"] == [package]
+    assert view.payload["levels"]["depth"] == depth
+    logger.info("Payload verified package=%s depth=%s", package, depth)
+
+
+@then("the browser URL includes {fragment}")
+def step_browser_url_includes(context, fragment: str) -> None:
+    """Assert last navigation URL contains fragment (e.g. stereotype=component)."""
+    url = getattr(context, "last_url", "")
+    assert fragment in url, f"Expected {fragment!r} in URL {url!r}"
+    logger.info("URL includes %s", fragment)

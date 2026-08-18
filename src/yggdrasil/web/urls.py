@@ -16,6 +16,16 @@ urlpatterns = [
         name="view_browse_model",
     ),
     path(
+        "models/<slug:model_slug>/views/save/",
+        views.ViewBrowseSaveView.as_view(),
+        name="view_browse_save",
+    ),
+    path(
+        "models/<slug:model_slug>/views/<slug:view_slug>/delete/",
+        views.ViewBrowseDeleteView.as_view(),
+        name="view_browse_delete",
+    ),
+    path(
         "models/<slug:model_slug>/views/graph.json",
         views.ViewBrowseGraphJsonView.as_view(),
         name="view_browse_graph_model",

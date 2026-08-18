@@ -145,7 +145,12 @@ def _seed_view_browser(
 @pytest.fixture
 def view_browser_user(db):
     """Architect user for View Browser web tests."""
-    return UserFactory(username="view-browser-architect", is_architect=True)
+    from django.contrib.auth.models import Group
+
+    user = UserFactory(username="view-browser-architect", is_architect=True)
+    architect_group, _ = Group.objects.get_or_create(name="architect")
+    user.groups.add(architect_group)
+    return user
 
 
 @pytest.fixture

@@ -114,7 +114,7 @@
   function buildParamsAfterClear() {
     var params = new URLSearchParams();
     if (isGraphMode()) {
-      params.set('view', 'graph');
+      params.set('mode', 'graph');
     }
     return params;
   }

@@ -334,15 +334,6 @@
         <i class="fa-solid fa-brain-circuit me-1" aria-hidden="true"></i>Munin
       </button>
     </div>
-    <div class="dropdown">
-      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
-              data-bs-toggle="dropdown" aria-expanded="false" data-testid="saved-views-dropdown">
-        Saved views
-      </button>
-      <ul class="dropdown-menu dropdown-menu-end">
-        <li><span class="dropdown-item-text text-muted small">No saved views yet</span></li>
-      </ul>
-    </div>
   </div>
 </div>
 {% endblock %}
@@ -374,9 +365,10 @@
                 data-testid="filters-toggle">
           <i class="fa-solid fa-sliders me-1" aria-hidden="true"></i>Filters
         </button>
-        <a href="{% if model_slug %}{% url 'web:view_browse_model' model_slug=model_slug %}{% else %}{% url 'web:view_browse' %}{% endif %}" class="btn btn-sm btn-outline-danger"
-           data-testid="clear-filters-btn"
-           data-action="clear-filters">Clear</a>
+        {% if active_filters.loaded_view_name %}
+        <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1"
+              data-testid="active-view-name">{{ active_filters.loaded_view_name }}</span>
+        {% endif %}
       </div>
       <div class="d-flex align-items-center gap-2 flex-wrap">
         <div class="yrg-depth-control yrg-graph-only d-flex align-items-center gap-2 me-2"
@@ -394,7 +386,35 @@
                  aria-label="Show levels deep">
           <span class="badge bg-secondary" data-testid="browser-depth-value">{{ current_depth }} / {{ max_depth }}</span>
         </div>
-        <span id="browserElementCount" style="font-size:0.82rem;color:var(--hg-ink-muted);">{{ element_count }} elements</span>
+        <div class="dropdown">
+          <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                  data-bs-toggle="dropdown" aria-expanded="false" data-testid="views-dropdown"
+                  aria-label="Named Views">
+            Views
+          </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-label="Saved Views">
+            {% for entry in browse_view_entries %}
+            {% with view=entry.view %}
+            <li class="d-flex align-items-center gap-1 px-2">
+              <a class="dropdown-item flex-grow-1"
+                 href="{{ entry.load_url }}"
+                 data-testid="view-option-{{ view.slug }}">{{ view.name }}</a>
+              {% if can_save_views %}
+              <form method="post"
+                    action="{% url 'web:view_browse_delete' model_slug=model_slug view_slug=view.slug %}"
+                    class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-link btn-sm text-danger p-0"
+                        data-testid="delete-view-btn" aria-label="Delete {{ view.name }}">×</button>
+              </form>
+              {% endif %}
+            </li>
+            {% endwith %}
+            {% empty %}
+            <li><span class="dropdown-item-text text-muted small">No saved views yet</span></li>
+            {% endfor %}
+          </ul>
+        </div>
         <div class="yrg-view-toggle btn-group btn-group-sm" role="group" aria-label="View mode">
           <button class="btn btn-outline-secondary{% if view_mode == 'table' %} active{% endif %}"
                   id="tableViewBtn"
@@ -418,6 +438,9 @@
       <form method="get" action="{% if model_slug %}{% url 'web:view_browse_model' model_slug=model_slug %}{% else %}{% url 'web:view_browse' %}{% endif %}" id="filterForm">
         <input type="hidden" name="mode" id="filterViewMode" value="{{ view_mode }}">
         <input type="hidden" name="depth" value="{{ current_depth }}">
+        {% if active_filters.browse_view %}
+        <input type="hidden" name="browse_view" value="{{ active_filters.browse_view }}">
+        {% endif %}
         <div class="hg-filter-panel">
           <div class="row g-3 mb-3">
             <div class="col-md-3">
@@ -466,7 +489,12 @@
             <a href="{% if model_slug %}{% url 'web:view_browse_model' model_slug=model_slug %}{% else %}{% url 'web:view_browse' %}{% endif %}" class="btn btn-outline-secondary btn-sm"
                data-testid="filter-panel-clear-btn"
                data-action="clear-filters">Clear</a>
-            <button class="btn btn-outline-secondary btn-sm" type="button" disabled>Save View</button>
+            {% if can_save_views %}
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-testid="save-view-btn"
+                    data-bs-toggle="modal" data-bs-target="#saveViewModal">
+              {% if active_filters.loaded_view_name %}Update View{% else %}Save View{% endif %}
+            </button>
+            {% endif %}
             <button class="btn btn-primary btn-sm" type="submit" data-testid="apply-filters-btn">Apply Filters</button>
           </div>
         </div>
@@ -519,6 +547,38 @@
   {% include "web/view/partials/inspector_shell.html" %}
 
 </div>
+
+{% if can_save_views and model_slug %}
+<div class="modal fade" id="saveViewModal" tabindex="-1" aria-labelledby="saveViewModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" action="{% url 'web:view_browse_save' model_slug=model_slug %}" id="saveViewForm">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title" id="saveViewModalLabel">Save current view</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label" for="saveViewNameInput">View name</label>
+          <input type="text" class="form-control" name="name" id="saveViewNameInput"
+                 data-testid="save-view-name-input"
+                 value="{{ active_filters.loaded_view_name|default:'' }}"
+                 placeholder="e.g. Technology stack" required>
+          <input type="hidden" name="package" value="{{ active_filters.package|default:'' }}">
+          <input type="hidden" name="stereotype" value="{{ active_filters.stereotype|default:'' }}">
+          <input type="hidden" name="health" value="{{ active_filters.health|default:'' }}">
+          <input type="hidden" name="depth" value="{{ current_depth }}">
+          <input type="hidden" name="mode" value="{{ view_mode }}">
+        </div>
+        <div class="modal-footer d-flex justify-content-end gap-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm" data-testid="save-view-confirm-btn">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}

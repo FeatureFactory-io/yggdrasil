@@ -9,6 +9,7 @@ Web views for Yggdrasil.
 import logging
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -16,13 +17,17 @@ from django.views import View
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET
 
-from yggdrasil.graph import browse_service
-from yggdrasil.graph.models import Element, Relationship
+from yggdrasil.graph import browse_service, browse_view_service
+from yggdrasil.graph.models import BrowseView, Element, Relationship
 from yggdrasil.web.browse_helpers import (
+    apply_browse_view_expansion,
     build_empty_browse_context,
+    build_payload_from_browse_params,
     build_view_browse_context,
     enrich_confidence_fields,
+    parse_browse_params_from_post,
     parse_view_browse_params,
+    user_can_save_views,
 )
 
 logger = logging.getLogger("yggdrasil.web")
@@ -147,6 +152,14 @@ class ViewBrowseView(LoginRequiredMixin, View):
             raise Http404("Model not found") from exc
 
         params = parse_view_browse_params(request, model_slug)
+        params = apply_browse_view_expansion(request, request.user, ymodel, params)
+        if params.browse_view:
+            logger.info(
+                "ViewBrowseView.get | branch | browse_view=%s expanded=%s loaded_view_name=%s",
+                params.browse_view,
+                bool(params.loaded_view_name),
+                params.loaded_view_name or "",
+            )
         context = build_view_browse_context(request, params)
         if request.GET.get("partial") == "navigator":
             logger.info(
@@ -202,10 +215,11 @@ class ViewBrowseGraphJsonView(LoginRequiredMixin, View):
         :return: JSON ``{"elements": [...], "edges": [...]}``.
         """
         try:
-            browse_service.user_can_read_model(request.user, model_slug)
+            ymodel = browse_service.user_can_read_model(request.user, model_slug)
         except (ValueError, PermissionError) as exc:
             raise Http404("Model not found") from exc
         params = parse_view_browse_params(request, model_slug)
+        params = apply_browse_view_expansion(request, request.user, ymodel, params)
         payload = browse_service.subgraph_for_elements(
             model_slug=params.model_slug,
             stereotype=params.stereotype,
@@ -296,3 +310,108 @@ class ViewBrowseInspectorRelationshipView(LoginRequiredMixin, View):
             pk,
         )
         return render(request, self.template_name, {"relationship": relationship})
+
+
+class ViewBrowseSaveView(LoginRequiredMixin, View):
+    """POST /models/{slug}/views/save/ — persist current browse session as a named View."""
+
+    def post(self, request: HttpRequest, model_slug: str) -> HttpResponse:
+        """
+        Save filters, depth, and presentation mode as a BrowseView snapshot.
+
+        :param request: Authenticated POST with ``name`` and current filter fields.
+        :param model_slug: Model slug from the URL path.
+        :return: Redirect to ``?browse_view={slug}`` on success.
+        """
+        logger.info(
+            "ViewBrowseSaveView.post | entry | user_pk=%s model_slug=%s",
+            request.user.pk,
+            model_slug,
+        )
+        if not user_can_save_views(request.user):
+            logger.info(
+                "ViewBrowseSaveView.post | validation | user_pk=%s reason=not_architect",
+                request.user.pk,
+            )
+            raise Http404("Not found")
+        try:
+            ymodel = browse_service.user_can_read_model(request.user, model_slug)
+        except (ValueError, PermissionError) as exc:
+            raise Http404("Model not found") from exc
+
+        name = (request.POST.get("name") or "").strip()
+        params = parse_browse_params_from_post(request, model_slug)
+        payload = build_payload_from_browse_params(params)
+        try:
+            saved = browse_view_service.save_view(
+                request.user,
+                ymodel,
+                name=name,
+                payload=payload,
+            )
+        except ValidationError as exc:
+            logger.info(
+                "ViewBrowseSaveView.post | validation | user_pk=%s model_slug=%s reason=%s",
+                request.user.pk,
+                model_slug,
+                exc.message_dict,
+            )
+            return redirect(reverse("web:view_browse_model", kwargs={"model_slug": model_slug}))
+
+        location = (
+            reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+            + f"?browse_view={saved.slug}"
+        )
+        logger.info(
+            "ViewBrowseSaveView.post | exit | user_pk=%s model_slug=%s slug=%s",
+            request.user.pk,
+            model_slug,
+            saved.slug,
+        )
+        return redirect(location)
+
+
+class ViewBrowseDeleteView(LoginRequiredMixin, View):
+    """POST /models/{slug}/views/{view_slug}/delete/ — owner-only View removal."""
+
+    def post(self, request: HttpRequest, model_slug: str, view_slug: str) -> HttpResponse:
+        """
+        Delete a saved View owned by the current user.
+
+        :param request: Authenticated POST request.
+        :param model_slug: Model slug from the URL path.
+        :param view_slug: Saved View slug to delete.
+        :return: Redirect to unfiltered browse URL.
+        """
+        logger.info(
+            "ViewBrowseDeleteView.post | entry | user_pk=%s model_slug=%s view_slug=%s",
+            request.user.pk,
+            model_slug,
+            view_slug,
+        )
+        if not user_can_save_views(request.user):
+            raise Http404("Not found")
+        try:
+            ymodel = browse_service.user_can_read_model(request.user, model_slug)
+        except (ValueError, PermissionError) as exc:
+            raise Http404("Model not found") from exc
+        try:
+            browse_view_service.delete_view(request.user, ymodel, view_slug)
+        except PermissionError as exc:
+            logger.info(
+                "ViewBrowseDeleteView.post | validation | user_pk=%s view_slug=%s reason=not_owner",
+                request.user.pk,
+                view_slug,
+            )
+            raise Http404("Not found") from exc
+        except BrowseView.DoesNotExist as exc:
+            raise Http404("View not found") from exc
+
+        location = reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+        logger.info(
+            "ViewBrowseDeleteView.post | exit | user_pk=%s model_slug=%s view_slug=%s",
+            request.user.pk,
+            model_slug,
+            view_slug,
+        )
+        return redirect(location)

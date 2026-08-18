@@ -140,6 +140,33 @@ def list_views(user: AbstractBaseUser, model: YggdrasilModel) -> QuerySet[Browse
     return BrowseView.objects.filter(model=model, owner=user).order_by("name")
 
 
+def resolve_view_for_load(
+    user: AbstractBaseUser,
+    model: YggdrasilModel,
+    slug: str,
+) -> BrowseView | None:
+    """
+    Resolve a named View for load — prefer the current user's row, else any on the Model.
+
+    :param user: Authenticated reader.
+    :param model: Active YggdrasilModel.
+    :param slug: View slug from ``?browse_view=``.
+    :return: Matching BrowseView or None when not found.
+    """
+    owned = BrowseView.objects.filter(model=model, owner=user, slug=slug).first()
+    if owned is not None:
+        return owned
+    shared = BrowseView.objects.filter(model=model, slug=slug).order_by("name").first()
+    if shared is None:
+        logger.info(
+            "BrowseViewService.resolve_view_for_load | branch | user_pk=%s model_slug=%s slug=%s reason=not_found",
+            user.pk,
+            model.slug,
+            slug,
+        )
+    return shared
+
+
 def get_view(user: AbstractBaseUser, model: YggdrasilModel, slug: str) -> BrowseView:
     """
     Load a saved View by slug for the given owner and Model.

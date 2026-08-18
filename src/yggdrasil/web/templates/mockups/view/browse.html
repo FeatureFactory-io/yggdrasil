@@ -214,16 +214,8 @@
     height: 100%;
   }
   .yrg-canvas-controls {
-    position: absolute;
-    bottom: 0.75rem;
-    right: 0.75rem;
-    z-index: 10;
-    display: flex;
-    gap: 0.25rem;
-  }
-  .yrg-canvas-controls .btn {
-    font-size: 0.65rem;
-    padding: 2px 6px;
+    z-index: 20;
+    pointer-events: auto;
   }
   #tableViewPanel {
     position: absolute;
@@ -310,20 +302,41 @@
     background: var(--hg-primary-100);
   }
 
-  /* Panel toggles on seam */
+  /* Panel toggles on seam — match production browse.html */
   .yrg-panel-toggle {
     position: absolute;
     top: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 20;
+    z-index: 30;
     width: 20px;
     height: 20px;
     font-size: 10px;
     padding: 0;
     border-radius: 50%;
+    background: #fff;
+    border: 1px solid var(--hg-border);
+    box-shadow: 0 1px 4px rgba(31, 58, 95, 0.12);
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: left 0.2s ease, right 0.2s ease;
   }
-  .yrg-panel-toggle-left { left: 280px; }
-  .yrg-panel-toggle-right { right: 360px; }
+  .yrg-panel-toggle-left {
+    transform: translate(-50%, -50%);
+  }
+  .yrg-panel-toggle-right {
+    transform: translate(50%, -50%);
+  }
+  .yrg-mode-graph .yrg-panel-toggle-left { left: 280px; }
+  .yrg-mode-graph .yrg-panel-toggle-right { right: 360px; }
+  .yrg-browser-root.yrg-mode-graph.nav-collapsed .yrg-panel-toggle-left { left: 0; }
+  .yrg-browser-root.yrg-mode-graph.inspector-collapsed .yrg-panel-toggle-right { right: 0; }
+
+  .hg-filter-panel {
+    background: #fff;
+    border-bottom: 1px solid var(--hg-border);
+    padding: 1rem;
+  }
 </style>
 {% endblock %}
 
@@ -487,14 +500,14 @@
   </aside>
 
   <button type="button"
-          class="yrg-panel-toggle yrg-panel-toggle-left yrg-graph-only btn btn-sm btn-outline-secondary"
+          class="yrg-panel-toggle yrg-panel-toggle-left yrg-graph-only"
           id="toggleNavBtn"
           data-testid="browser-toggle-nav-panel"
           title="Toggle navigator"
           aria-label="Toggle navigator panel">‹</button>
 
   {# ── Center: graph / table canvas ── #}
-  <section class="yrg-browser-canvas-wrap" aria-label="Graph canvas">
+  <section class="yrg-browser-canvas-wrap flex-grow-1 min-h-0" aria-label="View canvas">
     <div class="yrg-canvas-toolbar">
       <div class="d-flex gap-2 align-items-center flex-wrap">
         <button class="btn btn-sm btn-outline-secondary"
@@ -554,7 +567,7 @@
       <form method="get" action="{{ mock_browse_url }}" id="filterForm">
         <input type="hidden" name="mode" id="filterViewMode" value="{{ view_mode }}">
         <input type="hidden" name="depth" value="{{ current_depth }}">
-        <div class="hg-filter-panel p-3 bg-white border-bottom">
+        <div class="hg-filter-panel">
           <div class="row g-3 mb-3">
             <div class="col-md-3">
               <label class="form-label" style="font-size:0.78rem;font-weight:600;">Package</label>
@@ -598,14 +611,16 @@
                      aria-label="View model as of date" value="{{ active_filters.as_of|default:'' }}">
             </div>
           </div>
-          <div class="d-flex gap-2">
+          <div class="d-flex gap-2 align-items-center">
             <a href="{{ mock_browse_url }}?mode={{ view_mode }}&amp;depth={{ current_depth }}"
                class="btn btn-outline-secondary btn-sm"
                data-testid="filter-panel-clear-btn"
                data-action="clear-filters">Clear</a>
-            <button class="btn btn-outline-secondary btn-sm" data-testid="save-view-btn"
-                    type="button" data-bs-toggle="modal" data-bs-target="#saveViewModal">Save View</button>
-            <button class="btn btn-primary btn-sm" type="submit" data-testid="apply-filters-btn">Apply Filters</button>
+            <div class="d-flex gap-2 ms-auto">
+              <button class="btn btn-outline-secondary btn-sm" data-testid="save-view-btn"
+                      type="button" data-bs-toggle="modal" data-bs-target="#saveViewModal">Save View</button>
+              <button class="btn btn-primary btn-sm" type="submit" data-testid="apply-filters-btn">Apply Filters</button>
+            </div>
           </div>
         </div>
       </form>
@@ -666,7 +681,7 @@
   </section>
 
   <button type="button"
-          class="yrg-panel-toggle yrg-panel-toggle-right yrg-graph-only btn btn-sm btn-outline-secondary"
+          class="yrg-panel-toggle yrg-panel-toggle-right yrg-graph-only"
           id="toggleInspectorBtn"
           data-testid="browser-toggle-inspector-panel"
           title="Toggle inspector"
@@ -681,16 +696,16 @@
     <div class="yrg-inspector-header">
       <span class="hg-section-label mb-0">Inspector</span>
       <button type="button" class="btn-close btn-close-sm"
-              aria-label="Close inspector"
+              aria-label="Clear selection"
               onclick="clearSelection()"></button>
     </div>
 
     <div class="yrg-inspector-body" id="inspectorBody">
-      <div class="yrg-inspector-empty" id="inspectorEmpty">
+      <div class="yrg-inspector-empty" id="inspectorEmpty" data-testid="inspector-empty">
         <i class="fa-solid fa-hand-pointer fa-2x mb-2 d-block" style="color:var(--hg-border);"></i>
         Select an element or relationship in the graph or navigator to inspect its properties.
       </div>
-      <div id="inspectorContent" class="d-none"></div>
+      <div id="inspectorContent" class="d-none" data-testid="inspector-content"></div>
     </div>
   </aside>
 
@@ -711,7 +726,7 @@
                placeholder="e.g. Application / Components">
         <p class="form-text small mb-0 mt-2">Saves filters, depth, and graph/table mode for this Model.</p>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer d-flex justify-content-end gap-2">
         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn btn-primary btn-sm" data-testid="save-view-confirm-btn"
                 id="saveViewConfirmBtn">Save</button>
@@ -888,6 +903,7 @@
     cyInstance.on('tap', function (evt) {
       if (evt.target === cyInstance) clearSelection();
     });
+    window.cyInstance = cyInstance;
   }
 
   function setView(mode) {
@@ -1005,9 +1021,9 @@
       '</dl>' +
       '<div class="hg-section-label">Connected (' + rels.length + ')</div>' +
       '<div class="mb-3">' + (relsHtml || '<div class="text-muted small">No relationships.</div>') + '</div>' +
-      '<div class="d-flex gap-2">' +
-        '<a href="/mockups/element/' + el.id + '/" class="btn btn-primary btn-sm" data-testid="view-element-' + el.id + '">Open full view</a>' +
+      '<div class="d-flex gap-2 justify-content-end">' +
         '<a href="/mockups/element/' + el.id + '/edit/" class="btn btn-outline-secondary btn-sm">Edit</a>' +
+        '<a href="/mockups/element/' + el.id + '/" class="btn btn-primary btn-sm" data-testid="view-element-' + el.id + '">Open full view</a>' +
       '</div>';
 
     document.getElementById('inspectorEmpty').classList.add('d-none');
@@ -1073,19 +1089,49 @@
     });
   }
 
+  var PANEL_ANIM_MS = 220;
+
+  function syncPanelTogglePositions() {
+    var root = document.getElementById('browserRoot');
+    var nav = document.getElementById('browserNavPanel');
+    var insp = document.getElementById('browserInspectorPanel');
+    if (!root) return;
+    root.classList.toggle('nav-collapsed', !!(nav && nav.classList.contains('collapsed')));
+    root.classList.toggle('inspector-collapsed', !!(insp && insp.classList.contains('collapsed')));
+  }
+
+  function scheduleGraphResize() {
+    if (!cyInstance) return;
+    setTimeout(function () {
+      cyInstance.resize();
+      cyInstance.fit(undefined, 40);
+    }, PANEL_ANIM_MS);
+  }
+
   function bindPanelToggles() {
     var navPanel = document.getElementById('browserNavPanel');
     var inspPanel = document.getElementById('browserInspectorPanel');
-    document.getElementById('toggleNavBtn').addEventListener('click', function () {
-      navPanel.classList.toggle('collapsed');
-      this.textContent = navPanel.classList.contains('collapsed') ? '›' : '‹';
-      if (cyInstance) setTimeout(function () { cyInstance.resize(); cyInstance.fit(undefined, 40); }, 220);
-    });
-    document.getElementById('toggleInspectorBtn').addEventListener('click', function () {
-      inspPanel.classList.toggle('collapsed');
-      this.textContent = inspPanel.classList.contains('collapsed') ? '‹' : '›';
-      if (cyInstance) setTimeout(function () { cyInstance.resize(); cyInstance.fit(undefined, 40); }, 220);
-    });
+    var navBtn = document.getElementById('toggleNavBtn');
+    var inspBtn = document.getElementById('toggleInspectorBtn');
+    if (navPanel && navBtn) {
+      navBtn.addEventListener('click', function () {
+        navPanel.classList.toggle('collapsed');
+        navBtn.textContent = navPanel.classList.contains('collapsed') ? '›' : '‹';
+        syncPanelTogglePositions();
+        scheduleGraphResize();
+        console.log('[mockup:view-browse-1] navigator toggled, collapsed=' + navPanel.classList.contains('collapsed'));
+      });
+    }
+    if (inspPanel && inspBtn) {
+      inspBtn.addEventListener('click', function () {
+        inspPanel.classList.toggle('collapsed');
+        inspBtn.textContent = inspPanel.classList.contains('collapsed') ? '‹' : '›';
+        syncPanelTogglePositions();
+        scheduleGraphResize();
+        console.log('[mockup:view-browse-1] inspector toggled, collapsed=' + inspPanel.classList.contains('collapsed'));
+      });
+    }
+    syncPanelTogglePositions();
   }
 </script>
 {% endblock %}

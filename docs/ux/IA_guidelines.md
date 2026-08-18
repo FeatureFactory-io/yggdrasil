@@ -884,12 +884,14 @@ The filter panel collapses to a single summary line when collapsed:
   <div id="filter-body" class="collapse show">
     <!-- Package selector, stereotype multi-select, advanced filter builder, time-travel picker -->
     …
-    <div class="d-flex gap-2 mt-2">
-      <button class="btn btn-primary btn-sm" data-testid="apply-filters-btn">Apply</button>
+    <div class="d-flex gap-2 mt-2 align-items-center">
       <button class="btn btn-outline-secondary btn-sm" data-testid="clear-filters-btn">Clear</button>
-      <button class="btn btn-outline-secondary btn-sm ms-auto" data-testid="save-view-btn">
-        <i class="fa-solid fa-floppy-disk me-1"></i> Save View
-      </button>
+      <div class="d-flex gap-2 ms-auto">
+        <button class="btn btn-outline-secondary btn-sm" data-testid="save-view-btn">
+          <i class="fa-solid fa-floppy-disk me-1"></i> Save View
+        </button>
+        <button class="btn btn-primary btn-sm" data-testid="apply-filters-btn">Apply</button>
+      </div>
     </div>
   </div>
 </div>

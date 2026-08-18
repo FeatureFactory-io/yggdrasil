@@ -271,7 +271,25 @@
   .hg-filter-panel {
     background: #fff;
     border-bottom: 1px solid var(--hg-border);
+    display: flex;
+    flex-direction: column;
+    max-height: min(28rem, 50vh);
+    padding: 0;
+  }
+  .hg-filter-panel-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
     padding: 1rem;
+    min-height: 0;
+  }
+  .hg-filter-panel-footer {
+    flex-shrink: 0;
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: #fff;
+    border-top: 1px solid var(--hg-border);
+    padding: 0.75rem 1rem;
   }
 
   .yrg-view-toggle.btn-group .btn {
@@ -445,6 +463,7 @@
         <input type="hidden" name="mode" id="filterViewMode" value="{{ view_mode }}">
         <input type="hidden" name="depth" value="{{ current_depth }}">
         <div class="hg-filter-panel">
+          <div class="hg-filter-panel-body">
           <p class="small text-muted mb-3">
             Configure the active View — package and stereotype constraints update the field list automatically.
           </p>
@@ -509,8 +528,10 @@
             </p>
             {% endfor %}
           </div>
+          </div>
 
-          <div class="d-flex gap-2 align-items-center mt-3">
+          <div class="hg-filter-panel-footer d-flex gap-2 align-items-center"
+               data-testid="filter-panel-footer">
             <a href="{% if model_slug %}{% url 'web:view_browse_model' model_slug=model_slug %}{% else %}{% url 'web:view_browse' %}{% endif %}" class="btn btn-outline-secondary btn-sm"
                data-testid="filter-panel-clear-btn"
                data-action="clear-filters">Clear</a>
@@ -521,7 +542,7 @@
                 {% if active_filters.loaded_view_name %}Update View{% else %}Save View{% endif %}
               </button>
               {% endif %}
-              <button class="btn btn-primary btn-sm" type="submit" data-testid="apply-filters-btn">Apply Filters</button>
+              <button class="btn btn-primary btn-sm" type="submit" data-testid="apply-filters-btn">Apply</button>
             </div>
           </div>
         </div>

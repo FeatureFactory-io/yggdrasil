@@ -90,6 +90,28 @@ def test_view_browser_shell_testids(client, view_browser_user, view_browser_mode
 
 
 @pytest.mark.django_db
+def test_view_browser_filter_panel_has_sticky_apply_footer(
+    client, view_browser_user, view_browser_explorer_model
+):
+    """Regression #96: Apply action lives in a sticky filter panel footer."""
+    client.force_login(view_browser_user)
+    response = client.get(
+        _browse_url("yggdrasil")
+        + "?mode=graph&stereotype=component&stereotype=container&stereotype=person"
+    )
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'data-testid="filter-panel-footer"' in body
+    assert 'data-testid="apply-filters-btn"' in body
+    assert "hg-filter-panel-footer" in body
+    footer_start = body.index('data-testid="filter-panel-footer"')
+    footer_end = body.index("</div>", footer_start)
+    footer = body[footer_start:footer_end]
+    assert 'data-testid="apply-filters-btn"' in footer
+    assert ">Apply</button>" in footer
+
+
+@pytest.mark.django_db
 def test_view_browser_panel_headers_share_alignment_class(
     client, view_browser_user, view_browser_model
 ):

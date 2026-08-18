@@ -13,6 +13,7 @@ from typing import ClassVar
 from django.contrib import admin
 
 from yggdrasil.graph.models import (
+    BrowseView,
     Diagram,
     Element,
     Metamodel,
@@ -129,3 +130,13 @@ class RelationshipAdmin(admin.ModelAdmin):
     list_filter: ClassVar[list[str]] = ["model", "stereotype"]
     search_fields: ClassVar[list[str]] = ["source__name", "target__name"]
     readonly_fields: ClassVar[list[str]] = ["created_at", "updated_at"]
+
+
+@admin.register(BrowseView)
+class BrowseViewAdmin(admin.ModelAdmin):
+    """Read-only ops surface for named View Browser snapshots."""
+
+    list_display: ClassVar[list[str]] = ["name", "slug", "model", "owner", "updated_at"]
+    list_filter: ClassVar[list[str]] = ["model"]
+    search_fields: ClassVar[list[str]] = ["name", "slug"]
+    readonly_fields: ClassVar[list[str]] = ["created_at", "updated_at", "payload"]

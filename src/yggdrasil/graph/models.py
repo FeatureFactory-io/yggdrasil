@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 from typing import Any, ClassVar
 
+from django.conf import settings
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -235,6 +236,52 @@ class YggdrasilModel(models.Model):
                 raise ValidationError(
                     {"metamodel": "Metamodel cannot be changed after the Model is created."}
                 )
+        super().save(*args, **kwargs)
+
+
+class BrowseView(models.Model):
+    """
+    A named View Browser snapshot (filters, depth, presentation) per user and Model.
+
+    User preference storage — not ChangeSet-governed (Views v1 Q2).
+    Slug is unique per ``(model, owner)`` tuple.
+
+    :Example:
+
+    >>> view = BrowseView(model=ymodel, owner=user, name="Tech stack", slug="tech-stack")
+    """
+
+    model = models.ForeignKey(
+        YggdrasilModel,
+        on_delete=models.CASCADE,
+        related_name="browse_views",
+    )
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="browse_views",
+    )
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=200)
+    payload = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["name"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["model", "owner", "slug"],
+                name="uniq_browse_view_model_owner_slug",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.model.slug})"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if not self.slug:
+            self.slug = slugify(self.name)
         super().save(*args, **kwargs)
 
 

@@ -2,29 +2,28 @@
   <div id="tableView"{% if view_mode == 'graph' %} class="d-none"{% endif %}>
     <table class="table table-hover mb-0" aria-label="Elements">
       <thead>
-        <tr>
-          <th>Name</th><th>Stereotype</th><th>Package</th>
-          <th>Owner</th><th>Health</th><th>Source</th><th></th>
+        <tr id="browseTableHeadRow">
+          {% for col in table_columns %}
+          <th data-col-key="{{ col.key }}">{{ col.label }}</th>
+          {% endfor %}
+          <th></th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="browseTableBody">
         {% for el in elements %}
         <tr data-testid="element-row-{{ el.slug }}" data-element-id="{{ el.id }}">
-          <td class="fw-semibold">{{ el.name }}</td>
-          <td>
-            <span class="badge" style="background:var(--hg-primary-100);color:var(--hg-primary);font-size:0.72rem;">
-              {{ el.stereotype }}
-            </span>
+          {% for cell in el.table_cells %}
+          <td class="{% if cell.key == 'name' %}fw-semibold{% elif cell.key == 'package' or cell.key == 'owner' %}text-muted{% endif %}"
+              data-col-key="{{ cell.key }}">
+            {% if cell.key == "stereotype" %}
+            <span class="badge" style="background:var(--hg-primary-100);color:var(--hg-primary);font-size:0.72rem;">{{ cell.value }}</span>
+            {% elif cell.key == "health" %}
+            <span class="hg-dot hg-dot-{{ el.health }}" title="{{ el.health }}" aria-label="{{ el.health }}"></span>
+            {% elif cell.key == "source" %}
+            <span class="hg-badge-source hg-badge-{{ el.source }}">{{ cell.value }}</span>
+            {% else %}{{ cell.value }}{% endif %}
           </td>
-          <td class="text-muted">{{ el.package }}</td>
-          <td class="text-muted">{{ el.owner }}</td>
-          <td>
-            <span class="hg-dot hg-dot-{{ el.health }}" title="{{ el.health }}"
-                  aria-label="{{ el.health }}"></span>
-          </td>
-          <td>
-            <span class="hg-badge-source hg-badge-{{ el.source }}">{{ el.source }}</span>
-          </td>
+          {% endfor %}
           <td class="text-end">
             <a href="/elements/{{ el.id }}/"
                class="btn btn-sm btn-outline-secondary"
@@ -33,7 +32,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="text-center text-muted py-5">
+          <td colspan="{{ table_columns|length|add:1 }}" class="text-center text-muted py-5">
             No elements match the current filters.
           </td>
         </tr>

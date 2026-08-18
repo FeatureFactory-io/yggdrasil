@@ -176,7 +176,7 @@
     params.set('depth', slider.value);
     params.delete('partial');
     if (isGraphMode()) {
-      params.set('view', 'graph');
+      params.set('mode', 'graph');
       syncBrowseUrl(params);
       updateDepthBadge(slider);
       syncFilterFormDepth(slider.value);
@@ -210,20 +210,201 @@
     root.classList.toggle('inspector-collapsed', !!(insp && insp.classList.contains('collapsed')));
   }
 
+  var FIELD_SCHEMA = {
+    system: [{ path: 'name', label: 'Name' }, { path: 'owner', label: 'Owner' }, { path: 'package', label: 'Package' }],
+    container: [{ path: 'name', label: 'Name' }, { path: 'owner', label: 'Owner' }, { path: 'health', label: 'Health' }, { path: 'properties.version', label: 'Version' }],
+    component: [{ path: 'name', label: 'Name' }, { path: 'owner', label: 'Owner' }, { path: 'health', label: 'Health' }, { path: 'properties.version', label: 'Version' }, { path: 'properties.jira_key', label: 'Jira key' }],
+    person: [{ path: 'name', label: 'Name' }, { path: 'package', label: 'Package' }],
+    depends_on: [{ path: 'stereotype', label: 'Stereotype' }, { path: 'properties.protocol', label: 'Protocol' }],
+    calls: [{ path: 'stereotype', label: 'Stereotype' }, { path: 'properties.protocol', label: 'Protocol' }],
+    uses: [{ path: 'stereotype', label: 'Stereotype' }]
+  };
+
+  function readLoadedViewport() {
+    var el = document.getElementById('loaded-viewport');
+    if (!el || !el.textContent) {
+      return null;
+    }
+    try {
+      return JSON.parse(el.textContent);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function readMultiSelect(id) {
+    var sel = document.getElementById(id);
+    if (!sel) {
+      return [];
+    }
+    return Array.prototype.filter.call(sel.selectedOptions, function (opt) {
+      return opt.value;
+    }).map(function (opt) {
+      return opt.value;
+    });
+  }
+
+  function readFieldMapFromForm() {
+    var map = {};
+    document.querySelectorAll('.view-field-section').forEach(function (section) {
+      var slug = section.dataset.stereotype;
+      if (!slug) {
+        return;
+      }
+      var checked = [];
+      section.querySelectorAll('.view-field-checkbox:checked').forEach(function (input) {
+        checked.push(input.value);
+      });
+      if (checked.length) {
+        map[slug] = checked;
+      }
+    });
+    return map;
+  }
+
+  function buildSectionHtml(kind, slug, checkedPaths) {
+    var fields = FIELD_SCHEMA[slug] || [{ path: 'name', label: 'Name' }];
+    var defaultChecked = fields.map(function (field) { return field.path; });
+    var checkedSet = {};
+    (checkedPaths && checkedPaths.length ? checkedPaths : defaultChecked).forEach(function (path) {
+      checkedSet[path] = true;
+    });
+    var label = kind === 'element'
+      ? slug.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); })
+      : slug.replace(/_/g, ' ');
+    var checks = fields.map(function (field, idx) {
+      var checkedAttr = checkedSet[field.path] ? ' checked' : '';
+      return (
+        '<div class="form-check">' +
+        '<input class="form-check-input view-field-checkbox" type="checkbox" ' +
+        'name="field_' + slug + '" value="' + field.path + '" ' +
+        'id="field-' + slug + '-' + idx + '" ' +
+        'data-testid="view-field-' + slug + '-' + field.path + '"' + checkedAttr + '>' +
+        '<label class="form-check-label" for="field-' + slug + '-' + idx + '">' + field.label + '</label>' +
+        '</div>'
+      );
+    }).join('');
+    return (
+      '<div class="mt-3 view-field-section" data-stereotype="' + slug + '" data-kind="' + kind + '" ' +
+      'data-testid="view-fields-' + slug + '">' +
+      '<span class="form-label d-block" style="font-size:0.78rem;font-weight:600;">' +
+      label + ' — visible fields</span>' +
+      '<div class="d-flex flex-wrap gap-3">' + checks + '</div></div>'
+    );
+  }
+
+  function renderFieldSections() {
+    var container = document.getElementById('viewFieldSections');
+    if (!container) {
+      return;
+    }
+    var existingMap = readFieldMapFromForm();
+    var elementSts = readMultiSelect('filter-stereotype');
+    var relSts = readMultiSelect('filter-edge-stereotype');
+    if (!elementSts.length && !relSts.length) {
+      container.innerHTML =
+        '<p class="small text-muted mt-2 mb-0" data-testid="view-field-sections-empty">' +
+        'Select element or relationship stereotypes to configure visible fields.</p>';
+      return;
+    }
+    var html = '';
+    elementSts.forEach(function (slug) {
+      html += buildSectionHtml('element', slug, existingMap[slug]);
+    });
+    relSts.forEach(function (slug) {
+      html += buildSectionHtml('relationship', slug, existingMap[slug]);
+    });
+    container.innerHTML = html;
+  }
+
+  function captureViewport() {
+    var cy = window.cyInstance;
+    if (!cy) {
+      return null;
+    }
+    return { zoom: cy.zoom(), pan: cy.pan() };
+  }
+
+  function restoreViewport(viewport) {
+    var cy = window.cyInstance;
+    if (!cy || !viewport) {
+      return;
+    }
+    if (typeof viewport.zoom === 'number') {
+      cy.zoom(viewport.zoom);
+    }
+    if (viewport.pan) {
+      cy.pan(viewport.pan);
+    }
+    console.log('[view-browser] restored viewport from saved View');
+  }
+
+  function populateSaveFormHiddenFields() {
+    var container = document.getElementById('saveViewHiddenFields');
+    if (!container) {
+      return;
+    }
+    container.innerHTML = '';
+    readMultiSelect('filter-package').forEach(function (value) {
+      container.innerHTML += '<input type="hidden" name="package" value="' + value + '">';
+    });
+    readMultiSelect('filter-stereotype').forEach(function (value) {
+      container.innerHTML += '<input type="hidden" name="stereotype" value="' + value + '">';
+    });
+    readMultiSelect('filter-edge-stereotype').forEach(function (value) {
+      container.innerHTML += '<input type="hidden" name="edge_stereotype" value="' + value + '">';
+    });
+    var fieldMap = readFieldMapFromForm();
+    Object.keys(fieldMap).forEach(function (slug) {
+      fieldMap[slug].forEach(function (path) {
+        container.innerHTML += '<input type="hidden" name="field_' + slug + '" value="' + path + '">';
+      });
+    });
+    var depthInput = document.getElementById('saveViewDepthInput');
+    var slider = document.getElementById('depthSlider');
+    if (depthInput && slider) {
+      depthInput.value = slider.value;
+    }
+    var includeViewport = document.getElementById('saveViewIncludeViewport');
+    if (includeViewport && includeViewport.checked) {
+      var viewport = captureViewport();
+      if (viewport) {
+        container.innerHTML += '<input type="hidden" name="viewport" value=\'' +
+          JSON.stringify(viewport).replace(/'/g, '&#39;') + '\'>';
+      }
+    }
+  }
+
+  function bindFilterPanelControls() {
+    ['filter-package', 'filter-stereotype', 'filter-edge-stereotype'].forEach(function (id) {
+      var sel = document.getElementById(id);
+      if (sel) {
+        sel.addEventListener('change', renderFieldSections);
+      }
+    });
+    var saveForm = document.getElementById('saveViewForm');
+    if (saveForm) {
+      saveForm.addEventListener('submit', populateSaveFormHiddenFields);
+    }
+  }
+
   function cytoscapeStyles() {
     return [
       {
         selector: 'node',
         style: {
           label: 'data(label)',
-          'font-size': 9,
-          'text-valign': 'bottom',
-          'text-margin-y': 4,
+          'font-size': 8,
+          'text-wrap': 'wrap',
+          'text-max-width': '120px',
+          'text-valign': 'center',
+          'text-halign': 'center',
           'background-color': 'var(--yrg-node-fill)',
           'border-color': 'var(--yrg-node-stroke)',
           'border-width': 2,
-          width: 36,
-          height: 36
+          width: 56,
+          height: 56,
+          shape: 'round-rectangle'
         }
       },
       {
@@ -330,10 +511,12 @@
           container: cyEl,
           elements: nodes.concat(edges),
           style: cytoscapeStyles(),
-          layout: { name: 'cose', animate: false, padding: 40 },
+          layout: { name: 'grid', animate: false, padding: 40 },
           minZoom: 0.2,
           maxZoom: 3
         });
+        window.cyInstance.fit(undefined, 40);
+        restoreViewport(readLoadedViewport());
         bindGraphEvents(window.cyInstance);
         updateGraphNodeCount(nodes.length);
         console.log('[view-browser] graph loaded nodes=%s edges=%s', nodes.length, edges.length);
@@ -648,6 +831,7 @@
     bindZoomControls();
     bindDepthSlider();
     bindClearFilters();
+    bindFilterPanelControls();
     syncPanelTogglePositions();
 
     var root = getRoot();

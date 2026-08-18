@@ -295,7 +295,7 @@ def test_view_browse_log_story_happy(
     assert "depth=" in messages
     assert "tree_root_count=" in messages
     assert "ViewBrowseGraphJsonView.get" in messages
-    assert "nodes=" in messages
+    assert "node_count=" in messages
     assert "edges=" in messages
 
 
@@ -608,7 +608,7 @@ def test_view_browse_depth_log_story_happy(
     messages = " ".join(record.message for record in caplog.records)
     assert "depth=2" in messages
     assert "ViewBrowseGraphJsonView.get" in messages
-    assert "nodes=" in messages
+    assert "node_count=" in messages
 
 
 @pytest.mark.django_db

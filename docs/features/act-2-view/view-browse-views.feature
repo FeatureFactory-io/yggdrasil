@@ -1,4 +1,4 @@
-Feature: VIEW-BROWSE-1 View Browser — Named Views (Filters + Levels + Content)
+Feature: ✅ VIEW-BROWSE-1 View Browser — Named Views (Filters + Levels + Content)
   As a Software Architect (Priya)
   I want to save and reload browse snapshots
   So that I can return to a scoped subgraph without re-entering filters and depth

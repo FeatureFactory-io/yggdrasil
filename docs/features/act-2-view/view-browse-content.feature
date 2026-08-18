@@ -1,4 +1,4 @@
-Feature: VIEW-BROWSE-1 View Browser — Content via Filters panel (Views v2)
+Feature: ✅ VIEW-BROWSE-1 View Browser — Content via Filters panel (Views v2)
   As a Software Architect (Priya)
   I want visible fields configured alongside browse filters
   So that graph nodes, edges, and table columns show the properties I care about in one Apply action

@@ -316,7 +316,7 @@ flowchart TD
 | `AUTH-LOGIN-1` | 0 | Login form |
 | `AUTH-TOKEN-1` | 0 | API token management |
 | `MUNIN-BRIEFING-1` | 1 | Post-run architectural briefing |
-| `VIEW-BROWSE-1` | 2 | View Browser with Model switcher, filters + graph/table toggle |
+| `VIEW-BROWSE-1` | 2 | ✅ View Browser — Named Views, Filters-first field_map, viewport (W14–W15 shipped) |
 | `EXPORT-BRIEFING-1` | 2 | Export modal (Mermaid / Markdown deck / JSON) |
 | `VIEW-HISTORY-1` | 2 | Model history timeline and A/B diff |
 | `ELEMENT-LIST+FIND-1` | 3 | Elements list & search (LIST+FIND entry point) |

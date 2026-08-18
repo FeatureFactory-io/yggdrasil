@@ -30,8 +30,8 @@
 | 35–37, 45–46 | v0.3 canvas | AT | Graph JSON, mode SSR, canvas controls |
 | 48–54 | **W12 implemented** | AT + E2E | Model switcher; canonical `/models/{slug}/views/` |
 | 55–60 | **W13 shipped** | AT + E2E | Depth slider + BFS subgraph |
-| 61–68 | **Views v1 spec** (BPE-08 CR) | AT + E2E (@wip 62–66, 68) | Named Views — Filters + Levels |
-| 69–79 | **Views v2 spec** (BPE-08 CR, mockup-validated) | AT + E2E (@wip 70–71, 73–79) | Filters-first `field_map`, in-node labels, viewport |
+| 61–68 | **W14 shipped** | AT green | Named Views — BrowseView save/load, `browse_view=`, `mode=` |
+| 69–79 | **W15 shipped** | AT green (75 E2E @wip) | Filters-first `field_map`, in-node labels, viewport payload |
 
 ---
 
@@ -51,7 +51,7 @@
 
 Deferred from v0.2 (unchanged): 09 export/history prod wiring, 11 time travel banner.
 
-W12 and W13 are **shipped**. Views v1 CR: [`VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md). Views v2 CR + mockup reconciliation: [`VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md), [`VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md). W14 unblocked after BPE-01; W15 after W14.
+W12 and W13 are **shipped**. W14 and W15 are **shipped** (AT 61–79 green except 75 Playwright E2E @wip). Views v1 CR: [`VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md). Views v2 CR + mockup reconciliation: [`VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md), [`VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md).
 
 ---
 

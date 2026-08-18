@@ -466,6 +466,11 @@ def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) ->
             field_map={slug: list(paths) for slug, paths in params.field_map.items()},
         )
         options = browse_service.list_filter_options(model_slug=params.model_slug)
+        if params.packages:
+            options = browse_service.build_package_scoped_filter_options(
+                model_slug=params.model_slug,
+                packages=params.packages,
+            )
         elements = [
             _row_from_summary(item, table_columns, field_map_dict) for item in scoped.node_summaries
         ]
@@ -511,7 +516,7 @@ def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) ->
         "can_save_views": user_can_save_views(request.user),
         "view_field_sections": view_field_sections,
         "table_columns": table_columns,
-        "loaded_viewport_json": params.viewport,
+        "loaded_viewport_json": params.viewport if params.view_mode == "graph" else None,
     }
 
 

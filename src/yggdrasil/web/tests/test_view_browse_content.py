@@ -118,3 +118,63 @@ def test_load_named_view_expands_field_map(client, view_browser_user, view_brows
     labels = [node["data"]["label"] for node in response.json()["elements"]]
     auth_label = next(label for label in labels if "auth" in label.lower())
     assert "Owner: platform-team" in auth_label
+
+
+@pytest.mark.django_db
+def test_table_mode_saved_view_omits_viewport_json(
+    client, view_browser_user, view_browser_explorer_model
+):
+    """VIEW-BROWSE-1-76: table presentation must not embed graph viewport JSON."""
+    browse_view_service.save_view(
+        view_browser_user,
+        view_browser_explorer_model,
+        name="table only",
+        payload={
+            "filters": {
+                "packages": [],
+                "element_stereotypes": [],
+                "relationship_stereotypes": [],
+            },
+            "levels": {"depth": 1},
+            "presentation": "table",
+            "viewport": {"zoom": 2.0, "pan": {"x": 1, "y": 2}},
+        },
+    )
+    client.force_login(view_browser_user)
+    response = client.get(_browse_url(), {"browse_view": "table-only"})
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'id="loaded-viewport"' not in body
+    assert "browser-canvas-controls" in body
+
+
+@pytest.mark.django_db
+def test_graph_json_shows_jira_key_label(client, view_browser_user, view_browser_explorer_model):
+    """VIEW-BROWSE-1-78: field_map includes properties.jira_key on munin."""
+    client.force_login(view_browser_user)
+    response = client.get(
+        _graph_url(),
+        [
+            ("stereotype", "component"),
+            ("field_component", "properties.jira_key"),
+            ("depth", "2"),
+        ],
+    )
+    payload = response.json()
+    labels = [node["data"]["label"] for node in payload["elements"]]
+    assert any("Jira key: YGG-142" in label for label in labels), labels
+
+
+@pytest.mark.django_db
+def test_package_scoped_stereotypes_exclude_context_person(
+    client, view_browser_user, view_browser_explorer_model
+):
+    """VIEW-BROWSE-1-79: application package scopes stereotype options."""
+    client.force_login(view_browser_user)
+    response = client.get(_browse_url(), {"package": "application", "mode": "graph"})
+    body = response.content.decode()
+    assert 'value="component"' in body
+    assert (
+        'value="person"'
+        not in body.split('data-testid="filter-stereotype"')[1].split("</select>")[0]
+    )

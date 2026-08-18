@@ -309,6 +309,55 @@ def list_filter_options(*, model_slug: str) -> dict[str, list[dict[str, str]]]:
     }
 
 
+def build_package_scoped_filter_options(
+    *,
+    model_slug: str,
+    packages: tuple[str, ...],
+) -> dict[str, list[dict[str, str]]]:
+    """
+    Narrow stereotype filter options to elements in selected packages.
+
+    :param model_slug: Model slug. Example: ``"yggdrasil"``.
+    :param packages: Selected package slugs from active filters.
+    :return: Filter options with scoped ``stereotypes`` and ``relationship_stereotypes``.
+    :raises ValueError: If model not found.
+    """
+    base = list_filter_options(model_slug=model_slug)
+    if not packages:
+        return base
+    ymodel = resolve_model(model_slug)
+    pkg_slugs = {pkg.lower() for pkg in packages}
+    scoped_elements = Element.objects.filter(
+        model=ymodel,
+        package__slug__in=pkg_slugs,
+    ).select_related("stereotype")
+    element_st_slugs = {el.stereotype.slug for el in scoped_elements if el.stereotype_id}
+    element_ids = set(scoped_elements.values_list("pk", flat=True))
+    rel_st_slugs = set(
+        Relationship.objects.filter(model=ymodel)
+        .filter(Q(source_id__in=element_ids) | Q(target_id__in=element_ids))
+        .exclude(stereotype__isnull=True)
+        .values_list("stereotype__slug", flat=True)
+    )
+    stereotypes = [st for st in base["stereotypes"] if st["slug"] in element_st_slugs]
+    relationship_stereotypes = [
+        st for st in base["relationship_stereotypes"] if st["slug"] in rel_st_slugs
+    ]
+    logger.info(
+        "browse_service.build_package_scoped_filter_options | exit | model_slug=%s "
+        "packages=%s element_stereotypes=%s rel_stereotypes=%s",
+        model_slug,
+        len(packages),
+        len(stereotypes),
+        len(relationship_stereotypes),
+    )
+    return {
+        **base,
+        "stereotypes": stereotypes,
+        "relationship_stereotypes": relationship_stereotypes,
+    }
+
+
 def _has_narrowing_filter(filters: BrowseFilters) -> bool:
     """Return True when any element-narrowing browse filter is active."""
     return bool(

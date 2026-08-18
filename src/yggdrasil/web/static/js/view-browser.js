@@ -322,7 +322,16 @@
     if (!cy) {
       return null;
     }
-    return { zoom: cy.zoom(), pan: cy.pan() };
+    var payload = { zoom: cy.zoom(), pan: cy.pan() };
+    if (selectedElementId) {
+      var node = cy.getElementById(String(selectedElementId));
+      if (node.length) {
+        var row = node.data('label') || '';
+        var slugMatch = row.match(/Name:\s*(\S+)/);
+        payload.center_element_id = slugMatch ? slugMatch[1] : String(selectedElementId);
+      }
+    }
+    return payload;
   }
 
   function restoreViewport(viewport) {
@@ -335,6 +344,14 @@
     }
     if (viewport.pan) {
       cy.pan(viewport.pan);
+    }
+    if (viewport.center_element_id) {
+      var node = cy.nodes().filter(function (n) {
+        return String(n.data('label') || '').toLowerCase().indexOf(String(viewport.center_element_id).toLowerCase()) >= 0;
+      });
+      if (node.length) {
+        cy.center(node);
+      }
     }
     console.log('[view-browser] restored viewport from saved View');
   }

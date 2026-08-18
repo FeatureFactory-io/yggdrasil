@@ -141,6 +141,20 @@ def _seed_view_browser(
     for name, slug in slug_overrides.items():
         Element.objects.filter(model=model, name=name).update(slug=slug)
 
+    _apply_element_properties(model)
+
+
+VIEW_BROWSER_ELEMENT_PROPERTIES: dict[str, dict[str, str]] = {
+    "munin": {"jira_key": "YGG-142"},
+    "auth": {"jira_key": "YGG-88"},
+}
+
+
+def _apply_element_properties(model) -> None:
+    """Set explorer fixture properties used by field_map AT scenarios."""
+    for slug, props in VIEW_BROWSER_ELEMENT_PROPERTIES.items():
+        Element.objects.filter(model=model, slug=slug).update(properties=props)
+
 
 @pytest.fixture
 def view_browser_user(db):

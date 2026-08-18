@@ -36,7 +36,6 @@ Feature: VIEW-BROWSE-1 View Browser — Content via Filters panel (Views v2)
     And the element "apply-filters-btn" should be visible
     And the element "view-field-sections" should be visible
 
-  @wip
   Scenario: VIEW-BROWSE-1-76 Table mode does not restore graph viewport from saved View
     Given a BrowseView "table-only" exists for model "yggdrasil" with presentation table and a saved viewport
     When I GET "/models/yggdrasil/views/?browse_view=table-only"
@@ -80,7 +79,6 @@ Feature: VIEW-BROWSE-1 View Browser — Content via Filters panel (Views v2)
     And Priya reloads View "Munin focus"
     Then graph node "munin" is centered in the canvas viewport
 
-  @wip
   Scenario: VIEW-BROWSE-1-78 Priya toggles visible fields and applies filters
     Given Priya is on the View Browser in graph mode
     When Priya selects element stereotype "component"
@@ -89,7 +87,6 @@ Feature: VIEW-BROWSE-1 View Browser — Content via Filters panel (Views v2)
     Then the browser URL includes field_component=
     And graph node "munin" displays label containing "Jira key:"
 
-  @wip
   Scenario: VIEW-BROWSE-1-79 Package selection narrows stereotype options
     Given Priya is on the View Browser with the filter panel open
     When Priya selects package "application" in the filter panel

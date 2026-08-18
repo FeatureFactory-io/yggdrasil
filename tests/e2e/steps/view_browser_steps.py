@@ -243,3 +243,79 @@ def step_graph_view_visible_e2e(context) -> None:
     graph.wait_for(state="attached", timeout=5_000)
     assert "d-none" not in (graph.get_attribute("class") or ""), "Graph view is hidden"
     logger.info("E2E graph view visible")
+
+
+@when('she focuses graph element "{slug}" with zoom and pan')
+def step_focus_graph_element_e2e(context, slug: str) -> None:
+    """Pan/zoom Cytoscape to focus an element before saving viewport."""
+    context.page.wait_for_function(
+        "window.cyInstance && document.querySelector('[data-testid=\"graph-json-loaded\"]')",
+        timeout=15_000,
+    )
+    context.page.evaluate(
+        """(slug) => {
+            const cy = window.cyInstance;
+            const node = cy.nodes().filter(n => {
+              const label = String(n.data('label') || '');
+              return label.toLowerCase().includes(slug.toLowerCase());
+            });
+            if (!node.length) throw new Error('node not found: ' + slug);
+            cy.zoom(1.8);
+            cy.center(node);
+            node.select();
+        }""",
+        slug,
+    )
+    context.focus_element_slug = slug
+    logger.info("E2E focused graph element %s", slug)
+
+
+@when('she saves the current view as "{name}" including viewport')
+def step_save_view_with_viewport_e2e(context, name: str) -> None:
+    """Open save modal, opt in to viewport, and submit."""
+    context.page.get_by_test_id("save-view-btn").click()
+    context.page.get_by_test_id("save-view-include-viewport").check()
+    context.page.get_by_test_id("save-view-name-input").fill(name)
+    context.page.get_by_test_id("save-view-confirm-btn").click()
+    context.page.wait_for_load_state("networkidle")
+    logger.info("E2E saved view %s with viewport url=%s", name, context.page.url)
+
+
+@when('she reloads saved view "{name}"')
+def step_reload_saved_view_e2e(context, name: str) -> None:
+    """Navigate away then load named View from dropdown."""
+    slug = name.lower().replace(" ", "-")
+    base = context.page.url.split("/models/")[0]
+    context.page.goto(base + "/models/yggdrasil/views/?mode=graph&depth=2")
+    context.page.wait_for_load_state("networkidle")
+    context.page.get_by_test_id("views-dropdown").click()
+    context.page.get_by_test_id(f"view-option-{slug}").click()
+    context.page.wait_for_load_state("networkidle")
+    context.page.wait_for_function(
+        "window.cyInstance && document.querySelector('[data-testid=\"graph-json-loaded\"]')",
+        timeout=15_000,
+    )
+    logger.info("E2E reloaded saved view %s", name)
+
+
+@then('graph element "{slug}" is visible in the canvas viewport')
+def step_graph_element_visible_in_viewport_e2e(context, slug: str) -> None:
+    """Assert element rendered position lies inside Cytoscape container."""
+    visible = context.page.evaluate(
+        """(slug) => {
+            const cy = window.cyInstance;
+            const container = document.getElementById('cy');
+            if (!cy || !container) return false;
+            const node = cy.nodes().filter(n => {
+              const label = String(n.data('label') || '');
+              return label.toLowerCase().includes(slug.toLowerCase());
+            });
+            if (!node.length) return false;
+            const rect = container.getBoundingClientRect();
+            const pos = node.renderedPosition();
+            return pos.x >= 0 && pos.x <= rect.width && pos.y >= 0 && pos.y <= rect.height;
+        }""",
+        slug,
+    )
+    assert visible, f"Expected {slug!r} visible in canvas viewport"
+    logger.info("E2E graph element %s visible in viewport", slug)

@@ -23,6 +23,7 @@ Step patterns (Domain: View Browser):
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from urllib.parse import urlencode
@@ -775,3 +776,115 @@ def step_priya_saved_view_with_field_map(context, name: str, stereotype: str) ->
     }
     browse_view_service.save_view(user, model, name=name, payload=payload)
     logger.info("Saved View %s with field_map for %s", name, stereotype)
+
+
+@given(
+    'a BrowseView "{name}" exists for model "{model_slug}" with presentation table and a saved viewport'
+)
+def step_browseview_table_with_viewport(context, name: str, model_slug: str) -> None:
+    """Seed a table-mode View whose payload still carries a graph viewport."""
+    user = _current_user(context)
+    model = _model_for_slug(model_slug)
+    payload = {
+        "filters": {"packages": [], "element_stereotypes": [], "relationship_stereotypes": []},
+        "levels": {"depth": 1},
+        "presentation": "table",
+        "viewport": {"zoom": 2.0, "pan": {"x": 120, "y": 80}},
+    }
+    browse_view_service.save_view(user, model, name=name, payload=payload)
+    logger.info("Seeded table View %s with viewport for model %s", name, model_slug)
+
+
+@then("the graph canvas controls are hidden")
+def step_graph_canvas_controls_hidden(context) -> None:
+    """Assert zoom/fit controls are SSR-hidden (table mode)."""
+    content = context.response.content.decode()
+    controls = opening_tag_for_testid(content, "browser-canvas-controls")
+    assert controls is not None, "Expected browser-canvas-controls element"
+    assert is_element_ssr_hidden(
+        content, "browser-canvas-controls"
+    ), "Graph canvas controls should be hidden in table mode"
+    assert "loaded-viewport" not in content, "Table mode must not embed graph viewport JSON"
+    logger.info("Graph canvas controls are hidden")
+
+
+@given("Priya is on the View Browser with the filter panel open")
+def step_priya_filter_panel_open(context) -> None:
+    """GET browse page (filters panel markup is always in DOM)."""
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    path = reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+    context.response = get_client(context).get(path, {"mode": "graph"})
+    context.last_url = path + "?mode=graph"
+    logger.info("Priya on View Browser with filter panel available")
+
+
+@when('Priya selects package "{package}" in the filter panel')
+def step_priya_selects_package_in_filter_panel(context, package: str) -> None:
+    """Select package in filter panel and refresh SSR (scoped stereotype catalog)."""
+    _append_param(context, "package", package)
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    path = reverse("web:view_browse_model", kwargs={"model_slug": model_slug})
+    query = {**_browse_query_params(context), "mode": ["graph"]}
+    context.response = get_client(context).get(path, query)
+    context.last_url = path + "?" + urlencode(query, doseq=True)
+    logger.info("Priya selected package=%s in filter panel", package)
+
+
+def _stereotype_option_slugs(content: str) -> set[str]:
+    """Parse element stereotype option values from filter-stereotype select."""
+    match = re.search(
+        r'data-testid="filter-stereotype"[^>]*>(.*?)</select>',
+        content,
+        re.DOTALL,
+    )
+    assert match is not None, "filter-stereotype select not found"
+    return set(re.findall(r'<option value="([^"]+)"', match.group(1)))
+
+
+@then('the element stereotype filter includes "{stereotype}"')
+def step_stereotype_filter_includes(context, stereotype: str) -> None:
+    """Assert stereotype appears in filter-stereotype options."""
+    slugs = _stereotype_option_slugs(context.response.content.decode())
+    assert stereotype in slugs, f"Expected {stereotype!r} in {slugs}"
+
+
+@then('the element stereotype filter does not include "{stereotype}"')
+def step_stereotype_filter_excludes(context, stereotype: str) -> None:
+    """Assert stereotype is absent from filter-stereotype options."""
+    slugs = _stereotype_option_slugs(context.response.content.decode())
+    assert stereotype not in slugs, f"Expected {stereotype!r} absent from {slugs}"
+
+
+@when('Priya saves the current browse session as View "{name}" including viewport')
+def step_priya_saves_view_including_viewport(context, name: str) -> None:
+    """POST save with viewport JSON from context (simulates include-viewport checkbox)."""
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    post_data = QueryDict(mutable=True)
+    post_data.update({"name": name, "depth": "2", "mode": "graph"})
+    viewport = getattr(context, "captured_viewport", {"zoom": 1.8, "pan": {"x": 50, "y": 30}})
+    post_data["viewport"] = json.dumps(viewport)
+    query = _browse_query_params(context)
+    for key, values in query.items():
+        if key.startswith("field_") or key in {"stereotype", "edge_stereotype", "package"}:
+            post_data.setlist(key, values)
+    path = reverse("web:view_browse_save", kwargs={"model_slug": model_slug})
+    context.response = get_client(context).post(path, post_data)
+    context.last_url = context.response.headers.get("Location", path)
+    logger.info("Saved view %s with viewport", name)
+
+
+@when('Priya reloads View "{name}"')
+def step_priya_reloads_view(context, name: str) -> None:
+    """GET saved View by slug (follow save redirect flow)."""
+    step_priya_selects_view(context, name)
+
+
+@given('Priya has panned and zoomed the graph to focus element "{slug}"')
+def step_priya_panned_zoomed_to_element(context, slug: str) -> None:
+    """Record simulated viewport state for save-viewport scenario."""
+    context.captured_viewport = {
+        "zoom": 1.8,
+        "pan": {"x": 40, "y": 20},
+        "center_element_id": slug,
+    }
+    logger.info("Recorded viewport focus on element %s", slug)

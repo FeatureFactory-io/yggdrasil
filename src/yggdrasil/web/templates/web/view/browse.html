@@ -271,8 +271,10 @@
   }
 
   .yrg-view-toggle.btn-group .btn {
-    font-size: 0.72rem;
-    padding: 3px 10px;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    padding: 0.25rem 0.5rem;
+    min-height: calc(1.5em + 0.5rem + 2px);
   }
   .yrg-view-toggle.btn-group .btn.active {
     background: var(--hg-accent);
@@ -328,7 +330,7 @@
               data-testid="history-btn" title="History — coming soon">
         <i class="fa-solid fa-clock-rotate-left me-1" aria-hidden="true"></i>History
       </button>
-      <button class="btn btn-primary" type="button"
+      <button class="btn btn-sm btn-primary" type="button"
               data-bs-toggle="offcanvas" data-bs-target="#muninPanel"
               aria-controls="muninPanel" data-testid="open-munin-btn">
         <i class="fa-solid fa-brain-circuit me-1" aria-hidden="true"></i>Munin
@@ -416,14 +418,14 @@
           </ul>
         </div>
         <div class="yrg-view-toggle btn-group btn-group-sm" role="group" aria-label="View mode">
-          <button class="btn btn-outline-secondary{% if view_mode == 'table' %} active{% endif %}"
+          <button class="btn btn-sm btn-outline-secondary{% if view_mode == 'table' %} active{% endif %}"
                   id="tableViewBtn"
                   data-testid="toggle-table"
                   type="button"
                   onclick="setView('table')">
             <i class="fa-solid fa-table me-1" aria-hidden="true"></i>Table
           </button>
-          <button class="btn btn-outline-secondary{% if view_mode == 'graph' %} active{% endif %}"
+          <button class="btn btn-sm btn-outline-secondary{% if view_mode == 'graph' %} active{% endif %}"
                   id="graphViewBtn"
                   data-testid="toggle-graph"
                   type="button"

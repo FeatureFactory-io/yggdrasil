@@ -90,6 +90,31 @@ def test_view_browser_shell_testids(client, view_browser_user, view_browser_mode
 
 
 @pytest.mark.django_db
+def test_view_browser_toolbar_buttons_use_consistent_sizing(
+    client, view_browser_user, view_browser_model
+):
+    """Regression #99: canvas toolbar and header actions use btn-sm sizing."""
+    client.force_login(view_browser_user)
+    response = client.get(GRAPH_URL)
+    body = response.content.decode()
+    assert response.status_code == 200
+    for testid in (
+        "filters-toggle",
+        "views-dropdown",
+        "toggle-table",
+        "toggle-graph",
+        "open-munin-btn",
+    ):
+        marker = f'data-testid="{testid}"'
+        assert marker in body
+        start = body.index(marker)
+        tag_start = body.rfind("<", 0, start)
+        tag_end = body.index(">", start)
+        tag = body[tag_start:tag_end]
+        assert "btn-sm" in tag, f"{testid} missing btn-sm: {tag}"
+
+
+@pytest.mark.django_db
 def test_view_browser_subtitle_hides_internal_screen_id(
     client, view_browser_user, view_browser_model
 ):

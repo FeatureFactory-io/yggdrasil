@@ -47,6 +47,10 @@
       --bs-border-color:     var(--hg-border);
       --bs-link-color:       var(--hg-primary);
       --bs-link-hover-color: var(--hg-primary-700);
+
+      --yrg-navbar-logo-size: 2.75rem;
+      --yrg-navbar-padding-y: 0.25rem;
+      --yrg-navbar-accent-border: 3px;
     }
 
     *, *::before, *::after { box-sizing: border-box; }
@@ -82,14 +86,31 @@
       border-color: rgba(255, 255, 255, 0.35);
     }
 
+    .yrg-navbar {
+      background: var(--hg-primary);
+      border-bottom: var(--yrg-navbar-accent-border) solid var(--hg-accent);
+      --bs-navbar-padding-y: var(--yrg-navbar-padding-y);
+      padding-top: var(--yrg-navbar-padding-y);
+      padding-bottom: var(--yrg-navbar-padding-y);
+    }
+
     .yrg-navbar .navbar-brand {
       color: #fff;
       font-weight: var(--hg-fw-bold);
       font-size: 1rem;
+      padding-top: 0;
+      padding-bottom: 0;
     }
 
     .yrg-navbar .navbar-brand .accent {
       color: var(--hg-accent);
+    }
+
+    .yrg-navbar-brand-logo {
+      height: var(--yrg-navbar-logo-size);
+      width: var(--yrg-navbar-logo-size);
+      object-fit: contain;
+      flex-shrink: 0;
     }
 
     /* ── Bootstrap btn-primary wired to hg-primary ────────────────────── */
@@ -286,7 +307,7 @@
        data-testid="main-navbar">
     <div class="container-fluid px-3">
       <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'web:index' %}" data-testid="nav-brand">
-        <i class="fa-solid fa-tree accent" aria-hidden="true"></i>
+        {% include "web/partials/nav_brand_logo.html" %}
         Yggdrasil
       </a>
       <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse"

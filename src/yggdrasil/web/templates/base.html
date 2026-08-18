@@ -52,17 +52,41 @@
       --hg-fw-semibold: 600;
       --bs-primary: #1f3a5f;
       --bs-link-color: #1f3a5f;
+      --yrg-navbar-logo-size: 2.75rem;
+      --yrg-navbar-padding-y: 0.25rem;
+      --yrg-navbar-accent-border: 3px;
+      --yrg-navbar-offset: calc(
+        var(--yrg-navbar-logo-size) + (var(--yrg-navbar-padding-y) * 2) + var(--yrg-navbar-accent-border)
+      );
     }
     body {
       font-family: "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       background: var(--hg-bg-body);
       color: var(--hg-ink);
-      padding-top: 57px;
+      padding-top: var(--yrg-navbar-offset);
       font-size: 0.9rem;
     }
-    .yrg-navbar { background: var(--hg-primary); border-bottom: 3px solid var(--hg-accent); }
-    .yrg-navbar .navbar-brand { color: #fff; font-weight: 700; font-size: 1rem; }
+    .yrg-navbar {
+      background: var(--hg-primary);
+      border-bottom: var(--yrg-navbar-accent-border) solid var(--hg-accent);
+      --bs-navbar-padding-y: var(--yrg-navbar-padding-y);
+      padding-top: var(--yrg-navbar-padding-y);
+      padding-bottom: var(--yrg-navbar-padding-y);
+    }
+    .yrg-navbar .navbar-brand {
+      color: #fff;
+      font-weight: 700;
+      font-size: 1rem;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
     .yrg-navbar .navbar-brand .accent { color: var(--hg-accent); }
+    .yrg-navbar-brand-logo {
+      height: var(--yrg-navbar-logo-size);
+      width: var(--yrg-navbar-logo-size);
+      object-fit: contain;
+      flex-shrink: 0;
+    }
     .yrg-navbar .nav-link {
       color: rgba(255,255,255,0.82); font-size: 0.8rem; font-weight: 500;
       border-radius: 4px; padding: 6px 10px;
@@ -150,7 +174,7 @@
     <div class="container-fluid px-3">
       <a class="navbar-brand d-flex align-items-center gap-2"
          href="{% if user.is_authenticated %}{% url 'web:view_browse' %}{% else %}{% url 'web:index' %}{% endif %}">
-        <i class="fa-solid fa-tree accent" aria-hidden="true"></i>
+        {% include "web/partials/nav_brand_logo.html" %}
         Yggdrasil
       </a>
       <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse"

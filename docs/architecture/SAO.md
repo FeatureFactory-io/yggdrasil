@@ -1237,7 +1237,9 @@ Before any MCP slice is merged:
 
 **Mode-scoped UI visibility:** Some controls (e.g. View Browser navigator / model switcher) render only in graph mode (`?mode=graph`, elements with `yrg-graph-only`). E2E and visibility assertions must match the mode the spec assumes — table mode hides graph chrome.
 
-**Named Views (Views v1, W14):** Persisted browse snapshots are `graph.BrowseView` records — user preference, scoped to `(YggdrasilModel, User)`, payload JSON `{ filters, levels: { depth }, presentation }`. Loaded via header dropdown or `?browse_view={slug}`. ORM writes; not ChangeSet-governed. Delete/rename: owner only; viewers load-only. Presentation query param is `mode=graph|table` (replaces legacy `view=`). Content annotations and viewport snapshot deferred to Views v2 CR.
+**Named Views (Views v1, W14):** Persisted browse snapshots are `graph.BrowseView` records — user preference, scoped to `(YggdrasilModel, User)`, payload JSON `{ filters, levels: { depth }, presentation }`. Loaded via header dropdown or `?browse_view={slug}`. ORM writes; not ChangeSet-governed. Delete/rename: owner only; viewers load-only. Presentation query param is `mode=graph|table` (replaces legacy `view=`).
+
+**Views v2 (Content + viewport, W15):** Extends `BrowseView.payload` with nullable `content` (preset slug + stereotype field bindings for nodes/edges/table) and `viewport` (graph-only `{ zoom, pan, center_element_id }`, opt-in on save). Live URL adds `?content={preset-slug}`. `graph.json` accepts `content=` and returns formatted labels. v1 records without these keys default to preset `minimal`. See [`VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md`](../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md).
 
 **AT fixture idempotency:** behave Background + scenario-specific Given steps that seed the same natural keys (e.g. `(model_id, slug)`) must use `get_or_create` or update-in-place, not blind `create`.
 

@@ -1,14 +1,15 @@
-Feature: VIEW-BROWSE-1 View Browser — Named Views (Filters + Levels)
+Feature: VIEW-BROWSE-1 View Browser — Named Views (Filters + Levels + Content)
   As a Software Architect (Priya)
   I want to save and reload browse snapshots
   So that I can return to a scoped subgraph without re-entering filters and depth
 
-  # Component: Views dropdown + save dialog · CR: VIEW-BROWSE-1_VIEWS_V1
+  # Component: Views dropdown + save dialog · CR: VIEW-BROWSE-1_VIEWS_V1 (+ v2 Content/viewport in W15)
   # Production: /models/{slug}/views/ · persistence: graph.BrowseView (ORM, per user+model)
   # Testids: views-dropdown, save-view-btn, save-view-confirm-btn, save-view-name-input,
-  #          view-option-{slug}, delete-view-btn
-  # Live URL: package, stereotype, health, as_of, depth, mode=graph|table
-  # Named View: ?browse_view={slug}
+  #          view-option-{slug}, delete-view-btn, save-view-include-viewport (W15)
+  # Live URL: package, stereotype, health, as_of, depth, mode=graph|table, content={preset-slug}
+  # Named View: ?browse_view={slug} — expands filters, depth, mode, content, optional viewport
+  # Content scenarios: view-browse-content.feature (69–76) · W15 extends save/load here
   # Fixture: view_browser_model (pytest) · view_browser_explorer_fixture (depth scenarios)
 
   Background:
@@ -39,6 +40,7 @@ Feature: VIEW-BROWSE-1 View Browser — Named Views (Filters + Levels)
     When Priya saves the current browse session as View "Tech only"
     Then a BrowseView "tech-only" exists for model "yggdrasil" owned by Priya
     And the stored View payload includes package "technology" and depth 2
+    # W15: same step also asserts content preset and optional viewport when checked
 
   @wip
   Scenario: VIEW-BROWSE-1-63 Load named View restores URL params and depth badge
@@ -47,6 +49,7 @@ Feature: VIEW-BROWSE-1 View Browser — Named Views (Filters + Levels)
     Then the browser URL includes stereotype=component
     And the browser URL includes depth=3
     And the element "browser-depth-value" should be visible
+    # W15: restores content preset labels and viewport when saved with include-viewport
 
   @wip
   Scenario: VIEW-BROWSE-1-64 browse_view slug expands to equivalent query string

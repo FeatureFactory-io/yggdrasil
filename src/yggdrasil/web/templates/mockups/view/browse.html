@@ -53,11 +53,12 @@
     background: #fff;
   }
 
-  .yrg-mode-graph #graphCy {
+  #graphCy {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
+    background: var(--yrg-graph-bg, #f8f9fb);
   }
 
   .yrg-browser-btn-compact {
@@ -207,12 +208,6 @@
     position: relative;
     overflow: hidden;
   }
-  #graphCy {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-  }
   .yrg-canvas-controls {
     z-index: 20;
     pointer-events: auto;
@@ -345,7 +340,7 @@
   <div>
     <h1 class="hg-page-title mb-0" style="font-size:1.1rem;">View Browser</h1>
     <p class="text-muted small mb-0">
-      VIEW-BROWSE-1 · {{ model_name }} · {{ element_count }} elements · {{ relationship_count }} relationships
+      VIEW-BROWSE-1 · {{ model_name }}
     </p>
   </div>
   <div class="d-flex gap-2 align-items-center">
@@ -364,28 +359,24 @@
         <i class="fa-solid fa-brain-circuit me-1" aria-hidden="true"></i>Munin
       </button>
     </div>
-    <div class="dropdown">
-      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
-              data-bs-toggle="dropdown" aria-expanded="false" data-testid="views-dropdown"
-              aria-label="Named Views">
-        Views
-      </button>
-      <ul class="dropdown-menu dropdown-menu-end" id="viewsDropdownMenu" aria-label="Saved Views">
-        {# Populated by mockup-view-browser.js from server + sessionStorage #}
-      </ul>
-    </div>
   </div>
 </div>
 {% endblock %}
 
 {% block content %}
 {{ browse_views|json_script:"mock-server-views" }}
+{{ loaded_viewport_json|json_script:"mock-loaded-viewport" }}
+{{ stereotype_field_schema|json_script:"mock-stereotype-field-schema" }}
+{{ filter_catalog|json_script:"mock-filter-catalog" }}
+{{ content_display|json_script:"mock-content-display" }}
+{{ canvas_payload|json_script:"mock-canvas-data" }}
 <div data-testid="view-browse-page"
      class="yrg-browser-root yrg-mode-{{ view_mode }} flex-grow-1"
      id="browserRoot"
      data-model-slug="{{ model_slug }}"
      data-browse-url="{{ mock_browse_url }}"
      data-max-depth="{{ max_depth }}"
+     data-baseline-browse-view="{{ baseline_browse_view }}"
      data-can-save="true">
 
   {# ── Left: package + element navigator ── #}
@@ -516,15 +507,16 @@
                 data-testid="filters-toggle">
           <i class="fa-solid fa-sliders me-1" aria-hidden="true"></i>Filters
         </button>
+        {% if active_filters.loaded_view_name %}
+        <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1"
+              data-testid="active-view-name">{{ active_filters.loaded_view_name }}</span>
+        {% elif filter_chips %}
         {% for chip in filter_chips %}
         <span class="badge bg-light text-dark border">{{ chip.label }}</span>
-        {% empty %}
-        <span class="text-muted small">No filters active</span>
         {% endfor %}
-        <a href="{{ mock_browse_url }}?mode={{ view_mode }}&amp;depth={{ current_depth }}"
-           class="btn btn-sm btn-outline-danger"
-           data-testid="clear-filters-btn"
-           data-action="clear-filters">Clear</a>
+        {% else %}
+        <span class="text-muted small">No View loaded</span>
+        {% endif %}
       </div>
       <div class="d-flex align-items-center gap-2 flex-wrap">
         <div class="yrg-depth-control yrg-graph-only d-flex align-items-center gap-2 me-2"
@@ -542,8 +534,16 @@
                  aria-label="Show levels deep">
           <span class="badge bg-secondary" data-testid="browser-depth-value">{{ current_depth }} / {{ max_depth }}</span>
         </div>
-        <span id="browserElementCount" style="font-size:0.82rem;color:var(--hg-ink-muted);"
-              data-testid="results-container">{{ element_count }} elements</span>
+        <div class="dropdown">
+          <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                  data-bs-toggle="dropdown" aria-expanded="false" data-testid="views-dropdown"
+                  aria-label="Named Views">
+            Views
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end" id="viewsDropdownMenu" aria-label="Saved Views">
+            {# Populated by mockup-view-browser.js from server + sessionStorage #}
+          </ul>
+        </div>
         <div class="yrg-view-toggle btn-group btn-group-sm" role="group" aria-label="View mode">
           <button class="btn btn-outline-secondary{% if view_mode == 'table' %} active{% endif %}"
                   id="tableViewBtn"
@@ -567,58 +567,85 @@
       <form method="get" action="{{ mock_browse_url }}" id="filterForm">
         <input type="hidden" name="mode" id="filterViewMode" value="{{ view_mode }}">
         <input type="hidden" name="depth" value="{{ current_depth }}">
+        {% if active_filters.browse_view %}
+        <input type="hidden" name="browse_view" value="{{ active_filters.browse_view }}">
+        {% endif %}
         <div class="hg-filter-panel">
+          <p class="small text-muted mb-3">
+            Configure the active View — package and stereotype constraints update the field list automatically.
+          </p>
           <div class="row g-3 mb-3">
-            <div class="col-md-3">
+            <div class="col-md-4">
               <label class="form-label" style="font-size:0.78rem;font-weight:600;">Package</label>
-              <select name="package" class="form-select form-select-sm" data-testid="filter-package"
-                      aria-label="Filter by package">
-                <option value="">All packages</option>
+              <select name="package" id="filter-package" class="form-select form-select-sm" multiple size="4"
+                      data-testid="filter-package" aria-label="Filter by package">
                 {% for pkg in filter_options.packages %}
-                <option value="{{ pkg.slug }}" {% if active_filters.package == pkg.slug %}selected{% endif %}>
-                  {{ pkg.name }}
-                </option>
+                <option value="{{ pkg.slug }}"
+                        {% if pkg.slug in active_filters.packages %}selected{% endif %}>{{ pkg.name }}</option>
                 {% endfor %}
               </select>
             </div>
-            <div class="col-md-3">
-              <label class="form-label" style="font-size:0.78rem;font-weight:600;">Stereotype</label>
-              <select name="stereotype" class="form-select form-select-sm" data-testid="filter-stereotype"
-                      aria-label="Filter by stereotype">
-                <option value="">All stereotypes</option>
+            <div class="col-md-4">
+              <label class="form-label" style="font-size:0.78rem;font-weight:600;">Element stereotypes</label>
+              <select name="stereotype" id="filter-stereotype" class="form-select form-select-sm" multiple size="4"
+                      data-testid="filter-stereotype" aria-label="Filter by element stereotype">
                 {% for st in filter_options.stereotypes %}
-                <option value="{{ st.slug }}" {% if active_filters.stereotype == st.slug %}selected{% endif %}>
-                  {{ st.name }}
-                </option>
+                <option value="{{ st.slug }}"
+                        {% if st.slug in active_filters.element_stereotypes %}selected{% endif %}>{{ st.name }}</option>
                 {% endfor %}
               </select>
             </div>
-            <div class="col-md-3">
-              <label class="form-label" style="font-size:0.78rem;font-weight:600;">Health</label>
-              <select name="health" class="form-select form-select-sm" data-testid="filter-health"
-                      aria-label="Filter by health">
-                <option value="">All</option>
-                {% for h in filter_options.health %}
-                <option value="{{ h.value }}" {% if active_filters.health == h.value %}selected{% endif %}>
-                  {{ h.label }}
-                </option>
+            <div class="col-md-4">
+              <label class="form-label" style="font-size:0.78rem;font-weight:600;">Relationship stereotypes</label>
+              <select name="edge_stereotype" id="filter-edge-stereotype" class="form-select form-select-sm" multiple size="4"
+                      data-testid="filter-edge-stereotype" aria-label="Filter by relationship stereotype">
+                {% for st in filter_options.relationship_stereotypes %}
+                <option value="{{ st.slug }}"
+                        {% if st.slug in active_filters.relationship_stereotypes %}selected{% endif %}>{{ st.name }}</option>
                 {% endfor %}
               </select>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label" style="font-size:0.78rem;font-weight:600;">Time travel</label>
-              <input type="date" name="as_of" class="form-control form-control-sm" data-testid="filter-as-of"
-                     aria-label="View model as of date" value="{{ active_filters.as_of|default:'' }}">
             </div>
           </div>
-          <div class="d-flex gap-2 align-items-center">
-            <a href="{{ mock_browse_url }}?mode={{ view_mode }}&amp;depth={{ current_depth }}"
-               class="btn btn-outline-secondary btn-sm"
-               data-testid="filter-panel-clear-btn"
-               data-action="clear-filters">Clear</a>
+
+          <div id="viewFieldSections" data-testid="view-field-sections">
+            {% for section in view_field_sections %}
+            <div class="mt-3 view-field-section" data-stereotype="{{ section.slug }}" data-kind="{{ section.kind }}"
+                 data-testid="view-fields-{{ section.slug }}">
+              <span class="form-label d-block" style="font-size:0.78rem;font-weight:600;">
+                {{ section.label }} — visible fields
+              </span>
+              <div class="d-flex flex-wrap gap-3">
+                {% for field in section.fields %}
+                <div class="form-check">
+                  <input class="form-check-input view-field-checkbox" type="checkbox"
+                         name="field_{{ section.slug }}" value="{{ field.path }}"
+                         id="field-{{ section.slug }}-{{ forloop.counter }}"
+                         data-testid="view-field-{{ section.slug }}-{{ field.path }}"
+                         {% if field.path in section.checked_paths %}checked{% endif %}>
+                  <label class="form-check-label" for="field-{{ section.slug }}-{{ forloop.counter }}">
+                    {{ field.label }}
+                  </label>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+            {% empty %}
+            <p class="small text-muted mt-2 mb-0" id="viewFieldSectionsEmpty" data-testid="view-field-sections-empty">
+              Select element or relationship stereotypes to configure visible fields.
+            </p>
+            {% endfor %}
+          </div>
+
+          <div class="d-flex gap-2 align-items-center mt-3">
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    data-testid="filter-panel-clear-btn"
+                    data-action="clear-view" id="clearViewBtn">Clear</button>
             <div class="d-flex gap-2 ms-auto">
               <button class="btn btn-outline-secondary btn-sm" data-testid="save-view-btn"
-                      type="button" data-bs-toggle="modal" data-bs-target="#saveViewModal">Save View</button>
+                      type="button" id="saveViewToolbarBtn"
+                      data-bs-toggle="modal" data-bs-target="#saveViewModal">
+                {% if active_filters.loaded_view_name %}Update View{% else %}Save View{% endif %}
+              </button>
               <button class="btn btn-primary btn-sm" type="submit" data-testid="apply-filters-btn">Apply Filters</button>
             </div>
           </div>
@@ -630,24 +657,32 @@
       <div id="graphCy" data-testid="graph-cy-container"{% if view_mode != 'graph' %} style="display:none;"{% endif %}></div>
 
       <div id="tableViewPanel" class="{% if view_mode != 'table' %}d-none{% endif %}">
-        <table class="table table-hover mb-0" aria-label="Elements">
+        <table class="table table-hover mb-0" aria-label="Elements" id="browseElementsTable">
           <thead>
-            <tr>
-              <th>Name</th><th>Stereotype</th><th>Package</th>
-              <th>Owner</th><th>Health</th><th>Source</th>
+            <tr id="browseTableHeadRow">
+              {% for col in table_columns %}
+              <th data-col-key="{{ col.key }}">{{ col.label }}</th>
+              {% endfor %}
             </tr>
           </thead>
-          <tbody>
+          <tbody id="browseTableBody">
             {% for el in elements %}
             <tr data-testid="element-row-{{ el.id }}"
+                data-element-id="{{ el.id }}"
                 style="cursor:pointer;" role="button"
                 onclick="selectElement({{ el.id }})">
-              <td class="fw-semibold">{{ el.name }}</td>
-              <td><span class="badge" style="background:var(--hg-primary-100);color:var(--hg-primary);font-size:0.72rem;">{{ el.stereotype }}</span></td>
-              <td class="text-muted">{{ el.package }}</td>
-              <td class="text-muted">{{ el.owner|default:"—" }}</td>
-              <td><span class="hg-dot hg-dot-{{ el.health }}" aria-label="{{ el.health }}"></span></td>
-              <td><span class="hg-badge-source hg-badge-{{ el.source }}">{{ el.source }}</span></td>
+              {% for cell in el.table_cells %}
+              <td class="{% if cell.key == 'name' %}fw-semibold{% elif cell.key == 'package' or cell.key == 'owner' %}text-muted{% endif %}"
+                  data-col-key="{{ cell.key }}">
+                {% if cell.key == "stereotype" %}
+                <span class="badge" style="background:var(--hg-primary-100);color:var(--hg-primary);font-size:0.72rem;">{{ cell.value }}</span>
+                {% elif cell.key == "health" %}
+                <span class="hg-dot hg-dot-{{ el.health }}" aria-label="{{ el.health }}"></span>
+                {% elif cell.key == "source" %}
+                <span class="hg-badge-source hg-badge-{{ el.source }}">{{ cell.value }}</span>
+                {% else %}{{ cell.value }}{% endif %}
+              </td>
+              {% endfor %}
             </tr>
             {% endfor %}
           </tbody>
@@ -658,9 +693,6 @@
            id="graphZoomControls"
            data-testid="browser-canvas-controls"
            aria-label="Graph zoom controls">
-        <div class="text-end mb-1">
-          <span class="badge bg-secondary" data-testid="graph-node-count">{{ element_count }} nodes</span>
-        </div>
         <div class="d-flex gap-1">
           <button class="yrg-browser-btn-compact btn btn-outline-secondary" type="button"
                   data-testid="graph-replot-btn"
@@ -724,7 +756,14 @@
         <input type="text" class="form-control" id="saveViewNameInput"
                data-testid="save-view-name-input"
                placeholder="e.g. Application / Components">
-        <p class="form-text small mb-0 mt-2">Saves filters, depth, and graph/table mode for this Model.</p>
+        <p class="form-text small mb-0 mt-2">Saves filters, depth, content preset, and graph/table mode for this Model.</p>
+        <div class="form-check mt-2 yrg-graph-only{% if view_mode != 'graph' %} d-none{% endif %}" id="saveViewViewportWrap">
+          <input class="form-check-input" type="checkbox" id="saveViewIncludeViewport"
+                 data-testid="save-view-include-viewport">
+          <label class="form-check-label" for="saveViewIncludeViewport">
+            Include graph viewport (zoom and pan)
+          </label>
+        </div>
       </div>
       <div class="modal-footer d-flex justify-content-end gap-2">
         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
@@ -753,57 +792,164 @@
 <script>
   document.body.classList.add('yrg-view-browser');
 
-  /* Server-rendered lists → JS maps (mockup only; production uses API) */
-  var MOCK_ELEMENTS = [
-    {% for el in elements %}
-    {
-      id: {{ el.id }},
-      name: "{{ el.name|escapejs }}",
-      slug: "{{ el.slug|escapejs }}",
-      stereotype: "{{ el.stereotype|escapejs }}",
-      package: "{{ el.package|escapejs }}",
-      owner: "{{ el.owner|escapejs }}",
-      health: "{{ el.health }}",
-      source: "{{ el.source }}",
-      confidence: {{ el.confidence }},
-      conf_pct: {{ el.conf_pct }},
-      conf_band: "{{ el.conf_band }}",
-      properties: {
-        {% for k, v in el.properties.items %}
-        "{{ k|escapejs }}": "{{ v|escapejs }}"{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      },
-      relationships_in: {{ el.relationships_in }},
-      relationships_out: {{ el.relationships_out }},
-      last_verified: "{{ el.last_verified|escapejs }}"
-    }{% if not forloop.last %},{% endif %}
-    {% endfor %}
-  ];
-
-  var MOCK_RELATIONSHIPS = [
-    {% for rel in relationships %}
-    {
-      id: {{ rel.id }},
-      from_id: {{ rel.from_id }},
-      to_id: {{ rel.to_id }},
-      from_element: "{{ rel.from_element|escapejs }}",
-      to_element: "{{ rel.to_element|escapejs }}",
-      edge_stereotype: "{{ rel.edge_stereotype|escapejs }}",
-      confidence: {{ rel.confidence }},
-      conf_pct: {{ rel.conf_pct }},
-      conf_band: "{{ rel.conf_band }}",
-      source: "{{ rel.source }}",
-      properties: {
-        {% for k, v in rel.properties.items %}
-        "{{ k|escapejs }}": "{{ v|escapejs }}"{% if not forloop.last %},{% endif %}
-        {% endfor %}
-      }
-    }{% if not forloop.last %},{% endif %}
-    {% endfor %}
-  ];
+  /* Canvas graph data — json_script avoids escape failures on multiline labels */
+  var MOCK_ELEMENTS = [];
+  var MOCK_RELATIONSHIPS = [];
+  (function loadCanvasData() {
+    var el = document.getElementById('mock-canvas-data');
+    if (!el || !el.textContent) return;
+    try {
+      var payload = JSON.parse(el.textContent);
+      MOCK_ELEMENTS = payload.elements || [];
+      MOCK_RELATIONSHIPS = payload.relationships || [];
+    } catch (err) {
+      console.error('[mockup:view-browse-1] canvas data parse failed', err);
+    }
+  })();
 
   var elementById = {};
   MOCK_ELEMENTS.forEach(function (el) { elementById[el.id] = el; });
+  window.elementById = elementById;
+  window.MOCK_ELEMENTS = MOCK_ELEMENTS;
+  window.MOCK_RELATIONSHIPS = MOCK_RELATIONSHIPS;
+
+  var LOADED_VIEWPORT = null;
+  var CONTENT_DISPLAY = {};
+  (function loadContentDisplay() {
+    var el = document.getElementById('mock-content-display');
+    if (el && el.textContent) {
+      try {
+        CONTENT_DISPLAY = JSON.parse(el.textContent);
+      } catch (e) { /* noop */ }
+    }
+    window.CONTENT_DISPLAY = CONTENT_DISPLAY;
+  })();
+  (function loadViewport() {
+    var el = document.getElementById('mock-loaded-viewport');
+    if (el && el.textContent) {
+      try {
+        var parsed = JSON.parse(el.textContent);
+        if (parsed && Object.keys(parsed).length) LOADED_VIEWPORT = parsed;
+      } catch (e) { /* noop */ }
+    }
+  })();
+
+  function elementFieldValue(el, path) {
+    if (!el) return '';
+    if (path === 'name') return el.name || '';
+    if (path === 'owner') return el.owner || '';
+    if (path === 'health') return el.health || '';
+    if (path === 'stereotype') return el.stereotype || '';
+    if (path === 'package') return el.package || '';
+    if (path === 'source') return el.source || '';
+    if (path.indexOf('properties.') === 0) {
+      return (el.properties && el.properties[path.split('.')[1]]) || '';
+    }
+    return el[path] || '';
+  }
+
+  function relationshipFieldValue(rel, path) {
+    if (!rel) return '';
+    if (path === 'stereotype') return rel.edge_stereotype || '';
+    if (path.indexOf('properties.') === 0) {
+      return (rel.properties && rel.properties[path.split('.')[1]]) || '';
+    }
+    return rel[path] || '';
+  }
+
+  function fieldPathLabel(path) {
+    var labels = {
+      name: 'Name', owner: 'Owner', health: 'Health', package: 'Package',
+      stereotype: 'Stereotype', source: 'Source'
+    };
+    if (path.indexOf('properties.') === 0) {
+      return path.split('.')[1].replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+    }
+    return labels[path] || path.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+
+  function nodeLabelPathsForElement(el) {
+    var slug = (el.stereotype || '').toLowerCase();
+    var bindings = (CONTENT_DISPLAY.nodes || {})[slug] || { primary: 'name', secondary: [] };
+    return [bindings.primary || 'name'].concat(bindings.secondary || []);
+  }
+
+  function formatNodeLabel(el) {
+    if (el.node_label) return el.node_label;
+    var lines = [];
+    nodeLabelPathsForElement(el).forEach(function (path) {
+      var value = elementFieldValue(el, path);
+      if (!value) return;
+      lines.push(fieldPathLabel(path) + ': ' + value);
+    });
+    if (lines.length) return lines.join('\n');
+    return fieldPathLabel('name') + ': ' + (el.name || '—');
+  }
+
+  function formatEdgeLabel(rel) {
+    if (rel.edge_label) return rel.edge_label;
+    var slug = (rel.edge_stereotype || '').toLowerCase();
+    var fields = ((CONTENT_DISPLAY.edges || {})[slug] || {}).fields || ['stereotype'];
+    var parts = [];
+    fields.forEach(function (path) {
+      var value = relationshipFieldValue(rel, path);
+      if (!value) return;
+      if (path === 'stereotype') parts.push(value);
+      else if (path.indexOf('properties.') === 0) parts.push(path.split('.')[1] + ': ' + value);
+      else parts.push(value);
+    });
+    return parts.join(' · ') || rel.edge_stereotype || '';
+  }
+
+  function contentDisplayFromFieldMap(fieldMap, elementSts, relSts) {
+    var display = { nodes: {}, edges: {}, table_columns: [] };
+    (elementSts || []).forEach(function (slug) {
+      var paths = fieldMap[slug] || ['name'];
+      display.nodes[slug] = { primary: paths[0], secondary: paths.slice(1) };
+    });
+    (relSts || []).forEach(function (slug) {
+      display.edges[slug] = { fields: fieldMap[slug] || ['stereotype'] };
+    });
+    return display;
+  }
+
+  function refreshGraphLabels() {
+    if (!cyInstance) return;
+    cyInstance.nodes().forEach(function (node) {
+      var el = elementById[node.data('elementId')];
+      if (el) {
+        delete el.node_label;
+        node.data('label', formatNodeLabel(el));
+      }
+    });
+    cyInstance.edges().forEach(function (edge) {
+      var relId = parseInt(edge.data('relationshipId'), 10);
+      var rel = MOCK_RELATIONSHIPS.find(function (r) { return r.id === relId; });
+      if (rel) edge.data('label', formatEdgeLabel(rel));
+    });
+    cyInstance.style().update();
+    runGraphLayout();
+  }
+
+  window.mockupRefreshContentLabels = function () {
+    if (window.mockupReadFormState) {
+      var state = window.mockupReadFormState();
+      CONTENT_DISPLAY = contentDisplayFromFieldMap(
+        state.field_map || {},
+        state.element_stereotypes || [],
+        state.relationship_stereotypes || []
+      );
+      window.CONTENT_DISPLAY = CONTENT_DISPLAY;
+    }
+    MOCK_ELEMENTS.forEach(function (el) { delete el.node_label; });
+    MOCK_RELATIONSHIPS.forEach(function (rel) { delete rel.edge_label; });
+    refreshGraphLabels();
+    if (selectedElementId) renderElementInspector(elementById[selectedElementId]);
+    else if (selectedRelationshipId) {
+      var rel = MOCK_RELATIONSHIPS.find(function (r) { return r.id === selectedRelationshipId; });
+      renderRelationshipInspector(rel);
+    }
+  };
 
   var cyInstance = null;
   var selectedElementId = null;
@@ -814,59 +960,142 @@
     initGraph();
     bindNavSearch();
     bindPanelToggles();
-    /* Default selection: munin component */
-    selectElement(293);
   });
 
-  function initGraph() {
+  function buildGraphElements() {
+    var nodeIds = {};
+    MOCK_ELEMENTS.forEach(function (el) { nodeIds[el.id] = true; });
     var nodes = MOCK_ELEMENTS.map(function (el) {
       return {
         group: 'nodes',
-        data: { id: 'el-' + el.id, label: el.name, elementId: el.id, stereotype: el.stereotype }
+        data: {
+          id: 'el-' + el.id,
+          label: formatNodeLabel(el),
+          elementId: el.id,
+          stereotype: el.stereotype
+        }
       };
     });
-    var edges = MOCK_RELATIONSHIPS.map(function (rel) {
+    var edges = MOCK_RELATIONSHIPS.filter(function (rel) {
+      return nodeIds[rel.from_id] && nodeIds[rel.to_id];
+    }).map(function (rel) {
       return {
         group: 'edges',
         data: {
           id: 'rel-' + rel.id,
           source: 'el-' + rel.from_id,
           target: 'el-' + rel.to_id,
-          label: rel.edge_stereotype,
+          label: formatEdgeLabel(rel),
           relationshipId: rel.id
         }
       };
     });
+    return nodes.concat(edges);
+  }
+
+  function countVisibleEdges() {
+    var nodeIds = {};
+    MOCK_ELEMENTS.forEach(function (el) { nodeIds[el.id] = true; });
+    return MOCK_RELATIONSHIPS.filter(function (rel) {
+      return nodeIds[rel.from_id] && nodeIds[rel.to_id];
+    }).length;
+  }
+
+  function graphLayoutOptions() {
+    var nodeCount = MOCK_ELEMENTS.length;
+    var edgeCount = countVisibleEdges();
+    /* Filtered views often drop container nodes but keep component→container edges,
+       leaving many isolated nodes — cose collapses those on one point. */
+    var sparse = edgeCount === 0 || edgeCount < Math.max(1, nodeCount - 1);
+
+    if (sparse) {
+      return {
+        name: 'grid',
+        animate: false,
+        padding: 56,
+        avoidOverlap: true,
+        avoidOverlapPadding: 36,
+        condense: false,
+        spacingFactor: 1.4,
+        cols: Math.max(1, Math.ceil(Math.sqrt(nodeCount)))
+      };
+    }
+    return {
+      name: 'cose',
+      animate: false,
+      padding: 56,
+      nodeDimensionsIncludeLabels: true,
+      spacingFactor: 2,
+      nodeRepulsion: 14000,
+      idealEdgeLength: 180,
+      gravity: 0.2,
+      numIter: 1200
+    };
+  }
+
+  function fitGraph(padding) {
+    if (!cyInstance) return;
+    var pad = typeof padding === 'number' ? padding : 48;
+    cyInstance.resize();
+    var eles = cyInstance.elements();
+    if (eles.length) {
+      cyInstance.fit(eles, pad);
+    }
+  }
+
+  function runGraphLayout(done) {
+    if (!cyInstance) return;
+    var layout = cyInstance.layout(graphLayoutOptions());
+    layout.one('layoutstop', function () {
+      /* Label-sized nodes: bounds stabilize after layout + paint. */
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          fitGraph(48);
+          if (typeof done === 'function') done();
+        });
+      });
+    });
+    layout.run();
+  }
+
+  function initGraph() {
+    var container = document.getElementById('graphCy');
+    if (!container) return;
+    if (!MOCK_ELEMENTS.length) {
+      console.warn('[mockup:view-browse-1] graph skipped — no elements in canvas payload');
+      return;
+    }
     cyInstance = cytoscape({
-      container: document.getElementById('graphCy'),
-      elements: nodes.concat(edges),
+      container: container,
+      elements: buildGraphElements(),
       style: [
         {
           selector: 'node',
           style: {
             'label': 'data(label)',
-            'font-size': 9,
-            'text-valign': 'bottom',
-            'text-margin-y': 4,
-            'background-color': 'var(--yrg-node-fill)',
-            'border-color': 'var(--yrg-node-stroke)',
-            'border-width': 2,
-            'width': 36,
-            'height': 36
+            'color': '#1a1f2e',
+            'font-size': 8,
+            'text-wrap': 'wrap',
+            'text-max-width': 140,
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'shape': 'round-rectangle',
+            'width': 'label',
+            'height': 'label',
+            'padding': 10,
+            'background-color': '#e7eef7',
+            'border-color': '#1f3a5f',
+            'border-width': 2
           }
         },
         {
-          selector: 'node[stereotype = "System"]',
-          style: { 'shape': 'round-rectangle', 'width': 48, 'height': 36 }
-        },
-        {
           selector: 'node[stereotype = "Person"]',
-          style: { 'shape': 'ellipse', 'background-color': '#e8f4ea' }
+          style: { 'background-color': '#e8f4ea' }
         },
         {
           selector: 'node:selected',
           style: {
-            'border-color': 'var(--hg-accent)',
+            'border-color': '#c9a227',
             'border-width': 3,
             'background-color': '#fff8e1'
           }
@@ -875,10 +1104,11 @@
           selector: 'edge',
           style: {
             'width': 2,
-            'line-color': 'var(--yrg-edge-stroke)',
-            'target-arrow-color': 'var(--yrg-edge-stroke)',
+            'line-color': '#5a6478',
+            'target-arrow-color': '#5a6478',
             'target-arrow-shape': 'triangle',
             'curve-style': 'bezier',
+            'color': '#1a1f2e',
             'font-size': 8,
             'label': 'data(label)',
             'text-rotation': 'autorotate'
@@ -886,12 +1116,25 @@
         },
         {
           selector: 'edge:selected',
-          style: { 'line-color': 'var(--hg-accent)', 'target-arrow-color': 'var(--hg-accent)', 'width': 3 }
+          style: { 'line-color': '#c9a227', 'target-arrow-color': '#c9a227', 'width': 3 }
         }
       ],
-      layout: { name: 'cose', animate: false, padding: 40 },
       minZoom: 0.2,
       maxZoom: 3
+    });
+    runGraphLayout(function onGraphReady() {
+      if (LOADED_VIEWPORT) {
+        if (typeof LOADED_VIEWPORT.zoom === 'number') cyInstance.zoom(LOADED_VIEWPORT.zoom);
+        if (LOADED_VIEWPORT.pan) cyInstance.pan(LOADED_VIEWPORT.pan);
+        if (LOADED_VIEWPORT.center_element_id) {
+          var centerNode = cyInstance.getElementById('el-' + LOADED_VIEWPORT.center_element_id);
+          if (centerNode.length) cyInstance.center(centerNode);
+        }
+        console.log('[mockup:view-browse-1] restored viewport from saved View', LOADED_VIEWPORT);
+      } else if (MOCK_ELEMENTS.length) {
+        var defaultEl = MOCK_ELEMENTS.find(function (el) { return el.id === 293; }) || MOCK_ELEMENTS[0];
+        selectElement(defaultEl.id, { focus: false });
+      }
     });
 
     cyInstance.on('tap', 'node', function (evt) {
@@ -904,6 +1147,12 @@
       if (evt.target === cyInstance) clearSelection();
     });
     window.cyInstance = cyInstance;
+
+    window.addEventListener('resize', function () {
+      if (cyInstance && document.getElementById('graphCy') && document.getElementById('graphCy').offsetParent !== null) {
+        fitGraph(48);
+      }
+    });
   }
 
   function setView(mode) {
@@ -921,13 +1170,17 @@
       graph.style.display = 'block';
       graphBtn.classList.add('active');
       tableBtn.classList.remove('active');
-      if (cyInstance) cyInstance.resize();
+      if (cyInstance) {
+        fitGraph(48);
+      }
     }
     console.log('[mockup:view-browse-1] view toggled to ' + mode);
   }
 
-  function selectElement(id) {
+  function selectElement(id, opts) {
+    opts = opts || {};
     selectedElementId = id;
+    window.selectedElementId = id;
     selectedRelationshipId = null;
     highlightNavItem(id);
     if (cyInstance) {
@@ -935,7 +1188,9 @@
       var node = cyInstance.getElementById('el-' + id);
       if (node.length) {
         node.select();
-        cyInstance.animate({ center: { eles: node }, zoom: 1.2 }, { duration: 200 });
+        if (opts.focus !== false) {
+          cyInstance.animate({ center: { eles: node }, zoom: Math.max(cyInstance.zoom(), 1) }, { duration: 200 });
+        }
       }
     }
     renderElementInspector(elementById[id]);
@@ -959,6 +1214,7 @@
 
   function clearSelection() {
     selectedElementId = null;
+    window.selectedElementId = null;
     selectedRelationshipId = null;
     document.querySelectorAll('.yrg-element-item').forEach(function (btn) {
       btn.classList.remove('active');
@@ -977,11 +1233,29 @@
 
   function renderElementInspector(el) {
     if (!el) return;
+    var slug = (el.stereotype || '').toLowerCase();
+    var bindings = (CONTENT_DISPLAY.nodes || {})[slug] || { primary: 'name', secondary: [] };
+    var visiblePaths = [bindings.primary || 'name'].concat(bindings.secondary || []);
+    var fieldLabels = {
+      name: 'Name', owner: 'Owner', health: 'Health', package: 'Package',
+      stereotype: 'Stereotype', source: 'Source'
+    };
+    var visibleHtml = visiblePaths.map(function (path) {
+      var label = fieldLabels[path] || (path.indexOf('properties.') === 0 ? path.split('.')[1] : path);
+      var value = elementFieldValue(el, path) || '—';
+      if (path === 'health') {
+        value = '<span class="hg-dot hg-dot-' + el.health + '"></span> ' + (el.health || '—');
+      }
+      return '<dt class="col-5">' + label + '</dt><dd class="col-7">' + value + '</dd>';
+    }).join('');
+
     var rels = MOCK_RELATIONSHIPS.filter(function (r) {
       return r.from_id === el.id || r.to_id === el.id;
     });
     var propsHtml = '';
     Object.keys(el.properties || {}).forEach(function (k) {
+      var propPath = 'properties.' + k;
+      if (visiblePaths.indexOf(propPath) >= 0) return;
       propsHtml += '<dt>' + k + '</dt><dd>' + el.properties[k] + '</dd>';
     });
     var relsHtml = rels.map(function (r) {
@@ -1003,13 +1277,9 @@
         '<span class="hg-badge-source hg-badge-' + el.source + '">' + el.source + '</span>' +
         ' <span class="text-muted small ms-1">' + el.package + '</span>' +
       '</div>' +
-      '<div class="hg-section-label">Properties</div>' +
-      '<dl class="yrg-prop-dl row mb-3">' +
-        '<dt class="col-5">Owner</dt><dd class="col-7">' + (el.owner || '—') + '</dd>' +
-        '<dt class="col-5">Package</dt><dd class="col-7">' + el.package + '</dd>' +
-        '<dt class="col-5">Stereotype</dt><dd class="col-7">' + el.stereotype + '</dd>' +
-        propsHtml +
-      '</dl>' +
+      '<div class="hg-section-label">Visible fields</div>' +
+      '<dl class="yrg-prop-dl row mb-3">' + visibleHtml + '</dl>' +
+      (propsHtml ? '<div class="hg-section-label">Other properties</div><dl class="yrg-prop-dl row mb-3">' + propsHtml + '</dl>' : '') +
       '<div class="hg-section-label">Provenance</div>' +
       '<dl class="yrg-prop-dl row mb-3">' +
         '<dt class="col-5">Confidence</dt><dd class="col-7">' +
@@ -1032,22 +1302,33 @@
 
   function renderRelationshipInspector(rel) {
     if (!rel) return;
+    var slug = (rel.edge_stereotype || '').toLowerCase();
+    var fields = ((CONTENT_DISPLAY.edges || {})[slug] || {}).fields || ['stereotype'];
+    var visibleHtml = fields.map(function (path) {
+      var label = path === 'stereotype' ? 'Stereotype' : (path.indexOf('properties.') === 0 ? path.split('.')[1] : path);
+      var value = relationshipFieldValue(rel, path) || '—';
+      if (path === 'stereotype') value = '<code>' + value + '</code>';
+      return '<dt class="col-5">' + label + '</dt><dd class="col-7">' + value + '</dd>';
+    }).join('');
     var propsHtml = '';
     Object.keys(rel.properties || {}).forEach(function (k) {
+      var propPath = 'properties.' + k;
+      if (fields.indexOf(propPath) >= 0) return;
       propsHtml += '<dt>' + k + '</dt><dd>' + rel.properties[k] + '</dd>';
     });
     document.getElementById('inspectorContent').innerHTML =
       '<div class="yrg-inspector-kind">Relationship · ' + rel.edge_stereotype + '</div>' +
       '<div class="yrg-inspector-title">' + rel.from_element + ' → ' + rel.to_element + '</div>' +
       '<div class="mb-3"><span class="hg-badge-source hg-badge-' + rel.source + '">' + rel.source + '</span></div>' +
+      '<div class="hg-section-label">Visible fields</div>' +
+      '<dl class="yrg-prop-dl row mb-3">' + visibleHtml + '</dl>' +
+      (propsHtml ? '<div class="hg-section-label">Other properties</div><dl class="yrg-prop-dl row mb-3">' + propsHtml + '</dl>' : '') +
       '<div class="hg-section-label">Endpoints</div>' +
       '<dl class="yrg-prop-dl row mb-3">' +
         '<dt class="col-5">From</dt><dd class="col-7">' +
           '<button type="button" class="btn btn-link btn-sm p-0" onclick="selectElement(' + rel.from_id + ')">' + rel.from_element + '</button></dd>' +
-        '<dt class="col-5">Stereotype</dt><dd class="col-7"><code>' + rel.edge_stereotype + '</code></dd>' +
         '<dt class="col-5">To</dt><dd class="col-7">' +
           '<button type="button" class="btn btn-link btn-sm p-0" onclick="selectElement(' + rel.to_id + ')">' + rel.to_element + '</button></dd>' +
-        propsHtml +
       '</dl>' +
       '<div class="hg-section-label">Provenance</div>' +
       '<dl class="yrg-prop-dl row mb-3">' +
@@ -1063,12 +1344,14 @@
     if (!cyInstance) return;
     if (action === 'in') cyInstance.zoom(cyInstance.zoom() * 1.2);
     else if (action === 'out') cyInstance.zoom(cyInstance.zoom() / 1.2);
-    else cyInstance.fit(undefined, 40);
+    else fitGraph(48);
   }
 
   function replotGraph() {
     if (!cyInstance) return;
-    cyInstance.layout({ name: 'cose', animate: false, padding: 40 }).run();
+    cyInstance.elements().remove();
+    cyInstance.add(buildGraphElements());
+    runGraphLayout();
     console.log('[mockup:view-browse-1] graph replotted');
   }
 

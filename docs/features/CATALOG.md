@@ -189,6 +189,13 @@ And the element "element-list-page" should be visible
 | `When I GET "/models/{slug}/views/?browse_view={view_slug}"` | AT | Semantic URL expansion |
 | `When Priya deletes View "{name}"` | AT + E2E | Owner-only; removes from dropdown |
 | `Then a BrowseView "{slug}" exists for model "{slug}" owned by Priya` | AT | ORM assertion on payload |
+| **Content presets (W15 — @wip)** | | |
+| `When Priya selects content preset "{name}"` | AT + E2E | Updates `?content=` URL |
+| `Then graph node "{name}" displays secondary text containing "{text}"` | E2E | Content binding assertion |
+| `Then the table includes column "{name}"` | AT + E2E | Table columns from preset |
+| `When Priya opens the Content editor` | AT + E2E | Opens content-editor-panel |
+| `When Priya applies content bindings` | AT + E2E | Apply content button |
+| `Then the stored View payload includes custom content bindings` | AT | ORM payload assertion |
 
 ---
 
@@ -304,6 +311,20 @@ assertions and in form step fields.
 | Save View confirm | `save-view-confirm-btn` |
 | Named View menu item | `view-option-{slug}` |
 | Delete View | `delete-view-btn` |
+| Content dropdown | `content-dropdown` |
+| Content preset item | `content-option-{slug}` |
+| Open Content editor | `content-editor-toggle`, `content-editor-open` |
+| Content editor panel | `content-editor-panel` |
+| Graph content section | `content-editor-graph-section` |
+| Table content section | `content-editor-table-section` |
+| Content editor preset (graph) | `content-editor-preset-select` |
+| Content editor preset (table) | `content-editor-table-preset-select` |
+| Node primary field | `content-editor-node-primary` |
+| Node secondary field | `content-editor-node-secondary-{path}` |
+| Edge label field | `content-editor-edge-label` |
+| Table column field | `content-editor-table-col-{path}` |
+| Reset / Apply content | `content-editor-reset-btn`, `content-editor-apply-btn` |
+| Include viewport on save | `save-view-include-viewport` |
 | Toggle filters | `filters-toggle` |
 | Clear filters | `clear-filters-btn` |
 | Package filter | `filter-package` |

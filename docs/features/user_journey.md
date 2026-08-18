@@ -199,29 +199,31 @@ Priya follows the printed link to `MUNIN-BRIEFING-1` — Munin's post-run archit
   - **Model switcher** (navigator header — not a static title): dropdown showing the current Model name (`browser-model-name`) and listing every Model the signed-in user may read (`browser-model-switcher`). Selecting another Model navigates to `/models/{slug}/views/` and **reloads** package tree, filters, canvas, and inspector for that graph. Filters, time-travel, and selection are **not** carried across Models.
   - The switcher does **not** create Models. New Models are created by `ratatosk bootstrap` / MCP `ensure_model` (Act 1 / Act 5).
   - **Traversal tree** + navigator search (below the switcher): roots = elements matching active filters; children = next **outgoing** hop (same subgraph as canvas). Chevron expand/collapse is **local UI only** — does not change `?depth=`.
-- **Filter panel (top of the list; collapsible panel - when collapsed reads what filters applied):**
-  - Package selector (Context, Container, Component, Code — from the C4 bootstrap)
-  - Stereotype multi-select (Application, Capability, …)
-  - **Advanced filter builder:** compound AND/OR rules over any element property (see below)
-  - **Time Travel:** date picker (defaults to "now"); selecting a past date sets `?as_of=` in the URL and re-runs the query against the historical snapshot — a banner "Viewing model as of 2026-01-15" appears; [Compare with now →] opens `VIEW-HISTORY-1`
-  - [Apply Filters] [Clear] [Save View] — Save View opens the same dialog as **Save current view…** in the Views dropdown (two entry points, one dialog)
+- **Filter panel (canvas toolbar → Filters; this is how Priya works with Views):**
+  - When a **named View** is active, toolbar shows the **View name** (`active-view-name`).
+  - **Package** — multi-select
+  - **Element stereotypes** — multi-select
+  - **Relationship stereotypes** — multi-select
+  - Stereotype changes **auto-update** the visible-field checklist (from each stereotype's `property_schema`).
+  - Footer: **[Clear]** left · **[Save View / Update View]** + **[Apply Filters]** right — **one primary only** (`Apply Filters`).
+  - **Clear** resets to the loaded View's original state.
 
 **Views (named browse snapshots):**
 
-A **View** captures **Filters** (scope) + **Levels** (`depth`) + **presentation** (`graph` or `table`) for the current Model. It does **not** include inspector selection, panel collapse, or Munin panel state.
+A **View** captures **Filters** (scope) + **Levels** (`depth`) + **presentation** (`graph` or `table`) + **Content** (which properties annotate nodes, edges, and table columns) + optional **viewport** (graph camera snapshot) for the current Model. It does **not** include inspector selection, panel collapse, or Munin panel state.
 
-- **Live URL:** bookmark/share without saving — query params encode filters, `depth`, and `mode=graph|table`.
+- **Live URL:** bookmark/share without saving — query params encode filters, `depth`, `mode=graph|table`, and **`content={preset-slug}`** (built-in Content presets).
 - **Named View:** persisted per `(Model, User)` as `graph.BrowseView` — load from the Views dropdown or `?browse_view={slug}`.
-- **Save:** Priya clicks Save View (filter panel) or Save current view… (header dropdown), enters a name, confirms — current filters + depth + mode are stored.
-- **Load:** selecting a named View navigates to the equivalent live URL (filters, depth, mode restored).
+- **Save:** Priya clicks Save View (filter panel) or Save current view… (header dropdown), enters a name, optionally checks **Include graph viewport** (graph mode only), confirms — current filters, depth, mode, content preset/bindings, and optional viewport are stored.
+- **Load:** selecting a named View navigates to the equivalent live URL and restores Content annotations; viewport is applied in graph mode when it was saved.
 - **Delete/rename:** owner only; viewers may load but not save, delete, or rename.
 
-Content annotations on nodes/edges and graph viewport (zoom/pan) are **deferred** (Views v2 CR).
+**Content (Views v2):** not a separate toolbar or second apply button. Field visibility is configured **inside the Filters panel** after stereotype selection — one **Apply Filters** commits scope + fields. Graph View and Table View render those fields on the canvas/table respectively (W15).
+
+**Viewport (Views v2, graph-only):** zoom, pan, and optional centered element ID — saved only when explicitly included on Save View; not encoded in live URLs.
 - **Results (center, under filters):**
-  - **Depth slider (graph mode):** “Show N levels deep” — N = 1 is filter roots only; each increment adds one **outgoing** hop (max = longest reachable path from roots, cap 20). Synced to `?depth=N` in the URL.
-  - Table mode: columns Name, Stereotype, Owner, Health, Package — rows = flat list of nodes in the **current depth-scoped subgraph**
-  - Graph mode: Cytoscape.js rendering of the depth-scoped subgraph (nodes + edges where both endpoints in scope)
-  - Toggle [Table] [Graph]
+  - **Depth slider (graph mode):** “Show N levels deep” — toolbar control only (not in Filters panel).
+  - Table mode / Graph mode toggle
   - **Actions bar:** [Export →] (`EXPORT-BRIEFING-1`) [History →] (`VIEW-HISTORY-1`)
 - **Detail drawer (right):** selected element summary + quick links to VIEW/EDIT
 - **Munin panel:** collapsible chat side panel (`Act 8`) that can drive this same screen
@@ -269,7 +271,8 @@ Every filter state is encoded as a JSON query object appended to the URL — sha
 | Operators              | `eq` `neq` `gt` `gte` `lt` `lte` `contains` `not_contains` `starts` `ends` `in` `not_in` |
 | Depth (traversal)      | `?depth=N` — N ≥ 1; filters define roots; N = 1 → roots only; each +1 adds one outgoing hop (BFS). Default: `1`. Unfiltered browse uses graph sources as roots. |
 | Presentation mode      | `?mode=graph` \| `?mode=table` — graph shows three-panel explorer; table shows results grid only. Default: `graph`. |
-| Named View             | `?browse_view={slug}` — expands to stored filters + depth + mode for the current user on the current Model |
+| Named View             | `?browse_view={slug}` — expands to stored filters + depth + mode + content (+ viewport on load in graph mode) for the current user on the current Model |
+| Content preset (live)  | `?content={preset-slug}` — built-in template (`minimal`, `current-state`, `jira-info`); after editor apply → `?content=custom` with bindings in session / named View |
 | Time travel            | `?as_of=2026-06-01`                                                                      |
 | Pre-filled create form | `/elements/new?prefill={"name":"X","stereotype":"Container","package":"technology"}`     |
 

@@ -964,6 +964,76 @@ Header control for loading and saving **Views** (Filters + Levels/depth + presen
 
 Owner may **delete** a named View from a manage affordance on the dropdown or a context menu (`delete-view-btn`). Viewers see the dropdown but not save/delete/rename actions.
 
+### 6.4.1 View Browser Content preset dropdown (Views v2)
+
+Canvas-toolbar control for **Content** — which element/relationship properties annotate the graph and which columns appear in table mode.
+
+```html
+<div class="dropdown">
+  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+          data-bs-toggle="dropdown" aria-expanded="false" data-testid="content-dropdown"
+          aria-label="Content preset">
+    Content: Current State
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><a class="dropdown-item" href="?content=minimal"
+           data-testid="content-option-minimal">Minimal</a></li>
+    <li><a class="dropdown-item active" href="?content=current-state"
+           data-testid="content-option-current-state">Current State</a></li>
+    <li><a class="dropdown-item" href="?content=jira-info"
+           data-testid="content-option-jira-info">Jira Info</a></li>
+  </ul>
+</div>
+```
+
+**Save View modal extension (graph mode):**
+
+```html
+<div class="form-check mt-2" id="saveViewViewportWrap">
+  <input class="form-check-input" type="checkbox" id="saveViewIncludeViewport"
+         data-testid="save-view-include-viewport">
+  <label class="form-check-label" for="saveViewIncludeViewport">
+    Include graph viewport (zoom and pan)
+  </label>
+</div>
+```
+
+Rules:
+
+- Content dropdown visible in **graph and table** modes; picking a preset reloads with `?content={slug}` and clears unsaved custom bindings.
+- **Edit content** opens the **Content editor** collapse panel (`content-editor-panel`) for field-by-field binding (see §6.4.2).
+- After **Apply content**, URL uses `?content=custom`; full bindings persist in session until **Save View**.
+- Viewport checkbox visible when `mode=graph`; default **unchecked**; persisted only in `BrowseView.payload.viewport`.
+- Cytoscape node `label` is formatted from Content bindings (primary + secondary lines); see §8.2.
+
+### 6.4.2 View Browser Content editor (Views v2)
+
+Field-by-field binding panel — **mode-specific**. Graph View and Table View have separate content; the editor shows only the section for the active `mode`.
+
+**Graph View section** (`content-editor-graph-section`, visible when `mode=graph`):
+
+```html
+<div id="contentEditorGraphSection" data-testid="content-editor-graph-section">
+  <!-- preset select, node primary, node secondary checkboxes, edge label -->
+</div>
+```
+
+**Table View section** (`content-editor-table-section`, visible when `mode=table`):
+
+```html
+<div id="contentEditorTableSection" data-testid="content-editor-table-section">
+  <!-- preset select, table column checkboxes only -->
+</div>
+```
+
+Rules:
+
+- **Table columns** appear **only** in Table View editor — never in Graph View.
+- **Node/edge bindings** appear **only** in Graph View editor — never in Table View.
+- Field options derive from union of `Stereotype.property_schema` paths in scope.
+- **Apply content** updates the active mode only (graph labels **or** table columns).
+- **Save View** persists both graph and table binding halves in `BrowseView.payload.content`.
+
 ### 6.3.1 View Browser Depth Slider (graph mode)
 
 Controls how many **levels** of the relationship graph are in scope. Filters define **roots**; the slider sets `?depth=N` (outgoing BFS hops + 1).
@@ -1178,7 +1248,7 @@ Standard series colour order: `HG.primary`, `HG.green`, `HG.orange`, `HG.red`, `
 
 Used in `VIEW-BROWSE-1` (graph mode), `ELEMENT-VIEW_ELEMENT-1` (ego-graph), `DIAGRAM-LIST+FIND-1` (Part II layout editor).
 
-**Standard Cytoscape styles:**
+**Standard Cytoscape styles** (base theme — node `label` value is **Content-driven** in VIEW-BROWSE-1; default preset `minimal` uses name only):
 
 ```js
 const cytoscapeStyle = [

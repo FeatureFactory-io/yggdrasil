@@ -113,9 +113,9 @@ Ephemeral UI excluded: inspector selection, panel collapse, Munin panel open sta
 
 New file: `docs/features/act-2-view/view-browse-views.feature`. Interactive save/load/delete marked `@wip` until W14 step defs land; shell scenarios (61, 67 partial) AT-ready.
 
-### CR #2 (deferred)
+### CR #2 (Views v2 — reconciled 2026-08-18)
 
-`VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md` — Content bindings + viewport snapshot.
+[`VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md`](VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md) — Content bindings + viewport snapshot. **W15** after W14. Status: pending approval.
 
 ---
 

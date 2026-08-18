@@ -13,11 +13,12 @@
 | Centre canvas | Cytoscape graph + table toggle, filters, **depth slider** | `graph-cy-container`, `toggle-table`, `toggle-graph`, `browser-depth-slider`, `browser-depth-value`, `results-container` | `view-browse-canvas.feature` |
 | Right inspector | Element/relationship properties (embed mode) | `browser-inspector-panel`, `inspector-empty`, `inspector-content` | `view-browse-inspector.feature` |
 | Page shell | Header **Views** dropdown, save dialog, Munin offcanvas | `views-dropdown`, `save-view-btn`, `save-view-confirm-btn`, `view-option-{slug}` | `view-browse-views.feature` |
+| Canvas toolbar | **Content** preset dropdown + **Edit content** field editor (Views v2) | `content-dropdown`, `content-editor-*`, `save-view-include-viewport` | `view-browse-content.feature` |
 | Page shell | Munin offcanvas | `view-browse-page`, `export-btn`, `open-munin-btn` | `view-browse.feature` |
 
 ---
 
-## Scenario index (VIEW-BROWSE-1-01 … 68)
+## Scenario index (VIEW-BROWSE-1-01 … 76)
 
 | IDs | Status | Runner | Notes |
 |-----|--------|--------|-------|
@@ -28,7 +29,8 @@
 | 35–37, 45–46 | v0.3 canvas | AT | Graph JSON, mode SSR, canvas controls |
 | 48–54 | **W12 implemented** | AT + E2E | Model switcher; canonical `/models/{slug}/views/` |
 | 55–60 | **W13 shipped** | AT + E2E | Depth slider + BFS subgraph |
-| 61–68 | **Views v1 spec** (BPE-08 CR) | AT + E2E (@wip 62–66, 68) | Named Views — Filters + Levels |
+| 61–68 | **Views v1 spec** (BPE-08 CR) | AT + E2E (@wip 62–66, 68) | Named Views — Filters + Levels; 73–74 extend to content/viewport in W15 |
+| 69–79 | **Views v2 spec** (BPE-08 CR) | AT + E2E (@wip 70–71, 73–79) | Content presets, field editor, viewport |
 
 ---
 
@@ -44,10 +46,11 @@
 | W12 | **Model switcher** (shipped) | 48–54 |
 | W13 | **Depth traversal** — `browse_service.subgraph_from_roots`, slider, traversal tree, multi-hop `traverse` | 55–60 |
 | W14 | **Views v1** — `graph.BrowseView`, save/load dropdown, `browse_view=` URL, `mode=` migration | 61–68 |
+| W15 | **Views v2** — Content editor, presets, `content=` URL, viewport in payload, graph.json labels | 69–79 |
 
 Deferred from v0.2 (unchanged): 09 export/history prod wiring, 11 time travel banner.
 
-W12 and W13 are **shipped**. Views v1 CR: [`VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md). W14 unblocked after BPE-01 Plan Feature.
+W12 and W13 are **shipped**. Views v1 CR: [`VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md). Views v2 CR: [`VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md). W14 unblocked after BPE-01; W15 after W14.
 
 ---
 

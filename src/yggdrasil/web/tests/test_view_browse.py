@@ -90,6 +90,24 @@ def test_view_browser_shell_testids(client, view_browser_user, view_browser_mode
 
 
 @pytest.mark.django_db
+def test_view_browser_subtitle_hides_internal_screen_id(
+    client, view_browser_user, view_browser_model
+):
+    """Regression #98: page subtitle must not expose internal Screen ID."""
+    client.force_login(view_browser_user)
+    response = client.get(_browse_url())
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'data-testid="view-browser-subtitle"' in body
+    start = body.index('data-testid="view-browser-subtitle"')
+    end = body.index("</p>", start)
+    subtitle = body[start:end]
+    assert "VIEW-BROWSE-1" not in subtitle
+    assert "Yggdrasil" in subtitle
+    assert "elements visible" in subtitle
+
+
+@pytest.mark.django_db
 def test_default_view_shows_elements(client, view_browser_user, view_browser_model):
     """VIEW-BROWSE-1-02: default depth=1 lists graph source elements."""
     client.force_login(view_browser_user)

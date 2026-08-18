@@ -225,8 +225,12 @@ class ViewBrowseGraphJsonView(LoginRequiredMixin, View):
             stereotype=params.stereotype,
             package=params.package,
             health=params.health,
+            packages=params.packages,
+            stereotypes=params.element_stereotypes,
+            relationship_stereotypes=params.relationship_stereotypes,
             depth=params.depth,
             user_id=request.user.pk,
+            field_map={slug: list(paths) for slug, paths in params.field_map.items()},
         )
         logger.info(
             "ViewBrowseGraphJsonView.get | user_pk=%s depth=%s nodes=%s edges=%s",

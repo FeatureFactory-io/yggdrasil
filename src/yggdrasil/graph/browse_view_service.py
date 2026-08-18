@@ -6,6 +6,7 @@ ORM writes only — not ChangeSet-governed (Views v1 Q2).
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -64,7 +65,18 @@ def validate_payload_v1(payload: dict[str, Any]) -> dict[str, Any]:
         "presentation": presentation,
     }
     if "content" in payload and isinstance(payload["content"], dict):
-        normalized["content"] = payload["content"]
+        content = payload["content"]
+        field_map = content.get("field_map")
+        if isinstance(field_map, dict):
+            normalized["content"] = {
+                "field_map": {
+                    str(slug): _coerce_str_list(paths)
+                    for slug, paths in field_map.items()
+                    if isinstance(paths, list)
+                }
+            }
+        else:
+            normalized["content"] = content
     if "viewport" in payload and payload["viewport"] is not None:
         normalized["viewport"] = payload["viewport"]
     return normalized
@@ -232,6 +244,15 @@ def expand_to_query_params(view: BrowseView) -> dict[str, list[str]]:
         params["edge_stereotype"] = list(filters["relationship_stereotypes"])
     params["depth"] = [str(payload["levels"]["depth"])]
     params["mode"] = [payload["presentation"]]
+    content = payload.get("content") or {}
+    field_map = content.get("field_map") or {}
+    if isinstance(field_map, dict):
+        for stereotype, paths in field_map.items():
+            if paths:
+                params[f"field_{stereotype}"] = list(paths)
+    viewport = payload.get("viewport")
+    if viewport is not None:
+        params["viewport"] = [json.dumps(viewport)]
     logger.info(
         "BrowseViewService.expand_to_query_params | exit | slug=%s depth=%s mode=%s",
         view.slug,

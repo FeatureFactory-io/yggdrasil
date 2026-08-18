@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -16,7 +17,7 @@ from urllib.parse import urlencode
 
 from django.urls import reverse
 
-from yggdrasil.graph import browse_service, browse_view_service
+from yggdrasil.graph import browse_content, browse_service, browse_view_service
 
 logger = logging.getLogger("yggdrasil.web")
 
@@ -66,14 +67,27 @@ class ViewBrowseParams:
     """Parsed query parameters for VIEW-BROWSE-1."""
 
     model_slug: str
-    stereotype: str | None
-    package: str | None
-    health: str | None
-    as_of: str | None
-    view_mode: str
-    depth: int
+    packages: tuple[str, ...] = ()
+    element_stereotypes: tuple[str, ...] = ()
+    relationship_stereotypes: tuple[str, ...] = ()
+    health: str | None = None
+    as_of: str | None = None
+    view_mode: str = DEFAULT_VIEW_MODE
+    depth: int = browse_service.DEFAULT_DEPTH
+    field_map: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    viewport: dict[str, Any] | None = None
     browse_view: str | None = None
     loaded_view_name: str | None = None
+
+    @property
+    def package(self) -> str | None:
+        """First selected package slug (legacy single-select callers)."""
+        return self.packages[0] if self.packages else None
+
+    @property
+    def stereotype(self) -> str | None:
+        """First selected element stereotype slug (legacy single-select callers)."""
+        return self.element_stereotypes[0] if self.element_stereotypes else None
 
 
 def _parse_view_mode(request: HttpRequest) -> str:
@@ -89,6 +103,32 @@ def _parse_view_mode(request: HttpRequest) -> str:
     return DEFAULT_VIEW_MODE
 
 
+def _get_query_list(query: Any, key: str) -> tuple[str, ...]:
+    """
+    Read repeated query values, skipping blanks.
+
+    :param query: ``request.GET`` or ``request.POST`` mapping.
+    :param key: Parameter name. Example: ``"package"``.
+    :return: Non-empty trimmed values.
+    """
+    getlist = getattr(query, "getlist", None)
+    if getlist is None:
+        raw = query.get(key)
+        return (
+            (_blank_to_none(str(raw)),)
+            if _blank_to_none(str(raw) if raw is not None else None)
+            else ()
+        )
+    values = [_blank_to_none(item) for item in getlist(key)]
+    return tuple(item for item in values if item)
+
+
+def _field_map_from_query(query: Any) -> dict[str, tuple[str, ...]]:
+    """Normalize ``field_{stereotype}`` params to immutable tuples."""
+    parsed = browse_content.parse_field_map_from_query(query)
+    return {slug: tuple(paths) for slug, paths in parsed.items()}
+
+
 def parse_view_browse_params(request: HttpRequest, model_slug: str) -> ViewBrowseParams:
     """
     Parse filter query parameters from a View Browser request.
@@ -98,14 +138,19 @@ def parse_view_browse_params(request: HttpRequest, model_slug: str) -> ViewBrows
     :return: Normalized browse parameters.
     """
     view_mode = _parse_view_mode(request)
+    packages = _get_query_list(request.GET, "package")
+    element_stereotypes = _get_query_list(request.GET, "stereotype")
+    relationship_stereotypes = _get_query_list(request.GET, "edge_stereotype")
     return ViewBrowseParams(
         model_slug=model_slug,
-        stereotype=_blank_to_none(request.GET.get("stereotype")),
-        package=_blank_to_none(request.GET.get("package")),
+        packages=packages,
+        element_stereotypes=element_stereotypes,
+        relationship_stereotypes=relationship_stereotypes,
         health=_blank_to_none(request.GET.get("health")),
         as_of=_blank_to_none(request.GET.get("as_of")),
         view_mode=view_mode,
         depth=_parse_depth(request.GET.get("depth")),
+        field_map=_field_map_from_query(request.GET),
     )
 
 
@@ -139,12 +184,15 @@ def apply_browse_view_expansion(
         return params
 
     expanded = browse_view_service.expand_to_query_params(saved)
-    package = _blank_to_none(request.GET.get("package"))
-    if package is None and expanded.get("package"):
-        package = expanded["package"][0]
-    stereotype = _blank_to_none(request.GET.get("stereotype"))
-    if stereotype is None and expanded.get("stereotype"):
-        stereotype = expanded["stereotype"][0]
+    packages = _get_query_list(request.GET, "package")
+    if not packages and expanded.get("package"):
+        packages = tuple(expanded["package"])
+    element_stereotypes = _get_query_list(request.GET, "stereotype")
+    if not element_stereotypes and expanded.get("stereotype"):
+        element_stereotypes = tuple(expanded["stereotype"])
+    relationship_stereotypes = _get_query_list(request.GET, "edge_stereotype")
+    if not relationship_stereotypes and expanded.get("edge_stereotype"):
+        relationship_stereotypes = tuple(expanded["edge_stereotype"])
     health = params.health
     as_of = params.as_of
     view_mode = _parse_view_mode(request)
@@ -153,15 +201,23 @@ def apply_browse_view_expansion(
     depth = params.depth
     if request.GET.get("depth") is None:
         depth = int(expanded.get("depth", [str(params.depth)])[0])
+    query_field_map = _field_map_from_query(request.GET)
+    field_map = query_field_map if query_field_map else _field_map_from_expanded(expanded)
+    viewport = params.viewport
+    if not query_field_map:
+        viewport = _viewport_from_expanded(expanded) or viewport
 
     merged = ViewBrowseParams(
         model_slug=params.model_slug,
-        stereotype=stereotype,
-        package=package,
+        packages=packages,
+        element_stereotypes=element_stereotypes,
+        relationship_stereotypes=relationship_stereotypes,
         health=health,
         as_of=as_of,
         view_mode=view_mode,
         depth=depth,
+        field_map=field_map,
+        viewport=viewport,
         browse_view=browse_view_slug,
         loaded_view_name=saved.name,
     )
@@ -172,6 +228,30 @@ def apply_browse_view_expansion(
         merged.package,
     )
     return merged
+
+
+def _field_map_from_expanded(expanded: dict[str, list[str]]) -> dict[str, tuple[str, ...]]:
+    """Extract field_map tuples from expanded query param lists."""
+    field_map: dict[str, tuple[str, ...]] = {}
+    for key, values in expanded.items():
+        if not str(key).startswith("field_"):
+            continue
+        slug = str(key)[6:]
+        if slug and values:
+            field_map[slug] = tuple(values)
+    return field_map
+
+
+def _viewport_from_expanded(expanded: dict[str, list[str]]) -> dict[str, Any] | None:
+    """Parse optional viewport JSON from expanded query params."""
+    raw_values = expanded.get("viewport")
+    if not raw_values:
+        return None
+    try:
+        parsed = json.loads(raw_values[0])
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def user_can_save_views(user: AbstractBaseUser) -> bool:
@@ -194,15 +274,21 @@ def build_payload_from_browse_params(params: ViewBrowseParams) -> dict:
     :return: Payload dict for ``browse_view_service.save_view``.
     """
     filters: dict[str, list[str]] = {
-        "packages": [params.package] if params.package else [],
-        "element_stereotypes": [params.stereotype] if params.stereotype else [],
-        "relationship_stereotypes": [],
+        "packages": list(params.packages),
+        "element_stereotypes": list(params.element_stereotypes),
+        "relationship_stereotypes": list(params.relationship_stereotypes),
     }
-    return {
+    payload: dict[str, Any] = {
         "filters": filters,
         "levels": {"depth": params.depth},
         "presentation": params.view_mode,
+        "content": {
+            "field_map": {slug: list(paths) for slug, paths in params.field_map.items()},
+        },
     }
+    if params.viewport is not None:
+        payload["viewport"] = params.viewport
+    return payload
 
 
 def _parse_depth(raw: str | None) -> int:
@@ -244,10 +330,6 @@ def build_empty_browse_context(request: HttpRequest) -> dict[str, Any]:
         "filter_options": {"packages": [], "stereotypes": [], "health": []},
         "active_filters": ViewBrowseParams(
             model_slug="",
-            stereotype=None,
-            package=None,
-            health=None,
-            as_of=None,
             view_mode=DEFAULT_VIEW_MODE,
             depth=browse_service.DEFAULT_DEPTH,
         ),
@@ -259,6 +341,12 @@ def build_empty_browse_context(request: HttpRequest) -> dict[str, Any]:
         "browse_views": [],
         "browse_view_entries": [],
         "can_save_views": False,
+        "view_field_sections": [],
+        "table_columns": browse_content.build_table_columns(
+            element_stereotypes=[],
+            field_map={},
+        ),
+        "loaded_viewport_json": None,
     }
 
 
@@ -349,6 +437,17 @@ def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) ->
     ymodel = None
     browse_views: list = []
     browse_view_entries: list[dict[str, Any]] = []
+    field_map_dict = {slug: list(paths) for slug, paths in params.field_map.items()}
+    view_field_sections = browse_content.build_view_field_sections(
+        list(params.element_stereotypes),
+        list(params.relationship_stereotypes),
+        field_map_dict,
+    )
+    table_columns = browse_content.build_table_columns(
+        element_stereotypes=list(params.element_stereotypes),
+        field_map=field_map_dict,
+    )
+
     try:
         ymodel = browse_service.resolve_model(params.model_slug)
         model_name = ymodel.name
@@ -359,11 +458,17 @@ def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) ->
             stereotype=params.stereotype,
             package=params.package,
             health=params.health,
+            packages=params.packages,
+            stereotypes=params.element_stereotypes,
+            relationship_stereotypes=params.relationship_stereotypes,
             depth=params.depth,
             user_id=request.user.pk,
+            field_map={slug: list(paths) for slug, paths in params.field_map.items()},
         )
         options = browse_service.list_filter_options(model_slug=params.model_slug)
-        elements = [_row_from_summary(item) for item in scoped.node_summaries]
+        elements = [
+            _row_from_summary(item, table_columns, field_map_dict) for item in scoped.node_summaries
+        ]
         element_count = len(elements)
         traversal_roots = build_traversal_tree(
             elements,
@@ -378,7 +483,7 @@ def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) ->
         traversal_roots = []
         max_depth = 1
         current_depth = params.depth
-        options = {"packages": [], "stereotypes": [], "health": []}
+        options = {"packages": [], "stereotypes": [], "relationship_stereotypes": [], "health": []}
 
     logger.info(
         "build_view_browse_context | depth=%s element_count=%s tree_root_count=%s model_slug=%s",
@@ -404,6 +509,9 @@ def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) ->
         "browse_views": browse_views,
         "browse_view_entries": browse_view_entries,
         "can_save_views": user_can_save_views(request.user),
+        "view_field_sections": view_field_sections,
+        "table_columns": table_columns,
+        "loaded_viewport_json": params.viewport,
     }
 
 
@@ -426,20 +534,32 @@ def parse_browse_params_from_post(request: HttpRequest, model_slug: str) -> View
     """
     raw_mode = request.POST.get("mode") or DEFAULT_VIEW_MODE
     view_mode = raw_mode if raw_mode in VALID_VIEW_MODES else DEFAULT_VIEW_MODE
+    packages = _get_query_list(request.POST, "package")
+    element_stereotypes = _get_query_list(request.POST, "stereotype")
+    relationship_stereotypes = _get_query_list(request.POST, "edge_stereotype")
+    field_map = _field_map_from_query(request.POST)
+    viewport = _parse_viewport_from_post(request)
     return ViewBrowseParams(
         model_slug=model_slug,
-        stereotype=_blank_to_none(request.POST.get("stereotype")),
-        package=_blank_to_none(request.POST.get("package")),
+        packages=packages,
+        element_stereotypes=element_stereotypes,
+        relationship_stereotypes=relationship_stereotypes,
         health=_blank_to_none(request.POST.get("health")),
         as_of=_blank_to_none(request.POST.get("as_of")),
         view_mode=view_mode,
         depth=_parse_depth(request.POST.get("depth")),
+        field_map=field_map,
+        viewport=viewport,
     )
 
 
-def _row_from_summary(item: dict[str, Any]) -> dict[str, Any]:
+def _row_from_summary(
+    item: dict[str, Any],
+    table_columns: list[dict[str, str]] | None = None,
+    field_map: dict[str, list[str]] | None = None,
+) -> dict[str, Any]:
     """Map browse_service summary dict to table/navigator row fields."""
-    return {
+    row = {
         "id": item["id"],
         "name": item["name"],
         "slug": item["slug"],
@@ -450,7 +570,29 @@ def _row_from_summary(item: dict[str, Any]) -> dict[str, Any]:
         "owner": item["owner"],
         "health": item["health"],
         "source": item["source"],
+        "properties": item.get("properties") or {},
     }
+    if table_columns:
+        row["table_cells"] = [
+            {
+                "key": col["key"],
+                "value": browse_content.table_cell_display(row, col["key"]),
+            }
+            for col in table_columns
+        ]
+    return row
+
+
+def _parse_viewport_from_post(request: HttpRequest) -> dict[str, Any] | None:
+    """Parse optional viewport JSON from save-view POST."""
+    raw = (request.POST.get("viewport") or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def _package_key(element: dict[str, Any]) -> str:

@@ -36,6 +36,9 @@ class BrowseFilters:
     package: str | None = None
     health: str | None = None
     as_of: str | None = None
+    packages: tuple[str, ...] = ()
+    stereotypes: tuple[str, ...] = ()
+    relationship_stereotypes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -291,13 +294,30 @@ def list_filter_options(*, model_slug: str) -> dict[str, list[dict[str, str]]]:
             "name"
         )
     ]
+    relationship_stereotypes = [
+        {"name": st.name, "slug": st.slug}
+        for st in Stereotype.objects.filter(metamodel=ymodel.metamodel, is_edge=True).order_by(
+            "name"
+        )
+    ]
     health = [{"value": value, "label": label} for value, label in Element.HEALTH_CHOICES]
-    return {"packages": packages, "stereotypes": stereotypes, "health": health}
+    return {
+        "packages": packages,
+        "stereotypes": stereotypes,
+        "relationship_stereotypes": relationship_stereotypes,
+        "health": health,
+    }
 
 
 def _has_narrowing_filter(filters: BrowseFilters) -> bool:
     """Return True when any element-narrowing browse filter is active."""
-    return bool(filters.stereotype or filters.package or filters.health)
+    return bool(
+        filters.stereotype
+        or filters.package
+        or filters.health
+        or filters.packages
+        or filters.stereotypes
+    )
 
 
 def resolve_root_element_ids(ymodel: YggdrasilModel, filters: BrowseFilters) -> set[int]:
@@ -429,8 +449,12 @@ def subgraph_from_roots(
     stereotype: str | None = None,
     package: str | None = None,
     health: str | None = None,
+    packages: tuple[str, ...] = (),
+    stereotypes: tuple[str, ...] = (),
+    relationship_stereotypes: tuple[str, ...] = (),
     depth: int = DEFAULT_DEPTH,
     user_id: int | None = None,
+    field_map: dict[str, list[str]] | None = None,
 ) -> DepthSubgraph:
     """
     Build a depth-scoped subgraph from filter roots via outgoing BFS.
@@ -451,7 +475,15 @@ def subgraph_from_roots(
         )
         msg = f"depth must be >= 1, got {depth}"
         raise ValueError(msg)
-    filters = BrowseFilters(stereotype=stereotype, package=package, health=health)
+    filters = BrowseFilters(
+        stereotype=stereotype,
+        package=package,
+        health=health,
+        packages=packages,
+        stereotypes=stereotypes,
+        relationship_stereotypes=relationship_stereotypes,
+    )
+    field_map = field_map or {}
     logger.info(
         "browse_service.subgraph_from_roots | entry | model_slug=%s depth=%s direction=outgoing user_id=%s",
         model_slug,
@@ -467,19 +499,30 @@ def subgraph_from_roots(
     )
     id_set = {el.pk for el in elements}
     node_summaries = [element_summary(el) for el in sorted(elements, key=lambda e: e.name)]
-    cytoscape_elements = [
-        {
-            "data": {
-                "id": str(el.pk),
-                "label": el.name,
-                "stereotype": el.stereotype.name if el.stereotype_id else "",
+    summary_by_id = {str(summary["id"]): summary for summary in node_summaries}
+    cytoscape_elements = []
+    for el in elements:
+        summary = summary_by_id[str(el.pk)]
+        label = el.name
+        if field_map:
+            from yggdrasil.graph import browse_content
+
+            paths = browse_content.field_map_for_element(summary, field_map)
+            label = browse_content.format_node_label_from_paths(summary, paths)
+        cytoscape_elements.append(
+            {
+                "data": {
+                    "id": str(el.pk),
+                    "label": label,
+                    "stereotype": el.stereotype.name if el.stereotype_id else "",
+                }
             }
-        }
-        for el in elements
-    ]
+        )
     rels = Relationship.objects.filter(
         model=ymodel, source_id__in=id_set, target_id__in=id_set
     ).select_related("stereotype")
+    if relationship_stereotypes:
+        rels = rels.filter(stereotype__slug__in=[s.lower() for s in relationship_stereotypes])
     cytoscape_edges = [
         {
             "data": {
@@ -599,9 +642,13 @@ def subgraph_for_elements(
     stereotype: str | None = None,
     package: str | None = None,
     health: str | None = None,
+    packages: tuple[str, ...] = (),
+    stereotypes: tuple[str, ...] = (),
+    relationship_stereotypes: tuple[str, ...] = (),
     element_ids: list[int] | None = None,
     depth: int = DEFAULT_DEPTH,
     user_id: int | None = None,
+    field_map: dict[str, list[str]] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """
     Build a Cytoscape-compatible subgraph for filtered elements.
@@ -660,8 +707,12 @@ def subgraph_for_elements(
         stereotype=stereotype,
         package=package,
         health=health,
+        packages=packages,
+        stereotypes=stereotypes,
+        relationship_stereotypes=relationship_stereotypes,
         depth=depth,
         user_id=user_id,
+        field_map=field_map,
     )
     logger.info(
         "browse_service.subgraph_for_elements | exit model_slug=%s node_count=%s edge_count=%s user_id=%s",
@@ -765,14 +816,20 @@ def _relationship_inspector_detail(rel: Relationship) -> dict[str, Any]:
 def _filtered_queryset(ymodel: YggdrasilModel, filters: BrowseFilters) -> QuerySet[Element]:
     """Apply browse filters to an element queryset."""
     qs = Element.objects.filter(model=ymodel).select_related("stereotype", "package")
-    if filters.stereotype:
+    if filters.packages:
+        slugs = [pkg.lower() for pkg in filters.packages]
+        qs = qs.filter(Q(package__slug__in=slugs) | Q(package__name__in=slugs))
+    elif filters.package:
+        qs = qs.filter(
+            Q(package__slug__iexact=filters.package) | Q(package__name__iexact=filters.package)
+        )
+    if filters.stereotypes:
+        slugs = [st.lower() for st in filters.stereotypes]
+        qs = qs.filter(Q(stereotype__slug__in=slugs) | Q(stereotype__name__in=slugs))
+    elif filters.stereotype:
         qs = qs.filter(
             Q(stereotype__slug__iexact=filters.stereotype)
             | Q(stereotype__name__iexact=filters.stereotype)
-        )
-    if filters.package:
-        qs = qs.filter(
-            Q(package__slug__iexact=filters.package) | Q(package__name__iexact=filters.package)
         )
     if filters.health:
         qs = qs.filter(health__iexact=filters.health)

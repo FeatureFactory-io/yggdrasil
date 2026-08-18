@@ -164,15 +164,15 @@ New file: `docs/features/act-2-view/view-browse-content.feature`
 |----|----------|--------|
 | 69 | Filters panel shows field sections when stereotypes selected | AT |
 | 70 | Default field_map labels nodes with name only | AT + E2E |
-| 71 | Toggling owner field shows `Owner: …` inside node label | AT + E2E @wip |
+| 71 | Toggling owner field shows `Owner: …` inside node label | AT + E2E |
 | 72 | `field_component=owner` in URL applies without named View | AT |
-| 73 | Save View persists field_map in BrowseView payload | AT @wip |
-| 74 | Load named View restores in-node labels and table columns | AT + E2E @wip |
-| 75 | Viewport restored on load when saved with include flag (graph) | E2E @wip |
-| 76 | Viewport not applied when presentation is table | AT @wip |
+| 73 | Save View persists field_map in BrowseView payload | AT |
+| 74 | Load named View restores in-node labels and table columns | AT + E2E |
+| 75 | Viewport restored on load when saved with include flag (graph) | AT + E2E |
+| 76 | Viewport not applied when presentation is table | AT |
 | 77 | Package change narrows stereotype options (cascade) | AT |
-| 78 | Priya toggles field checkboxes and applies filters | AT + E2E @wip |
-| 79 | Save View persists custom field_map | AT @wip |
+| 78 | Priya toggles field checkboxes and applies filters | AT |
+| 79 | Save View persists custom field_map | AT |
 
 Scenarios 61–68 in `view-browse-views.feature` gain notes that 73–74 extend to content/viewport after W15.
 

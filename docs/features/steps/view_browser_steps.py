@@ -879,6 +879,22 @@ def step_priya_reloads_view(context, name: str) -> None:
     step_priya_selects_view(context, name)
 
 
+@then('graph node "{slug}" is centered in the canvas viewport')
+def step_graph_node_centered_in_viewport(context, slug: str) -> None:
+    """Assert saved View carries viewport focus and reload embeds it for graph mode."""
+    user = _current_user(context)
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    view = BrowseView.objects.filter(model__slug=model_slug, owner=user).latest("created_at")
+    viewport = view.payload.get("viewport") or {}
+    assert (
+        viewport.get("center_element_id") == slug
+    ), f"Expected viewport center_element_id={slug!r}, got {viewport!r}"
+    body = context.response.content.decode()
+    assert "loaded-viewport" in body, "Graph reload should embed viewport JSON script"
+    assert slug in body, f"Expected {slug!r} in embedded viewport JSON"
+    logger.info("Viewport for %s persisted and embedded on reload", slug)
+
+
 @given('Priya has panned and zoomed the graph to focus element "{slug}"')
 def step_priya_panned_zoomed_to_element(context, slug: str) -> None:
     """Record simulated viewport state for save-viewport scenario."""

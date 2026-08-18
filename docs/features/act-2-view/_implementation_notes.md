@@ -31,7 +31,7 @@
 | 48–54 | **W12 implemented** | AT + E2E | Model switcher; canonical `/models/{slug}/views/` |
 | 55–60 | **W13 shipped** | AT + E2E | Depth slider + BFS subgraph |
 | 61–68 | **W14 shipped** | AT green | Named Views — BrowseView save/load, `browse_view=`, `mode=` |
-| 69–79 | **W15 shipped** | AT green (75 E2E @wip) | Filters-first `field_map`, in-node labels, viewport payload |
+| 69–79 | **W15 shipped** | AT + E2E green | Filters-first `field_map`, in-node labels, viewport payload |
 
 ---
 

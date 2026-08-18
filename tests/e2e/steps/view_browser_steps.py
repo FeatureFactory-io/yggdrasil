@@ -18,6 +18,7 @@ import logging
 from behave import given, then, when
 from django.contrib.auth.models import Group
 from django.urls import reverse
+from django.utils.text import slugify
 from tests.fixtures.factories import UserFactory
 from tests.fixtures.view_browser import (
     _PAYMENT_RELATIONSHIPS,
@@ -272,12 +273,14 @@ def step_focus_graph_element_e2e(context, slug: str) -> None:
 
 @when('she saves the current view as "{name}" including viewport')
 def step_save_view_with_viewport_e2e(context, name: str) -> None:
-    """Open save modal, opt in to viewport, and submit."""
+    """Open filters panel, save modal, opt in to viewport, and submit."""
+    context.page.get_by_test_id("filters-toggle").click()
     context.page.get_by_test_id("save-view-btn").click()
     context.page.get_by_test_id("save-view-include-viewport").check()
     context.page.get_by_test_id("save-view-name-input").fill(name)
     context.page.get_by_test_id("save-view-confirm-btn").click()
     context.page.wait_for_load_state("networkidle")
+    assert f"browse_view={slugify(name)}" in context.page.url
     logger.info("E2E saved view %s with viewport url=%s", name, context.page.url)
 
 

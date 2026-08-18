@@ -7,7 +7,6 @@ Feature: VIEW-BROWSE-1 View Browser — saved viewport restore (E2E)
     Given Priya is logged in for View Browser E2E
     And the view browser explorer fixture is seeded for E2E
 
-  @wip
   Scenario: VIEW-BROWSE-1-75 Saved viewport restores after layout fit in graph mode
     Given Priya is on the View Browser for model "yggdrasil"
     When she focuses graph element "munin" with zoom and pan

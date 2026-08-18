@@ -71,7 +71,6 @@ Feature: VIEW-BROWSE-1 View Browser — Content via Filters panel (Views v2)
     When Priya selects View "Application components" from the Views dropdown
     Then graph node "auth" displays label containing "Owner: platform-team"
 
-  @wip
   Scenario: VIEW-BROWSE-1-75 Saved viewport restores after layout fit in graph mode
     Given Priya is on the View Browser in graph mode
     And Priya has panned and zoomed the graph to focus element "munin"

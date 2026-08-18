@@ -82,3 +82,34 @@ def test_parse_field_map_log_story(caplog) -> None:
         where="browse_content.parse_field_map_from_query",
         beats={"processing": ["field_stereotypes=", "field_path_count="]},
     )
+
+
+def test_format_node_label_log_story(caplog) -> None:
+    """W15 log story: format_node_label_from_paths logs element_id and path_count."""
+    element = {"id": 42, "name": "auth", "owner": "platform-team"}
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph"):
+        browse_content.format_node_label_from_paths(element, ["name", "owner"])
+    assert_log_story(
+        caplog,
+        where="browse_content.format_node_label_from_paths",
+        beats={"processing": ["element_id=", "path_count="]},
+    )
+
+
+def test_browse_content_log_story_happy(caplog) -> None:
+    """W15 log story alias: parse_field_map covers field_map resolution beats."""
+    request = RequestFactory().get(
+        "/models/yggdrasil/views/",
+        [
+            ("field_component", "name"),
+            ("field_component", "owner"),
+        ],
+    )
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph"):
+        field_map = browse_content.parse_field_map_from_query(request.GET)
+    assert field_map["component"] == ["name", "owner"]
+    assert_log_story(
+        caplog,
+        where="browse_content.parse_field_map_from_query",
+        beats={"processing": ["field_stereotypes=", "field_path_count="]},
+    )

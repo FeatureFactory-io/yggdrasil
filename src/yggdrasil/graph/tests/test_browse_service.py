@@ -338,6 +338,23 @@ def test_bfs_subgraph_log_story_happy(view_browser_model, caplog) -> None:
 
 
 @pytest.mark.django_db
+def test_format_node_label_log_story_happy(view_browser_explorer_model, caplog) -> None:
+    """W15 log story: field_map label formatting logs element_id and path_count."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph"):
+        browse_service.subgraph_from_roots(
+            model_slug="yggdrasil",
+            depth=2,
+            stereotypes=("component",),
+            field_map={"component": ["name", "owner"]},
+        )
+    assert_log_story(
+        caplog,
+        where="browse_service.format_node_label",
+        beats={"processing": ["element_id=", "path_count="]},
+    )
+
+
+@pytest.mark.django_db
 def test_bfs_subgraph_log_story_reject(view_browser_model, caplog) -> None:
     """W13: invalid depth logs error beat."""
     with (

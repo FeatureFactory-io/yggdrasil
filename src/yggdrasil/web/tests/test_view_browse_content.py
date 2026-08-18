@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 from django.http import QueryDict
 from django.urls import reverse
+from tests.support.log_story import assert_log_story
 
 from yggdrasil.graph import browse_view_service
 from yggdrasil.graph.models import BrowseView
@@ -177,4 +180,30 @@ def test_package_scoped_stereotypes_exclude_context_person(
     assert (
         'value="person"'
         not in body.split('data-testid="filter-stereotype"')[1].split("</select>")[0]
+    )
+
+
+@pytest.mark.django_db
+def test_view_browse_content_log_story_happy(
+    client, view_browser_user, view_browser_explorer_model, caplog
+):
+    """W15 log story: graph JSON exit includes field_map_stereotypes and node_count."""
+    client.force_login(view_browser_user)
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        response = client.get(
+            _graph_url(),
+            [
+                ("stereotype", "component"),
+                ("field_component", "name"),
+                ("field_component", "owner"),
+                ("depth", "2"),
+            ],
+        )
+    assert response.status_code == 200
+    assert_log_story(
+        caplog,
+        where="ViewBrowseGraphJsonView.get",
+        beats={
+            "exit": ["field_map_stereotypes=", "node_count="],
+        },
     )

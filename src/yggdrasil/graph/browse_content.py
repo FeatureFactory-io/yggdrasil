@@ -143,6 +143,12 @@ def format_node_label_from_paths(element: dict[str, Any], field_paths: list[str]
         if not value:
             continue
         lines.append(f"{field_path_label(path)}: {value}")
+    element_id = element.get("id", "")
+    logger.info(
+        "browse_content.format_node_label_from_paths | processing | element_id=%s path_count=%s",
+        element_id,
+        len(field_paths),
+    )
     if lines:
         return "\n".join(lines)
     name = element_field_value(element, "name") or "—"

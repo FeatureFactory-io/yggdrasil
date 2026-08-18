@@ -27,6 +27,7 @@ from yggdrasil.web.browse_helpers import (
     enrich_confidence_fields,
     parse_browse_params_from_post,
     parse_view_browse_params,
+    require_authenticated_user,
     user_can_save_views,
 )
 
@@ -89,8 +90,9 @@ class ViewBrowseRedirectView(LoginRequiredMixin, View):
         :return: 302 redirect or empty-state HTML.
         """
         logger.info("ViewBrowseRedirectView.get | entry | user_pk=%s", request.user.pk)
+        user = require_authenticated_user(request.user)
         cookie_value = request.COOKIES.get(browse_service.MODEL_COOKIE_NAME)
-        default_slug = browse_service.resolve_default_model_slug(request.user, cookie_value)
+        default_slug = browse_service.resolve_default_model_slug(user, cookie_value)
         if default_slug is None:
             logger.info(
                 "ViewBrowseRedirectView.get | branch | user_pk=%s empty_state=true",
@@ -134,8 +136,9 @@ class ViewBrowseView(LoginRequiredMixin, View):
             request.user.pk,
             model_slug,
         )
+        user = require_authenticated_user(request.user)
         try:
-            ymodel = browse_service.user_can_read_model(request.user, model_slug)
+            ymodel = browse_service.user_can_read_model(user, model_slug)
         except ValueError as exc:
             logger.info(
                 "ViewBrowseView.get | validation | user_pk=%s model not found slug=%s",
@@ -152,7 +155,7 @@ class ViewBrowseView(LoginRequiredMixin, View):
             raise Http404("Model not found") from exc
 
         params = parse_view_browse_params(request, model_slug)
-        params = apply_browse_view_expansion(request, request.user, ymodel, params)
+        params = apply_browse_view_expansion(request, user, ymodel, params)
         if params.browse_view:
             logger.info(
                 "ViewBrowseView.get | branch | browse_view=%s expanded=%s loaded_view_name=%s",
@@ -215,11 +218,14 @@ class ViewBrowseGraphJsonView(LoginRequiredMixin, View):
         :return: JSON ``{"elements": [...], "edges": [...]}``.
         """
         try:
-            ymodel = browse_service.user_can_read_model(request.user, model_slug)
+            ymodel = browse_service.user_can_read_model(
+                require_authenticated_user(request.user), model_slug
+            )
         except (ValueError, PermissionError) as exc:
             raise Http404("Model not found") from exc
         params = parse_view_browse_params(request, model_slug)
-        params = apply_browse_view_expansion(request, request.user, ymodel, params)
+        user = require_authenticated_user(request.user)
+        params = apply_browse_view_expansion(request, user, ymodel, params)
         payload = browse_service.subgraph_for_elements(
             model_slug=params.model_slug,
             stereotype=params.stereotype,
@@ -229,13 +235,13 @@ class ViewBrowseGraphJsonView(LoginRequiredMixin, View):
             stereotypes=params.element_stereotypes,
             relationship_stereotypes=params.relationship_stereotypes,
             depth=params.depth,
-            user_id=request.user.pk,
+            user_id=user.pk,
             field_map={slug: list(paths) for slug, paths in params.field_map.items()},
         )
         logger.info(
-            "ViewBrowseGraphJsonView.get | user_pk=%s depth=%s nodes=%s edges=%s",
-            request.user.pk,
-            params.depth,
+            "ViewBrowseGraphJsonView.get | exit | user_pk=%s field_map_stereotypes=%s node_count=%s edges=%s",
+            user.pk,
+            len(params.field_map),
             len(payload["elements"]),
             len(payload["edges"]),
         )
@@ -256,15 +262,16 @@ class ViewBrowseInspectorElementView(LoginRequiredMixin, View):
         :param pk: Element primary key.
         :return: HTML partial without page chrome.
         """
+        user = require_authenticated_user(request.user)
         try:
-            ymodel = browse_service.user_can_read_model(request.user, model_slug)
+            ymodel = browse_service.user_can_read_model(user, model_slug)
             Element.objects.get(pk=pk, model=ymodel)
         except (ValueError, PermissionError) as exc:
             raise Http404("Model not found") from exc
         except Element.DoesNotExist as exc:
             raise Http404("Element not found") from exc
         try:
-            payload = browse_service.get_element_for_inspector(pk, user_id=request.user.pk)
+            payload = browse_service.get_element_for_inspector(pk, user_id=user.pk)
         except Element.DoesNotExist as exc:
             raise Http404("Element not found") from exc
         element = enrich_confidence_fields(payload["element"])
@@ -297,12 +304,13 @@ class ViewBrowseInspectorRelationshipView(LoginRequiredMixin, View):
         :param pk: Relationship primary key.
         :return: HTML partial without page chrome.
         """
+        user = require_authenticated_user(request.user)
         try:
-            ymodel = browse_service.user_can_read_model(request.user, model_slug)
+            ymodel = browse_service.user_can_read_model(user, model_slug)
         except (ValueError, PermissionError) as exc:
             raise Http404("Model not found") from exc
         try:
-            detail = browse_service.get_relationship_for_inspector(pk, user_id=request.user.pk)
+            detail = browse_service.get_relationship_for_inspector(pk, user_id=user.pk)
         except Relationship.DoesNotExist as exc:
             raise Http404("Relationship not found") from exc
         if not Relationship.objects.filter(pk=pk, model=ymodel).exists():
@@ -310,7 +318,7 @@ class ViewBrowseInspectorRelationshipView(LoginRequiredMixin, View):
         relationship = enrich_confidence_fields(detail)
         logger.info(
             "ViewBrowseInspectorRelationshipView.get | user_pk=%s relationship_id=%s",
-            request.user.pk,
+            user.pk,
             pk,
         )
         return render(request, self.template_name, {"relationship": relationship})
@@ -327,19 +335,20 @@ class ViewBrowseSaveView(LoginRequiredMixin, View):
         :param model_slug: Model slug from the URL path.
         :return: Redirect to ``?browse_view={slug}`` on success.
         """
+        user = require_authenticated_user(request.user)
         logger.info(
             "ViewBrowseSaveView.post | entry | user_pk=%s model_slug=%s",
-            request.user.pk,
+            user.pk,
             model_slug,
         )
-        if not user_can_save_views(request.user):
+        if not user_can_save_views(user):
             logger.info(
                 "ViewBrowseSaveView.post | validation | user_pk=%s reason=not_architect",
-                request.user.pk,
+                user.pk,
             )
             raise Http404("Not found")
         try:
-            ymodel = browse_service.user_can_read_model(request.user, model_slug)
+            ymodel = browse_service.user_can_read_model(user, model_slug)
         except (ValueError, PermissionError) as exc:
             raise Http404("Model not found") from exc
 
@@ -348,7 +357,7 @@ class ViewBrowseSaveView(LoginRequiredMixin, View):
         payload = build_payload_from_browse_params(params)
         try:
             saved = browse_view_service.save_view(
-                request.user,
+                user,
                 ymodel,
                 name=name,
                 payload=payload,
@@ -356,7 +365,7 @@ class ViewBrowseSaveView(LoginRequiredMixin, View):
         except ValidationError as exc:
             logger.info(
                 "ViewBrowseSaveView.post | validation | user_pk=%s model_slug=%s reason=%s",
-                request.user.pk,
+                user.pk,
                 model_slug,
                 exc.message_dict,
             )
@@ -368,7 +377,7 @@ class ViewBrowseSaveView(LoginRequiredMixin, View):
         )
         logger.info(
             "ViewBrowseSaveView.post | exit | user_pk=%s model_slug=%s slug=%s",
-            request.user.pk,
+            user.pk,
             model_slug,
             saved.slug,
         )
@@ -387,24 +396,25 @@ class ViewBrowseDeleteView(LoginRequiredMixin, View):
         :param view_slug: Saved View slug to delete.
         :return: Redirect to unfiltered browse URL.
         """
+        user = require_authenticated_user(request.user)
         logger.info(
             "ViewBrowseDeleteView.post | entry | user_pk=%s model_slug=%s view_slug=%s",
-            request.user.pk,
+            user.pk,
             model_slug,
             view_slug,
         )
-        if not user_can_save_views(request.user):
+        if not user_can_save_views(user):
             raise Http404("Not found")
         try:
-            ymodel = browse_service.user_can_read_model(request.user, model_slug)
+            ymodel = browse_service.user_can_read_model(user, model_slug)
         except (ValueError, PermissionError) as exc:
             raise Http404("Model not found") from exc
         try:
-            browse_view_service.delete_view(request.user, ymodel, view_slug)
+            browse_view_service.delete_view(user, ymodel, view_slug)
         except PermissionError as exc:
             logger.info(
                 "ViewBrowseDeleteView.post | validation | user_pk=%s view_slug=%s reason=not_owner",
-                request.user.pk,
+                user.pk,
                 view_slug,
             )
             raise Http404("Not found") from exc

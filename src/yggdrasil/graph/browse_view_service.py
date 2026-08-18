@@ -16,7 +16,7 @@ from django.utils.text import slugify
 from yggdrasil.graph.models import BrowseView, YggdrasilModel
 
 if TYPE_CHECKING:
-    from django.contrib.auth.models import AbstractBaseUser
+    from django.contrib.auth.models import User
     from django.db.models import QuerySet
 
 logger = logging.getLogger("yggdrasil.graph")
@@ -83,7 +83,7 @@ def validate_payload_v1(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def save_view(
-    user: AbstractBaseUser,
+    user: User,
     model: YggdrasilModel,
     name: str,
     payload: dict[str, Any],
@@ -141,7 +141,7 @@ def save_view(
     return view
 
 
-def list_views(user: AbstractBaseUser, model: YggdrasilModel) -> QuerySet[BrowseView]:
+def list_views(user: User, model: YggdrasilModel) -> QuerySet[BrowseView]:
     """
     List saved Views owned by ``user`` on ``model``.
 
@@ -153,7 +153,7 @@ def list_views(user: AbstractBaseUser, model: YggdrasilModel) -> QuerySet[Browse
 
 
 def resolve_view_for_load(
-    user: AbstractBaseUser,
+    user: User,
     model: YggdrasilModel,
     slug: str,
 ) -> BrowseView | None:
@@ -179,7 +179,7 @@ def resolve_view_for_load(
     return shared
 
 
-def get_view(user: AbstractBaseUser, model: YggdrasilModel, slug: str) -> BrowseView:
+def get_view(user: User, model: YggdrasilModel, slug: str) -> BrowseView:
     """
     Load a saved View by slug for the given owner and Model.
 
@@ -192,7 +192,7 @@ def get_view(user: AbstractBaseUser, model: YggdrasilModel, slug: str) -> Browse
     return BrowseView.objects.get(model=model, owner=user, slug=slug)
 
 
-def delete_view(user: AbstractBaseUser, model: YggdrasilModel, slug: str) -> None:
+def delete_view(user: User, model: YggdrasilModel, slug: str) -> None:
     """
     Delete a saved View; owner-only (Views v1 Q3).
 

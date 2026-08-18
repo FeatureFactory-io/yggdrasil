@@ -9,8 +9,10 @@ from django.test import RequestFactory
 from tests.fixtures.factories import UserFactory
 from tests.support.log_story import assert_log_story
 
+from yggdrasil.graph import browse_view_service
 from yggdrasil.web.browse_helpers import (
     DEFAULT_VIEW_MODE,
+    apply_browse_view_expansion,
     build_package_tree,
     build_traversal_tree,
     build_view_browse_context,
@@ -67,6 +69,64 @@ def test_parse_legacy_view_query_param_fallback() -> None:
     request = RequestFactory().get("/models/yggdrasil/views/", {"view": "table"})
     params = parse_view_browse_params(request, "yggdrasil")
     assert params.view_mode == "table"
+
+
+def test_parse_view_browse_params_log_story_happy(caplog) -> None:
+    """W15 log story: parse_view_browse_params logs field_map counts."""
+    request = RequestFactory().get(
+        "/models/yggdrasil/views/",
+        [("field_component", "name"), ("field_component", "owner")],
+    )
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        parse_view_browse_params(request, "yggdrasil")
+    assert_log_story(
+        caplog,
+        where="browse_helpers.parse_view_browse_params",
+        beats={"processing": ["field_stereotypes=", "field_path_count="]},
+    )
+
+
+@pytest.mark.django_db
+def test_apply_browse_view_expansion_log_story_happy(view_browser_model, caplog) -> None:
+    """W14/W15 log story: browse_view expansion resolves field_map from payload."""
+    owner = UserFactory(is_architect=True)
+    browse_view_service.save_view(
+        owner,
+        view_browser_model,
+        name="Field map view",
+        payload={
+            "filters": {
+                "packages": [],
+                "element_stereotypes": ["component"],
+                "relationship_stereotypes": [],
+            },
+            "levels": {"depth": 2},
+            "presentation": "graph",
+            "content": {"field_map": {"component": ["name", "owner"]}},
+        },
+    )
+    request = RequestFactory().get(
+        "/models/yggdrasil/views/",
+        {"browse_view": "field-map-view"},
+    )
+    request.user = owner
+    params = parse_view_browse_params(request, "yggdrasil")
+    with caplog.at_level(logging.INFO):
+        merged = apply_browse_view_expansion(request, owner, view_browser_model, params)
+    assert merged.loaded_view_name == "Field map view"
+    assert_log_story(
+        caplog,
+        where="browse_helpers.apply_browse_view_expansion",
+        beats={
+            "entry": ["browse_view=", "model_slug=", "user_pk="],
+            "exit": ["expanded=true", "depth="],
+        },
+    )
+    assert_log_story(
+        caplog,
+        where="browse_content.resolve_field_map",
+        beats={"processing": ["source=payload", "field_stereotypes=", "field_path_count="]},
+    )
 
 
 def test_build_traversal_tree_nests_children() -> None:

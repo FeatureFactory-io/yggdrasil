@@ -112,6 +112,27 @@ def test_view_browse_save_log_story_happy(client, view_browser_user, view_browse
 
 
 @pytest.mark.django_db
+def test_view_browse_load_log_story_happy(client, view_browser_user, view_browser_model, caplog):
+    """W14 log story: ViewBrowseView.get branch when browse_view expanded."""
+    browse_view_service.save_view(
+        view_browser_user,
+        view_browser_model,
+        name="Payment review",
+        payload=_payload_v1(package="technology", depth=2),
+    )
+    client.force_login(view_browser_user)
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        client.get(_browse_url(), {"browse_view": "payment-review"})
+    assert_log_story(
+        caplog,
+        where="ViewBrowseView.get",
+        beats={
+            "branch": ["browse_view=", "expanded="],
+        },
+    )
+
+
+@pytest.mark.django_db
 def test_delete_view_post_removes_browse_view(client, view_browser_user, view_browser_model):
     """VIEW-BROWSE-1-66: owner POST delete removes View from catalog."""
     saved = browse_view_service.save_view(

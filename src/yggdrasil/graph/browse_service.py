@@ -17,7 +17,7 @@ from django.db.models import Q, QuerySet
 from yggdrasil.graph.models import Element, Package, Relationship, Stereotype, YggdrasilModel
 
 if TYPE_CHECKING:
-    from django.contrib.auth.models import AbstractBaseUser
+    from django.contrib.auth.models import User
 
 logger = logging.getLogger("yggdrasil.graph.browse")
 
@@ -64,7 +64,7 @@ class DepthSubgraph:
     root_ids: frozenset[int]
 
 
-def list_readable_models(user: AbstractBaseUser) -> QuerySet[YggdrasilModel]:
+def list_readable_models(user: User) -> QuerySet[YggdrasilModel]:
     """
     Return Models the signed-in user may read for the View Browser switcher.
 
@@ -92,7 +92,7 @@ def list_readable_models(user: AbstractBaseUser) -> QuerySet[YggdrasilModel]:
 
 
 def resolve_default_model_slug(
-    user: AbstractBaseUser,
+    user: User,
     cookie_value: str | None,
 ) -> str | None:
     """
@@ -141,7 +141,7 @@ def resolve_default_model_slug(
     return slug
 
 
-def user_can_read_model(user: AbstractBaseUser, model_slug: str) -> YggdrasilModel:
+def user_can_read_model(user: User, model_slug: str) -> YggdrasilModel:
     """
     Resolve a Model slug and verify the user may read it.
 
@@ -558,6 +558,11 @@ def subgraph_from_roots(
 
             paths = browse_content.field_map_for_element(summary, field_map)
             label = browse_content.format_node_label_from_paths(summary, paths)
+            logger.info(
+                "browse_service.format_node_label | processing | element_id=%s path_count=%s",
+                el.pk,
+                len(paths),
+            )
         cytoscape_elements.append(
             {
                 "data": {

@@ -8,13 +8,14 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from django.contrib.auth.models import AbstractBaseUser
+    from django.contrib.auth.models import AbstractBaseUser, AnonymousUser, User
     from django.http import HttpRequest
 
-    from yggdrasil.graph.models import YggdrasilModel
+    from yggdrasil.graph.models import BrowseView, YggdrasilModel
 
 from urllib.parse import urlencode
 
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 
 from yggdrasil.graph import browse_content, browse_service, browse_view_service
@@ -22,6 +23,21 @@ from yggdrasil.graph import browse_content, browse_service, browse_view_service
 logger = logging.getLogger("yggdrasil.web")
 
 PACKAGE_DISPLAY_ORDER = ("context", "application", "technology", "code")
+
+
+def require_authenticated_user(user: AbstractBaseUser | AnonymousUser) -> User:
+    """
+    Narrow ``request.user`` for service calls under LoginRequired views.
+
+    :param user: Django request user (authenticated or anonymous).
+    :return: Authenticated user instance.
+    :raises ValueError: When ``user`` is anonymous.
+    """
+    if not user.is_authenticated:
+        msg = "Authenticated user required"
+        raise ValueError(msg)
+    user_model = get_user_model()
+    return user_model.objects.get(pk=user.pk)
 
 
 CONFIDENCE_BAND_THRESHOLDS: tuple[tuple[float, str], ...] = (
@@ -114,11 +130,8 @@ def _get_query_list(query: Any, key: str) -> tuple[str, ...]:
     getlist = getattr(query, "getlist", None)
     if getlist is None:
         raw = query.get(key)
-        return (
-            (_blank_to_none(str(raw)),)
-            if _blank_to_none(str(raw) if raw is not None else None)
-            else ()
-        )
+        normalized = _blank_to_none(str(raw) if raw is not None else None)
+        return (normalized,) if normalized else ()
     values = [_blank_to_none(item) for item in getlist(key)]
     return tuple(item for item in values if item)
 
@@ -141,6 +154,12 @@ def parse_view_browse_params(request: HttpRequest, model_slug: str) -> ViewBrows
     packages = _get_query_list(request.GET, "package")
     element_stereotypes = _get_query_list(request.GET, "stereotype")
     relationship_stereotypes = _get_query_list(request.GET, "edge_stereotype")
+    field_map = _field_map_from_query(request.GET)
+    logger.info(
+        "browse_helpers.parse_view_browse_params | processing | field_stereotypes=%s field_path_count=%s",
+        len(field_map),
+        sum(len(paths) for paths in field_map.values()),
+    )
     return ViewBrowseParams(
         model_slug=model_slug,
         packages=packages,
@@ -150,13 +169,13 @@ def parse_view_browse_params(request: HttpRequest, model_slug: str) -> ViewBrows
         as_of=_blank_to_none(request.GET.get("as_of")),
         view_mode=view_mode,
         depth=_parse_depth(request.GET.get("depth")),
-        field_map=_field_map_from_query(request.GET),
+        field_map=field_map,
     )
 
 
 def apply_browse_view_expansion(
     request: HttpRequest,
-    user: AbstractBaseUser,
+    user: User,
     ymodel: YggdrasilModel,
     params: ViewBrowseParams,
 ) -> ViewBrowseParams:
@@ -202,7 +221,18 @@ def apply_browse_view_expansion(
     if request.GET.get("depth") is None:
         depth = int(expanded.get("depth", [str(params.depth)])[0])
     query_field_map = _field_map_from_query(request.GET)
-    field_map = query_field_map if query_field_map else _field_map_from_expanded(expanded)
+    if query_field_map:
+        field_map = query_field_map
+        field_source = "query"
+    else:
+        field_map = _field_map_from_expanded(expanded)
+        field_source = "payload"
+    logger.info(
+        "browse_content.resolve_field_map | processing | source=%s field_stereotypes=%s field_path_count=%s",
+        field_source,
+        len(field_map),
+        sum(len(paths) for paths in field_map.values()),
+    )
     viewport = params.viewport
     if not query_field_map:
         viewport = _viewport_from_expanded(expanded) or viewport
@@ -254,7 +284,7 @@ def _viewport_from_expanded(expanded: dict[str, list[str]]) -> dict[str, Any] | 
     return parsed if isinstance(parsed, dict) else None
 
 
-def user_can_save_views(user: AbstractBaseUser) -> bool:
+def user_can_save_views(user: User) -> bool:
     """
     Return whether ``user`` may save or delete named Views (architect role).
 
@@ -266,7 +296,7 @@ def user_can_save_views(user: AbstractBaseUser) -> bool:
     return user.groups.filter(name="architect").exists()
 
 
-def build_payload_from_browse_params(params: ViewBrowseParams) -> dict:
+def build_payload_from_browse_params(params: ViewBrowseParams) -> dict[str, Any]:
     """
     Build a BrowseView payload v1 from current browse params.
 
@@ -314,7 +344,9 @@ def build_empty_browse_context(request: HttpRequest) -> dict[str, Any]:
     :param request: Authenticated request.
     :return: Empty browse context with switcher disabled.
     """
-    readable_models = list(browse_service.list_readable_models(request.user))
+    readable_models = list(
+        browse_service.list_readable_models(require_authenticated_user(request.user))
+    )
     logger.info(
         "build_empty_browse_context | user_pk=%s readable_count=%s",
         request.user.pk,
@@ -431,11 +463,14 @@ def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) ->
     :param params: Parsed browse parameters.
     :return: Context dict[str, Any] with elements, packages, filter options, and active filters.
     """
-    readable_models = list(browse_service.list_readable_models(request.user))
+    readable_models = list(
+        browse_service.list_readable_models(require_authenticated_user(request.user))
+    )
     switcher_disabled = len(readable_models) <= 1
+    auth_user = require_authenticated_user(request.user)
     model_name = params.model_slug.title()
     ymodel = None
-    browse_views: list = []
+    browse_views: list[BrowseView] = []
     browse_view_entries: list[dict[str, Any]] = []
     field_map_dict = {slug: list(paths) for slug, paths in params.field_map.items()}
     view_field_sections = browse_content.build_view_field_sections(
@@ -451,7 +486,7 @@ def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) ->
     try:
         ymodel = browse_service.resolve_model(params.model_slug)
         model_name = ymodel.name
-        browse_views = list(browse_view_service.list_views(request.user, ymodel))
+        browse_views = list(browse_view_service.list_views(auth_user, ymodel))
         browse_view_entries = [_browse_view_entry(params.model_slug, view) for view in browse_views]
         scoped = browse_service.subgraph_from_roots(
             model_slug=params.model_slug,
@@ -513,7 +548,7 @@ def build_view_browse_context(request: HttpRequest, params: ViewBrowseParams) ->
         "no_models": False,
         "browse_views": browse_views,
         "browse_view_entries": browse_view_entries,
-        "can_save_views": user_can_save_views(request.user),
+        "can_save_views": user_can_save_views(auth_user),
         "view_field_sections": view_field_sections,
         "table_columns": table_columns,
         "loaded_viewport_json": params.viewport if params.view_mode == "graph" else None,

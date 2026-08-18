@@ -227,3 +227,62 @@ def test_save_browse_view_log_story_reject(browse_view_model, caplog) -> None:
             "validation": ["reason="],
         },
     )
+
+
+@pytest.mark.django_db
+def test_expand_browse_view_log_story_happy(browse_view_model, caplog) -> None:
+    """W14 log story: expand_to_query_params entry → exit with depth= and mode=."""
+    owner = UserFactory(is_architect=True)
+    saved = browse_view_service.save_view(
+        owner,
+        browse_view_model,
+        name="Tech stack",
+        payload=_sample_payload_v1(depth=3),
+    )
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph"):
+        browse_view_service.expand_to_query_params(saved)
+    assert_log_story(
+        caplog,
+        where="BrowseViewService.expand_to_query_params",
+        beats={
+            "entry": ["slug=", "model_slug=", "user_pk="],
+            "exit": ["depth=", "mode="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_delete_browse_view_log_story_happy(browse_view_model, caplog) -> None:
+    """W14 log story: delete_view exit with slug= and deleted=true."""
+    owner = UserFactory(is_architect=True)
+    saved = browse_view_service.save_view(
+        owner,
+        browse_view_model,
+        name="Temporary",
+        payload=_sample_payload_v1(),
+    )
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph"):
+        browse_view_service.delete_view(owner, browse_view_model, saved.slug)
+    assert_log_story(
+        caplog,
+        where="BrowseViewService.delete_view",
+        beats={
+            "exit": ["slug=", "deleted="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_resolve_view_for_load_log_story_not_found(browse_view_model, caplog) -> None:
+    """W14 log story: resolve_view_for_load branch when slug missing."""
+    owner = UserFactory(is_architect=True)
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph"):
+        result = browse_view_service.resolve_view_for_load(owner, browse_view_model, "missing-view")
+    assert result is None
+    assert_log_story(
+        caplog,
+        where="BrowseViewService.resolve_view_for_load",
+        beats={
+            "branch": ["reason=not_found"],
+        },
+    )

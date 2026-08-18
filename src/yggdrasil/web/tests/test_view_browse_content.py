@@ -22,6 +22,37 @@ def _graph_url(model_slug: str = "yggdrasil") -> str:
 
 
 @pytest.mark.django_db
+def test_filter_panel_lists_custom_property_schema_fields(
+    client, view_browser_user, view_browser_explorer_model
+):
+    """Regression #101: Filters panel exposes metamodel custom property paths."""
+    from yggdrasil.graph.models import Stereotype
+
+    Stereotype.objects.update_or_create(
+        metamodel=view_browser_explorer_model.metamodel,
+        slug="actor",
+        defaults={
+            "name": "Actor",
+            "is_edge": False,
+            "property_schema": {
+                "type": "object",
+                "properties": {
+                    "actor_id": {"type": "string", "title": "Actor ID"},
+                    "persona_name": {"type": "string"},
+                },
+            },
+        },
+    )
+    client.force_login(view_browser_user)
+    response = client.get(_browse_url(), {"stereotype": "actor"})
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'data-testid="view-fields-actor"' in body
+    assert 'data-testid="view-field-actor-properties.actor_id"' in body
+    assert 'data-testid="view-field-actor-properties.persona_name"' in body
+
+
+@pytest.mark.django_db
 def test_field_sections_render_when_stereotype_selected(
     client, view_browser_user, view_browser_explorer_model
 ):

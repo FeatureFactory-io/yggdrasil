@@ -15,6 +15,12 @@ from typing import TYPE_CHECKING, Any
 from django.db.models import Q, QuerySet
 
 from yggdrasil.graph.models import Element, Package, Relationship, Stereotype, YggdrasilModel
+from yggdrasil.graph.property_schema_fields import (
+    BASE_ELEMENT_FIELDS,
+    BASE_RELATIONSHIP_FIELDS,
+    inspector_property_rows,
+    merge_field_definitions,
+)
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -307,6 +313,50 @@ def list_filter_options(*, model_slug: str) -> dict[str, list[dict[str, str]]]:
         "relationship_stereotypes": relationship_stereotypes,
         "health": health,
     }
+
+
+def stereotype_field_catalog(*, model_slug: str) -> dict[str, list[dict[str, str]]]:
+    """
+    Build merged field definitions per stereotype slug from metamodel schemas.
+
+    :param model_slug: Model slug. Example: ``"yggdrasil-mvp"``.
+    :return: Stereotype slug → field rows for Filters panel checklists.
+    :raises ValueError: If model not found.
+    """
+    from yggdrasil.graph import browse_content
+
+    ymodel = resolve_model(model_slug)
+    catalog: dict[str, list[dict[str, str]]] = {}
+    for stereotype in Stereotype.objects.filter(metamodel=ymodel.metamodel):
+        static = browse_content.STEREOTYPE_FIELD_SCHEMA.get(stereotype.slug)
+        if static is None:
+            static = BASE_RELATIONSHIP_FIELDS if stereotype.is_edge else BASE_ELEMENT_FIELDS
+        catalog[stereotype.slug] = merge_field_definitions(static, stereotype.property_schema)
+    logger.info(
+        "browse_service.stereotype_field_catalog | exit | model_slug=%s stereotype_count=%s",
+        model_slug,
+        len(catalog),
+    )
+    return catalog
+
+
+def list_all_element_summaries(*, model_slug: str) -> list[dict[str, Any]]:
+    """
+    Return element summaries for every element in a model (navigator package view).
+
+    :param model_slug: Model slug.
+    :return: Sorted element summary dicts.
+    :raises ValueError: If model not found.
+    """
+    ymodel = resolve_model(model_slug)
+    elements = Element.objects.filter(model=ymodel).select_related("stereotype", "package")
+    summaries = [element_summary(el) for el in sorted(elements, key=lambda item: item.name)]
+    logger.info(
+        "browse_service.list_all_element_summaries | exit | model_slug=%s element_count=%s",
+        model_slug,
+        len(summaries),
+    )
+    return summaries
 
 
 def build_package_scoped_filter_options(
@@ -800,14 +850,21 @@ def get_element_for_inspector(element_id: int, *, user_id: int | None = None) ->
     for rel in incoming:
         relationships.append(_connected_relationship_row(rel, element.pk, outbound=False))
     relationships.sort(key=lambda row: (row["edge_stereotype"], row["other_name"]))
+    summary = element_summary(element)
+    schema = element.stereotype.property_schema if element.stereotype_id else None
+    summary["property_rows"] = inspector_property_rows(
+        properties=summary.get("properties"),
+        property_schema=schema,
+    )
     logger.info(
-        "browse_service.get_element_for_inspector | exit element_id=%s rel_count=%s user_id=%s",
+        "browse_service.get_element_for_inspector | exit element_id=%s rel_count=%s property_rows=%s user_id=%s",
         element_id,
         len(relationships),
+        len(summary["property_rows"]),
         user_id,
     )
     return {
-        "element": element_summary(element),
+        "element": summary,
         "relationships": relationships,
         "relationships_in": incoming.count(),
         "relationships_out": outgoing.count(),

@@ -1,14 +1,18 @@
 {# Recursive traversal tree node (W13) #}
-<div class="yrg-tree-node" data-element="{{ node.slug }}">
+<div class="yrg-tree-node" data-element="{{ node.slug }}"{% if node.is_package %} data-package="{{ node.slug }}"{% endif %}>
   {% if node.children %}
   <button type="button"
           class="yrg-package-toggle"
           data-bs-toggle="collapse"
           data-bs-target="#tree-{{ node.slug }}"
           aria-expanded="{% if node.expanded %}true{% else %}false{% endif %}"
-          data-testid="nav-toggle-{{ node.slug }}">
+          data-testid="{% if node.is_package %}package-toggle-{{ node.slug }}{% else %}nav-toggle-{{ node.slug }}{% endif %}">
     <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+    {% if node.is_package %}
+    <i class="fa-solid fa-folder text-warning" aria-hidden="true"></i>
+    {% else %}
     <i class="fa-solid fa-cube text-primary" aria-hidden="true"></i>
+    {% endif %}
     <span>{{ node.name }}</span>
     <span class="badge bg-secondary ms-auto" style="font-size:0.6rem;">{{ node.children|length }}</span>
   </button>

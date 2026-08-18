@@ -18,9 +18,14 @@
     <dd class="col-7">{{ element.package|default:"—" }}</dd>
     <dt class="col-5">Stereotype</dt>
     <dd class="col-7">{{ element.stereotype }}</dd>
+    {% for row in element.property_rows %}
+    <dt class="col-5" data-testid="inspector-property-key-{{ row.key }}">{{ row.label }}</dt>
+    <dd class="col-7" data-testid="inspector-property-value-{{ row.key }}">{{ row.value|default:"—" }}</dd>
+    {% empty %}
     {% for key, value in element.properties.items %}
     <dt class="col-5">{{ key }}</dt>
-    <dd class="col-7">{{ value }}</dd>
+    <dd class="col-7">{{ value|default:"—" }}</dd>
+    {% endfor %}
     {% endfor %}
   </dl>
 

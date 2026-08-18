@@ -439,6 +439,47 @@ def build_package_tree(elements: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return tree
 
 
+def build_package_navigator_roots(elements: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Convert flat element rows into package-grouped navigator roots.
+
+    :param elements: Element row dicts from browse_service summaries.
+    :return: Package nodes with child element rows expanded by default.
+    """
+    packages = build_package_tree(elements)
+    roots: list[dict[str, Any]] = []
+    for pkg in packages:
+        children = [{**element, "children": [], "expanded": False} for element in pkg["elements"]]
+        roots.append(
+            {
+                "name": pkg["name"],
+                "slug": pkg["slug"],
+                "id": f"pkg-{pkg['slug']}",
+                "children": children,
+                "expanded": True,
+                "is_package": True,
+            }
+        )
+    logger.info(
+        "build_package_navigator_roots | package_count=%s element_count=%s",
+        len(roots),
+        len(elements),
+    )
+    return roots
+
+
+def _should_use_package_navigator(params: ViewBrowseParams) -> bool:
+    """Return True when the navigator should show package buckets at default scope."""
+    return (
+        params.depth == browse_service.DEFAULT_DEPTH
+        and not params.packages
+        and not params.element_stereotypes
+        and not params.relationship_stereotypes
+        and params.stereotype is None
+        and params.package is None
+    )
+
+
 def build_traversal_tree(
     node_rows: list[dict[str, Any]],
     parent_map: dict[int, int | None],
@@ -519,10 +560,19 @@ def _content_panel_fields(
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]], dict[str, list[str]]]:
     """Build Filters panel field sections and dynamic table columns."""
     field_map_dict = {slug: list(paths) for slug, paths in params.field_map.items()}
+    stereotype_fields: dict[str, list[dict[str, str]]] = {}
+    if params.model_slug:
+        try:
+            stereotype_fields = browse_service.stereotype_field_catalog(
+                model_slug=params.model_slug
+            )
+        except ValueError:
+            stereotype_fields = {}
     view_field_sections = browse_content.build_view_field_sections(
         list(params.element_stereotypes),
         list(params.relationship_stereotypes),
         field_map_dict,
+        stereotype_fields,
     )
     table_columns = browse_content.build_table_columns(
         element_stereotypes=list(params.element_stereotypes),
@@ -611,10 +661,18 @@ def _load_browse_subgraph(
         elements = [
             _row_from_summary(item, table_columns, field_map_dict) for item in scoped.node_summaries
         ]
+        if _should_use_package_navigator(params):
+            nav_summaries = browse_service.list_all_element_summaries(model_slug=params.model_slug)
+            nav_rows = [
+                _row_from_summary(item, table_columns, field_map_dict) for item in nav_summaries
+            ]
+            traversal_roots = build_package_navigator_roots(nav_rows)
+        else:
+            traversal_roots = build_traversal_tree(elements, scoped.parent_map, scoped.root_ids)
         return _BrowseSubgraphContext(
             elements=elements,
             element_count=len(elements),
-            traversal_roots=build_traversal_tree(elements, scoped.parent_map, scoped.root_ids),
+            traversal_roots=traversal_roots,
             max_depth=scoped.max_depth,
             current_depth=params.depth,
             filter_options=options,

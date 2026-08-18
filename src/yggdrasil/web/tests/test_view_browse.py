@@ -173,7 +173,7 @@ def test_view_browser_subtitle_hides_internal_screen_id(
 
 @pytest.mark.django_db
 def test_default_view_shows_elements(client, view_browser_user, view_browser_model):
-    """VIEW-BROWSE-1-02: default depth=1 lists graph source elements."""
+    """VIEW-BROWSE-1-02: default depth=1 scopes canvas; navigator lists package elements."""
     client.force_login(view_browser_user)
     response = client.get(_browse_url())
     body = response.content.decode()
@@ -185,7 +185,8 @@ def test_default_view_shows_elements(client, view_browser_user, view_browser_mod
         "Fulfillment Worker",
     ):
         assert name in body
-    assert "Payment API" not in body
+    assert "4 elements visible" in body
+    assert 'data-testid="package-toggle-' in body
 
 
 @pytest.mark.django_db
@@ -324,6 +325,21 @@ def test_mode_query_param_replaces_view(client, view_browser_user, view_browser_
 
 
 @pytest.mark.django_db
+def test_default_navigator_shows_package_buckets(
+    client, view_browser_user, view_browser_explorer_model
+):
+    """Regression #102: default graph load groups navigator by top-level packages."""
+    client.force_login(view_browser_user)
+    response = client.get(GRAPH_URL)
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'data-testid="package-toggle-application"' in body
+    assert 'data-testid="package-toggle-context"' in body
+    assert 'data-testid="nav-element-auth"' in body
+    assert 'data-testid="nav-element-yggdrasil"' in body
+
+
+@pytest.mark.django_db
 def test_view_browser_navigator_element_tree(
     client, view_browser_user, view_browser_explorer_model
 ):
@@ -401,6 +417,8 @@ def test_inspector_element_partial_renders_properties(
 
     element = Element.objects.filter(model=view_browser_explorer_model, slug="munin").first()
     assert element is not None
+    element.properties = {"jira_key": "YGG-42", "persona_name": "Planner"}
+    element.save(update_fields=["properties"])
     client.force_login(view_browser_user)
     response = client.get(
         reverse(
@@ -413,6 +431,11 @@ def test_inspector_element_partial_renders_properties(
     assert f'data-testid="inspector-element-{element.pk}"' in body
     assert "munin" in body
     assert "Properties" in body
+    assert 'data-testid="inspector-property-key-jira_key"' in body
+    assert 'data-testid="inspector-property-value-jira_key"' in body
+    assert "YGG-42" in body
+    assert 'data-testid="inspector-property-key-persona_name"' in body
+    assert "Planner" in body
     assert "nav-view-browser" not in body
     assert f'data-testid="inspector-open-full-{element.pk}"' in body
     assert 'title="not Yet implemented"' in body

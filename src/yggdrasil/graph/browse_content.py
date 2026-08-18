@@ -204,14 +204,29 @@ def build_view_field_sections(
     element_stereotypes: list[str],
     relationship_stereotypes: list[str],
     selected_fields: dict[str, list[str]] | None = None,
+    stereotype_fields: dict[str, list[dict[str, str]]] | None = None,
 ) -> list[dict[str, Any]]:
     """Build stereotype-grouped field checklists for the Filters panel."""
     selected_fields = selected_fields or {}
+    catalog = stereotype_fields or {}
+
+    def _fields_for(slug: str, *, is_edge: bool) -> list[dict[str, str]]:
+        if slug in catalog:
+            return catalog[slug]
+        fallback = STEREOTYPE_FIELD_SCHEMA.get(slug)
+        if fallback:
+            return fallback
+        return (
+            [{"path": "stereotype", "label": "Stereotype"}]
+            if is_edge
+            else [{"path": "name", "label": "Name"}]
+        )
+
     element_sections = [
         _field_section(
             kind="element",
             slug=slug,
-            fields=STEREOTYPE_FIELD_SCHEMA.get(slug, [{"path": "name", "label": "Name"}]),
+            fields=_fields_for(slug, is_edge=False),
             selected_fields=selected_fields,
         )
         for slug in element_stereotypes
@@ -220,9 +235,7 @@ def build_view_field_sections(
         _field_section(
             kind="relationship",
             slug=slug,
-            fields=STEREOTYPE_FIELD_SCHEMA.get(
-                slug, [{"path": "stereotype", "label": "Stereotype"}]
-            ),
+            fields=_fields_for(slug, is_edge=True),
             selected_fields=selected_fields,
         )
         for slug in relationship_stereotypes

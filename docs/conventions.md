@@ -58,7 +58,7 @@ Every Screen ID must appear in:
 REST and MCP expose graph views via semantic paths:
 
 ```
-/models/{model_slug}/views/{package_slug}/{stereotype}?filter={json}&depth={n}&mode={graph|table}&content={preset-slug|custom}
+/models/{model_slug}/views/{package_slug}/{stereotype}?filter={json}&depth={n}&mode={graph|table}&field_{stereotype}={path}&field_{stereotype}={path2}
 /models/{model_slug}/views/?browse_view={slug}
 /elements/{id}
 /traverse?from={id}&depth={n}&as_of={iso8601}
@@ -68,9 +68,9 @@ REST and MCP expose graph views via semantic paths:
 
 **`mode` (View Browser presentation):** `graph` (three-panel explorer, default) or `table` (results grid). Replaces legacy `view=` query param (W14 migration).
 
-**`browse_view` (named View):** slug of a persisted `graph.BrowseView` for the current Model and signed-in user. Server expands to equivalent filter + depth + mode + content query string; applies saved viewport in graph mode when present in payload. Scoped to `(model, owner)` — not carried across Models.
+**`browse_view` (named View):** slug of a persisted `graph.BrowseView` for the current Model and signed-in user. Server expands to equivalent filter + depth + mode + `content.field_map` query string; applies saved viewport in graph mode when present in payload. Scoped to `(model, owner)` — not carried across Models.
 
-**`content` (Content preset / custom flag):** built-in preset slug (`minimal`, `current-state`, `jira-info`) or `custom` after field-by-field edits in the Content editor. Presets are shareable via live URL; **`custom`** signals that full `content.bindings` come from session (mockup) or named View payload (W15). Use **Edit content** to pick node primary/secondary fields, edge label, and table columns; **Save View** persists bindings.
+**`field_{stereotype}` (Content / visible fields):** repeated query param per active element or relationship stereotype slug; each value is a field path from `Stereotype.property_schema` (e.g. `field_component=name&field_component=owner`). Together they encode **`content.field_map`** for the live URL. Applying filters with explicit `field_*` params clears `browse_view` until a named View is re-loaded. Built-in Content presets (`minimal`, `current-state`, …) may seed defaults in W15 service helpers — there is **no preset picker** in the validated mockup UI. **Save View** persists the full `field_map` in `BrowseView.payload`.
 
 ### Important Guidelines
 

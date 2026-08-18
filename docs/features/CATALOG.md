@@ -189,13 +189,12 @@ And the element "element-list-page" should be visible
 | `When I GET "/models/{slug}/views/?browse_view={view_slug}"` | AT | Semantic URL expansion |
 | `When Priya deletes View "{name}"` | AT + E2E | Owner-only; removes from dropdown |
 | `Then a BrowseView "{slug}" exists for model "{slug}" owned by Priya` | AT | ORM assertion on payload |
-| **Content presets (W15 — @wip)** | | |
-| `When Priya selects content preset "{name}"` | AT + E2E | Updates `?content=` URL |
-| `Then graph node "{name}" displays secondary text containing "{text}"` | E2E | Content binding assertion |
-| `Then the table includes column "{name}"` | AT + E2E | Table columns from preset |
-| `When Priya opens the Content editor` | AT + E2E | Opens content-editor-panel |
-| `When Priya applies content bindings` | AT + E2E | Apply content button |
-| `Then the stored View payload includes custom content bindings` | AT | ORM payload assertion |
+| **Content / field_map (W15 — @wip)** | | |
+| `When Priya toggles field "{path}" for stereotype "{slug}" in the Filters panel` | AT + E2E | Updates field section checkboxes |
+| `When Priya applies filters from the Filters panel` | AT + E2E | Full GET with filters + `field_*` params |
+| `Then graph node "{name}" displays label containing "{text}"` | E2E | In-node Key: value label |
+| `Then the table includes column "{name}"` | AT + E2E | Table columns from field_map |
+| `Then the stored View payload includes content field_map` | AT | ORM payload assertion |
 
 ---
 
@@ -306,35 +305,24 @@ assertions and in form step fields.
 | Export button | `export-btn` |
 | History button | `history-btn` |
 | Views dropdown | `views-dropdown` |
+| Active View name badge | `active-view-name` |
 | Save View (filter panel) | `save-view-btn` |
 | Save View name input | `save-view-name-input` |
 | Save View confirm | `save-view-confirm-btn` |
 | Named View menu item | `view-option-{slug}` |
 | Delete View | `delete-view-btn` |
-| Content dropdown | `content-dropdown` |
-| Content preset item | `content-option-{slug}` |
-| Open Content editor | `content-editor-toggle`, `content-editor-open` |
-| Content editor panel | `content-editor-panel` |
-| Graph content section | `content-editor-graph-section` |
-| Table content section | `content-editor-table-section` |
-| Content editor preset (graph) | `content-editor-preset-select` |
-| Content editor preset (table) | `content-editor-table-preset-select` |
-| Node primary field | `content-editor-node-primary` |
-| Node secondary field | `content-editor-node-secondary-{path}` |
-| Edge label field | `content-editor-edge-label` |
-| Table column field | `content-editor-table-col-{path}` |
-| Reset / Apply content | `content-editor-reset-btn`, `content-editor-apply-btn` |
 | Include viewport on save | `save-view-include-viewport` |
 | Toggle filters | `filters-toggle` |
-| Clear filters | `clear-filters-btn` |
+| Clear filters | `filter-panel-clear-btn` |
 | Package filter | `filter-package` |
-| Stereotype filter | `filter-stereotype` |
-| Health filter | `filter-health` |
-| Time travel date | `filter-as-of` |
-| Apply filters | `apply-filters-btn` |
+| Element stereotype filter | `filter-stereotype` |
+| Relationship stereotype filter | `filter-edge-stereotype` |
+| Field sections container | `view-field-sections` |
+| Per-stereotype field section | `view-fields-{slug}` |
+| Field checkbox | `view-field-{slug}-{path}` |
+| Apply filters (primary) | `apply-filters-btn` |
 | Table toggle | `toggle-table` |
 | Graph toggle | `toggle-graph` |
-| Results container | `results-container` |
 | Graph Cytoscape container | `graph-cy-container` |
 | Element row | `element-row-{id}` or `element-row-{slug}` (v0.3) |
 | View element link | `view-element-{id}` |
@@ -362,7 +350,7 @@ assertions and in form step fields.
 | Graph zoom in | `graph-zoom-in` |
 | Graph zoom out | `graph-zoom-out` |
 | Graph zoom fit | `graph-zoom-fit` |
-| Visible node count badge | `graph-node-count` |
+| Graph re-plot | `graph-replot-btn` |
 
 ### EXPORT-BRIEFING-1 (`view/export.html`)
 

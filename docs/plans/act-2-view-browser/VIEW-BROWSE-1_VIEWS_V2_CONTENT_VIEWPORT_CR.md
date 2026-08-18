@@ -2,7 +2,7 @@
 
 **Feature:** `VIEW-BROWSE-1` (Act 2 View Browser)
 **Activity:** BPE-08 Process Change Request
-**Status:** Approved — 2026-08-18 (Q1–Q4 accepted; proceed to W15 planning after W14)
+**Status:** Approved — 2026-08-18 (Q1–Q4 accepted; mockup validated — see [`VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md`](VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md))
 **Date:** 2026-08-18
 **Prerequisite:** Views v1 CR approved — [`VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md`](VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md); W14 implements v1 payload before W15.
 
@@ -30,14 +30,14 @@ Affected Screen IDs: `VIEW-BROWSE-1` (primary), `CHAT-MUNIN-1` (semantic URLs ma
 | User journey | `user_journey.md` Act 2 | View = Filters + Levels only; Content deferred one line | **Y** | Full View definition; Content UI narrative |
 | Scenarios | `view-browse-canvas.feature` | Graph viewport = fit/zoom controls only; fixed table columns | **Y** | Add 69–76 in `view-browse-content.feature` |
 | Scenarios | `view-browse-views.feature` | Save/load filters + depth only | **Y** | Extend save/load for content + viewport |
-| Mockups | `mockups/view/browse.html` | Name-only node labels; no Content picker | **Y** | Content dropdown + viewport save checkbox |
+| Mockups | `mockups/view/browse.html` | Filters-first field_map; in-node Key: value labels | **N** | Validated — [`VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md`](VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md) |
 | Screen flow | `screen-flow.md` | Views footnote (v1) | **N** | Content is in-browser on VIEW-BROWSE-1 |
 | IA guidelines | `IA_guidelines.md` §8.2 | Cytoscape defaults `data(name)` / `data(stereotype)`; no Content organism | **Y** | §6.5 Content picker; dynamic label contract |
 | Conventions | `conventions.md` | No `content=` param | **Y** | Semantic URL row |
 | Prior plan | `INDEX.md` | W14 Views v1; v2 stub only | **Y** | W15 wave |
 | Architecture | `SAO.md` | BrowseView payload v1; Content deferred | **Y** | Payload v2 schema; graph.json enrichment |
 | As-built | `browse_service.py`, `view-browser.js` | Fixed labels/columns; no viewport persistence | **Y** | W15 implementation |
-| CATALOG | `CATALOG.md` | No Content testids | **Y** | content-dropdown, save-view-include-viewport |
+| CATALOG | `CATALOG.md` | content-editor-* testids | view-field-* testids | **Y** | Revised |
 
 ---
 
@@ -45,8 +45,8 @@ Affected Screen IDs: `VIEW-BROWSE-1` (primary), `CHAT-MUNIN-1` (semantic URLs ma
 
 | # | Question | Proposed decision |
 |---|----------|-------------------|
-| **Q1** | Content preset storage | **Built-in presets** (Minimal, Current State, Jira Info) are **starting templates** only. Priya **customizes field-by-field** in the **Content editor** panel; resulting **bindings** persist in `BrowseView.payload.content` (and in mockup `sessionStorage` until saved). Defer separate `BrowseContentPreset` ORM table. |
-| **Q2** | Live URL for Content | **`?content={preset-slug}`** selects a built-in template (`minimal`, `current-state`, `jira-info`). After customization, URL becomes **`?content=custom`** (mockup + W15) while full bindings live in session / named View payload — custom bindings are too large for bookmark URLs. |
+| **Q1** | Content preset storage | **Filters-first `field_map`** (mockup-validated). Built-in presets may seed defaults in W15 service layer only — **no Content dropdown or editor panel**. Priya selects stereotypes in the Filters panel; field checklists derive from `property_schema`; **`Apply Filters`** commits scope + fields. Persist `content.field_map` in `BrowseView.payload`. |
+| **Q2** | Live URL for Content | **`field_{stereotype}={path}`** repeated params encode `content.field_map` (mockup-validated). Applying filters with explicit field params **clears** `browse_view` until a named View is re-loaded. Built-in presets may seed defaults in W15 helpers only — **not** shareable via `?content=` in the UI. |
 | **Q3** | Viewport in saved Views | **Opt-in** — Save View dialog checkbox **Include graph viewport** (default unchecked). Viewport ignored in table mode. Not encoded in live URL (too fragile for bookmarking). |
 | **Q4** | W15 vs W14 order | **W15 blocked on W14** — `BrowseView` model and v1 save/load must ship first; v2 extends payload with nullable `content` and `viewport` keys (backward compatible). |
 
@@ -68,21 +68,32 @@ A **View** is a named, Model-scoped browse snapshot:
 
 Ephemeral UI still excluded: inspector selection, panel collapse, Munin open state.
 
-### Content model
+### Content model (mockup-validated — Filters-first)
 
-**Content** controls what properties are visible on the canvas — split by **presentation mode**:
+**Content** is configured **inside the Filters panel** alongside scope filters — not a separate toolbar control.
 
-| Mode | Content bindings | Editor section |
-|------|------------------|----------------|
-| **Graph View** (`mode=graph`) | `bindings.nodes`, `bindings.edges` | Node primary, node secondary, edge label |
-| **Table View** (`mode=table`) | `bindings.table` | Table column checklist |
+```json
+"content": {
+  "field_map": {
+    "component": ["name", "owner", "health"],
+    "depends_on": ["stereotype", "properties.protocol"]
+  }
+}
+```
 
-Built-in presets seed **both** halves when first selected, but the **Content editor shows only the section for the active mode**. Apply updates graph labels **or** table columns — never both at once. Saved Views persist the full `content.bindings` object (graph + table halves).
+- Keys = element or relationship stereotype slugs active in filters.
+- Values = ordered field paths from `Stereotype.property_schema`.
+- **Package** multi-select narrows stereotype option lists (package-scoped catalog).
+- **Stereotype** multi-select renders one field section per slug (`view-fields-{slug}`).
+- **Apply Filters** is the **sole primary** — commits scope + field_map to live URL.
+- **Graph nodes:** Cytoscape `label` = multiline **`Key: value`** inside round-rectangle nodes.
+- **Graph edges:** label from relationship stereotype field_map.
+- **Table:** columns = union of element field_map paths (Name + Stereotype always first).
+- **Inspector:** **Visible fields** section mirrors active field_map; full properties remain under Other properties / Provenance.
 
-- **Content editor (primary UX):** Priya opens **Edit content** from the canvas toolbar. In **Graph View** she edits node/edge field bindings; in **Table View** she edits table columns only. Presets pre-fill the active half; **Apply content** updates the current mode live. **Save View** persists both halves.
-- **Graph rendering:** Cytoscape `label` = formatted primary + secondary (graph bindings only).
-- **Table mode:** column set from `content.bindings.table` only.
-- **Inspector:** unchanged — always full `properties` (Content does not hide inspector data).
+Built-in Content presets may seed `field_map` in W15 service helpers — there is **no preset picker** in the validated mockup UI.
+
+**Superseded (do not implement without new CR):** Content preset dropdown, Content editor panel, separate Apply content button, `?content=` live URL.
 
 ### Viewport model (graph-only)
 
@@ -102,65 +113,50 @@ Built-in presets seed **both** halves when first selected, but the **Content edi
 
 ```json
 {
-  "filters": { "package": "application", "stereotype": "component", "health": null, "as_of": null, "rules": null },
+  "filters": { "package": ["application"], "stereotype": ["component"], "edge_stereotype": ["depends_on"], "health": null, "as_of": null, "rules": null },
   "levels": { "depth": 3 },
   "presentation": "graph",
-  "content": { "preset": "current-state", "bindings": { "nodes": { "*": { "primary": "name", "secondary": ["owner"] } }, "edges": { "*": { "label": "stereotype" } }, "table": ["name", "stereotype", "owner", "health", "package"] } },
+  "content": {
+    "field_map": {
+      "component": ["name", "owner", "health"],
+      "depends_on": ["stereotype", "properties.protocol"]
+    }
+  },
   "viewport": { "zoom": 1.2, "pan": { "x": 0, "y": 0 }, "center_element_id": "290" }
 }
 ```
 
-v1 records without `content` / `viewport` → defaults: preset `minimal`, no viewport restore.
+v1 records without `content` / `viewport` → defaults: name-only labels, no viewport restore.
 
 ### Dual persistence (extended)
 
 | Mechanism | Encodes |
 |-----------|---------|
-| Live URL | filters, `depth`, `mode`, **`content={preset-slug\|custom}`** |
-| Named View | full payload including custom `content.bindings` + optional viewport |
-| Session (mockup) | custom `content.bindings` until Save View or preset pick clears them |
-| `browse_view=` | expands all of the above |
+| Live URL | filters, `depth`, `mode`, repeated **`field_{stereotype}={path}`** |
+| Named View | full payload including `content.field_map` + optional viewport |
+| `browse_view=` | expands all of the above; explicit `field_*` overrides payload fields |
 
 Viewport is **not** in live URL.
 
-### UI (spec)
+### UI (spec — mockup-validated)
 
-| Control | Location | testid |
-|---------|----------|--------|
-| Content preset dropdown | Canvas toolbar (graph + table) | `content-dropdown` |
-| Preset menu item | Dropdown | `content-option-{slug}` |
-| Open Content editor | Toolbar button + dropdown item | `content-editor-toggle`, `content-editor-open` |
-| Graph content editor section | Visible when `mode=graph` | `content-editor-graph-section` |
-| Table content editor section | Visible when `mode=table` | `content-editor-table-section` |
-| Start from preset (graph) | Editor — template select | `content-editor-preset-select` |
-| Start from preset (table) | Editor — template select | `content-editor-table-preset-select` |
-| Node primary field | Editor — select | `content-editor-node-primary` |
-| Node secondary field | Editor — checkbox per path | `content-editor-node-secondary-{path}` |
-| Edge label field | Editor — select | `content-editor-edge-label` |
-| Table column | Editor — checkbox per path | `content-editor-table-col-{path}` |
-| Reset / Apply | Editor footer | `content-editor-reset-btn`, `content-editor-apply-btn` |
-| Include viewport | Save View modal checkbox | `save-view-include-viewport` |
+| Zone | Control | testid |
+|------|---------|--------|
+| Page header | Export, History, Munin | `export-btn`, `history-btn`, `open-munin-btn` |
+| Canvas toolbar (left) | Filters toggle; active View name when loaded | `filters-toggle`, `active-view-name` |
+| Canvas toolbar (right) | Depth slider; **Views** dropdown; Table/Graph toggle | `browser-depth-control`, `views-dropdown`, `toggle-table`, `toggle-graph` |
+| Filters panel | Package multi-select | `filter-package` |
+| Filters panel | Element stereotype multi-select | `filter-stereotype` |
+| Filters panel | Relationship stereotype multi-select | `filter-edge-stereotype` |
+| Filters panel | Per-stereotype field sections | `view-field-sections`, `view-fields-{slug}`, `view-field-{slug}-{path}` |
+| Filters panel | Clear · Save View · **Apply Filters** (primary) | `filter-panel-clear-btn`, `save-view-btn`, `apply-filters-btn` |
+| Save View modal | Include graph viewport checkbox | `save-view-include-viewport` |
 
-**Content editor panel** (collapse, parallel to Filters) — **mode-specific**:
-
-**Graph View** (`content-editor-graph-section`):
-- Start from preset, node primary, node secondary, edge label
-- Apply updates Cytoscape labels only
-
-**Table View** (`content-editor-table-section`):
-- Start from preset, table column checklist
-- Apply updates results table only
-
-Shared: **Reset to preset** (left) · **Apply content** (primary, right)
-
-Save View dialog (extended):
-
-- Name input (unchanged)
-- **Include graph viewport** checkbox — visible only when `mode=graph`; default unchecked
+**Superseded:** `content-dropdown`, `content-editor-*`, `results-container`, `graph-node-count`, Views dropdown in page header.
 
 ### API / graph.json
 
-`GET /models/{slug}/views/graph.json` accepts `content=`; response node `data` includes bound label fields and property values needed for Cytoscape styles (server-side formatting preferred for consistency with table).
+`GET /models/{slug}/views/graph.json` accepts resolved `field_map` (from URL params or named View expansion); response node `data.label` includes server-formatted multiline **`Key: value`** text for Cytoscape.
 
 ### Scenarios (69–76)
 
@@ -168,17 +164,17 @@ New file: `docs/features/act-2-view/view-browse-content.feature`
 
 | ID | Scenario | Runner |
 |----|----------|--------|
-| 69 | Content dropdown visible in graph mode | AT |
-| 70 | Default/minimal preset labels nodes with name only | AT + E2E |
-| 71 | Selecting Current State preset shows owner on nodes / columns | AT + E2E @wip |
-| 72 | `?content=current-state` applies preset without named View | AT |
-| 73 | Save View persists content preset in BrowseView payload | AT @wip |
-| 74 | Load named View restores content labels and table columns | AT + E2E @wip |
+| 69 | Filters panel shows field sections when stereotypes selected; no Content dropdown | AT |
+| 70 | Default field_map labels nodes with name only | AT + E2E |
+| 71 | Toggling owner field shows `Owner: …` inside node label | AT + E2E @wip |
+| 72 | `field_component=owner` in URL applies without named View | AT |
+| 73 | Save View persists field_map in BrowseView payload | AT @wip |
+| 74 | Load named View restores in-node labels and table columns | AT + E2E @wip |
 | 75 | Viewport restored on load when saved with include flag (graph) | E2E @wip |
 | 76 | Viewport not applied when presentation is table | AT @wip |
-| 77 | Content editor panel opens from toolbar | AT |
-| 78 | Priya customizes node secondary fields and applies | AT + E2E @wip |
-| 79 | Save View persists custom content bindings | AT @wip |
+| 77 | Package change narrows stereotype options (cascade) | AT |
+| 78 | Priya toggles field checkboxes and applies filters | AT + E2E @wip |
+| 79 | Save View persists custom field_map | AT @wip |
 
 Scenarios 61–68 in `view-browse-views.feature` gain notes that 73–74 extend to content/viewport after W15.
 
@@ -187,7 +183,7 @@ Scenarios 61–68 in `view-browse-views.feature` gain notes that 73–74 extend 
 | Wave | Deliverable | Scenarios |
 |------|-------------|-----------|
 | W14 | Views v1 (prerequisite) | 61–68 |
-| W15 | Content bindings + viewport + payload v2 migration | 69–76 |
+| W15 | Filters-first field_map + viewport + payload v2 | 69–79 |
 
 ---
 
@@ -195,18 +191,18 @@ Scenarios 61–68 in `view-browse-views.feature` gain notes that 73–74 extend 
 
 | File | Change |
 |------|--------|
-| `PRD.MD` | Content presets sentence under Key Feature 2 |
-| `docs/features/user_journey.md` | Complete View definition; Content + viewport narrative; URL table |
-| `docs/conventions.md` | `content=` semantic URL |
-| `docs/ux/IA_guidelines.md` | §6.5 Content dropdown; §8.2 dynamic labels note |
-| `docs/features/act-2-view/view-browse-content.feature` | **New** — scenarios 69–76 |
-| `docs/features/act-2-view/view-browse-views.feature` | Notes on content/viewport in save/load scenarios |
-| `docs/features/act-2-view/_implementation_notes.md` | Content row; W15; scenario index 69–76 |
-| `docs/features/CATALOG.md` | Content testids + steps |
-| `docs/architecture/SAO.md` | BrowseView payload v2; graph.json content param |
-| `docs/plans/act-2-view-browser/INDEX.md` | W15 row; CR approved link |
-| `docs/plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md` | CR #2 → closed reference |
-| `mockups/views.py` + `mockups/view/browse.html` | Content picker + viewport checkbox prototype |
+| `PRD.MD` | Filters-first Content + canvas-toolbar Views under Key Feature 2 |
+| `docs/features/user_journey.md` | Complete View definition; Filters-first Content + viewport; URL table |
+| `docs/conventions.md` | `field_{stereotype}=` semantic URL |
+| `docs/ux/IA_guidelines.md` | §6.3.1 Filters-first Content; §8.2 in-node labels |
+| `docs/features/act-2-view/view-browse-content.feature` | Scenarios 69–79 (Filters-first) |
+| `docs/features/act-2-view/view-browse-views.feature` | Canvas-toolbar Views; content/viewport in save/load |
+| `docs/features/act-2-view/_implementation_notes.md` | Filters panel row; W15; scenario index 69–79 |
+| `docs/features/CATALOG.md` | view-field-* testids + steps |
+| `docs/architecture/SAO.md` | BrowseView payload field_map; graph.json |
+| `docs/plans/act-2-view-browser/INDEX.md` | W15 row; mockup reconciliation link |
+| `docs/plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md` | **New** — mockup → spec back-propagation |
+| `mockups/views.py` + `mockups/view/browse.html` | Filters-first prototype (validated `ca42ea7`) |
 
 ---
 
@@ -228,4 +224,4 @@ Not applicable — drift across journey, scenarios, IA, architecture, and as-bui
 
 ## Open questions for user
 
-Confirm Q1–Q4 in the **Proposed decisions** table to set status → **Approved** and unblock BPE-01 Plan W15.
+None — Q1–Q4 approved; mockup validated per [`VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md`](VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md). BPE-01 Plan W15 may proceed.

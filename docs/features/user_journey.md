@@ -194,7 +194,7 @@ Priya follows the printed link to `MUNIN-BRIEFING-1` — Munin's post-run archit
 
 **Layout:**
 
-- **Header:** "View Browser" with **Views** dropdown (named browse snapshots for the current Model)
+- **Header:** "View Browser" with **Export**, **History**, and **Munin** (page-level actions)
 - **Left navigator (content-browser panel):**
   - **Model switcher** (navigator header — not a static title): dropdown showing the current Model name (`browser-model-name`) and listing every Model the signed-in user may read (`browser-model-switcher`). Selecting another Model navigates to `/models/{slug}/views/` and **reloads** package tree, filters, canvas, and inspector for that graph. Filters, time-travel, and selection are **not** carried across Models.
   - The switcher does **not** create Models. New Models are created by `ratatosk bootstrap` / MCP `ensure_model` (Act 1 / Act 5).
@@ -204,27 +204,32 @@ Priya follows the printed link to `MUNIN-BRIEFING-1` — Munin's post-run archit
   - **Package** — multi-select
   - **Element stereotypes** — multi-select
   - **Relationship stereotypes** — multi-select
-  - Stereotype changes **auto-update** the visible-field checklist (from each stereotype's `property_schema`).
+  - Stereotype changes **auto-update** the visible-field checklist (from each stereotype's `property_schema`); checkbox changes **preview** graph labels in the mockup before Apply.
   - Footer: **[Clear]** left · **[Save View / Update View]** + **[Apply Filters]** right — **one primary only** (`Apply Filters`).
   - **Clear** resets to the loaded View's original state.
+- **Canvas toolbar (above graph/table):**
+  - **Filters** toggle; **active View name** badge when a named View is loaded (`active-view-name`)
+  - **Depth slider** (graph mode only)
+  - **Views** dropdown (load / save current view…) — left of Table/Graph toggle
+  - **Table / Graph** mode toggle
+  - Graph zoom controls: re-plot, zoom in/out, **fit** (always frames all nodes after layout)
 
 **Views (named browse snapshots):**
 
 A **View** captures **Filters** (scope) + **Levels** (`depth`) + **presentation** (`graph` or `table`) + **Content** (which properties annotate nodes, edges, and table columns) + optional **viewport** (graph camera snapshot) for the current Model. It does **not** include inspector selection, panel collapse, or Munin panel state.
 
-- **Live URL:** bookmark/share without saving — query params encode filters, `depth`, `mode=graph|table`, and **`content={preset-slug}`** (built-in Content presets).
-- **Named View:** persisted per `(Model, User)` as `graph.BrowseView` — load from the Views dropdown or `?browse_view={slug}`.
-- **Save:** Priya clicks Save View (filter panel) or Save current view… (header dropdown), enters a name, optionally checks **Include graph viewport** (graph mode only), confirms — current filters, depth, mode, content preset/bindings, and optional viewport are stored.
+- **Live URL:** bookmark/share without saving — query params encode filters (`package`, `stereotype`, `edge_stereotype`), visible fields (`field_{stereotype}=…`), `depth`, and `mode=graph|table`.
+- **Named View:** persisted per `(Model, User)` as `graph.BrowseView` — load from the **Views** dropdown (canvas toolbar) or `?browse_view={slug}`.
+- **Save:** Priya clicks **Save View** in the filter panel or **Save current view…** in the Views dropdown, enters a name, optionally checks **Include graph viewport** (graph mode only), confirms — current filters, depth, mode, `content.field_map`, and optional viewport are stored.
 - **Load:** selecting a named View navigates to the equivalent live URL and restores Content annotations; viewport is applied in graph mode when it was saved.
 - **Delete/rename:** owner only; viewers may load but not save, delete, or rename.
 
-**Content (Views v2):** not a separate toolbar or second apply button. Field visibility is configured **inside the Filters panel** after stereotype selection — one **Apply Filters** commits scope + fields. Graph View and Table View render those fields on the canvas/table respectively (W15).
+**Content (Views v2):** configured **inside the Filters panel** — no separate Content toolbar or second apply button. After choosing element/relationship stereotypes, Priya toggles visible fields per stereotype; **Apply Filters** commits scope + `field_map`. **Graph View** renders **`Key: value`** lines **inside** node shapes and formatted edge labels; **Table View** renders matching columns. Inspector shows a **Visible fields** section aligned with the active map (full properties remain available). W15 production follows the validated mockup ([`VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md`](../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md)).
 
-**Viewport (Views v2, graph-only):** zoom, pan, and optional centered element ID — saved only when explicitly included on Save View; not encoded in live URLs.
+**Viewport (Views v2, graph-only):** zoom, pan, and optional centered element ID — saved only when explicitly included on Save View; not encoded in live URLs. Graph **fit** runs after every layout (grid for sparse subgraphs, cose when connected).
 - **Results (center, under filters):**
-  - **Depth slider (graph mode):** “Show N levels deep” — toolbar control only (not in Filters panel).
-  - Table mode / Graph mode toggle
-  - **Actions bar:** [Export →] (`EXPORT-BRIEFING-1`) [History →] (`VIEW-HISTORY-1`)
+  - Table or graph canvas (no element-count informer in toolbar)
+  - **Actions bar (page header):** [Export →] (`EXPORT-BRIEFING-1`) [History →] (`VIEW-HISTORY-1`)
 - **Detail drawer (right):** selected element summary + quick links to VIEW/EDIT
 - **Munin panel:** collapsible chat side panel (`Act 8`) that can drive this same screen
 
@@ -271,8 +276,8 @@ Every filter state is encoded as a JSON query object appended to the URL — sha
 | Operators              | `eq` `neq` `gt` `gte` `lt` `lte` `contains` `not_contains` `starts` `ends` `in` `not_in` |
 | Depth (traversal)      | `?depth=N` — N ≥ 1; filters define roots; N = 1 → roots only; each +1 adds one outgoing hop (BFS). Default: `1`. Unfiltered browse uses graph sources as roots. |
 | Presentation mode      | `?mode=graph` \| `?mode=table` — graph shows three-panel explorer; table shows results grid only. Default: `graph`. |
-| Named View             | `?browse_view={slug}` — expands to stored filters + depth + mode + content (+ viewport on load in graph mode) for the current user on the current Model |
-| Content preset (live)  | `?content={preset-slug}` — built-in template (`minimal`, `current-state`, `jira-info`); after editor apply → `?content=custom` with bindings in session / named View |
+| Named View             | `?browse_view={slug}` — expands stored filters + depth + mode + `content.field_map` (+ viewport on load in graph mode) for the current user on the current Model |
+| Visible fields (live)  | `?field_{stereotype}={path}` — repeated params per stereotype slug (e.g. `field_component=name&field_component=owner`) |
 | Time travel            | `?as_of=2026-06-01`                                                                      |
 | Pre-filled create form | `/elements/new?prefill={"name":"X","stereotype":"Container","package":"technology"}`     |
 

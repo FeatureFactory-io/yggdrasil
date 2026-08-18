@@ -10,15 +10,16 @@
 | Panel | Responsibility | Primary testids | Feature file |
 |-------|----------------|-----------------|--------------|
 | Left navigator | **Traversal tree**, search, **Model switcher** | `browser-nav-panel`, `browser-element-tree`, `browser-search-input`, `browser-model-switcher`, `nav-toggle-{slug}`, `nav-element-{slug}` | `view-browse-navigator.feature` |
-| Centre canvas | Cytoscape graph + table toggle, filters, **depth slider** | `graph-cy-container`, `toggle-table`, `toggle-graph`, `browser-depth-slider`, `browser-depth-value`, `results-container` | `view-browse-canvas.feature` |
+| Centre canvas | Cytoscape graph + table toggle, filters collapse, **depth slider**, canvas toolbar | `graph-cy-container`, `toggle-table`, `toggle-graph`, `browser-depth-slider`, `browser-depth-value`, `filters-toggle`, `active-view-name`, `views-dropdown` | `view-browse-canvas.feature`, `view-browse-views.feature` |
 | Right inspector | Element/relationship properties (embed mode) | `browser-inspector-panel`, `inspector-empty`, `inspector-content` | `view-browse-inspector.feature` |
-| Page shell | Header **Views** dropdown, save dialog, Munin offcanvas | `views-dropdown`, `save-view-btn`, `save-view-confirm-btn`, `view-option-{slug}` | `view-browse-views.feature` |
-| Canvas toolbar | **Content** preset dropdown + **Edit content** field editor (Views v2) | `content-dropdown`, `content-editor-*`, `save-view-include-viewport` | `view-browse-content.feature` |
-| Page shell | Munin offcanvas | `view-browse-page`, `export-btn`, `open-munin-btn` | `view-browse.feature` |
+| Filters panel | **View editor** — package/stereotype scope + per-stereotype field checklists (Content) | `filter-package`, `filter-stereotype`, `filter-edge-stereotype`, `view-field-sections`, `view-field-{slug}-{path}`, `filter-panel-clear-btn`, `save-view-btn`, `apply-filters-btn` | `view-browse-content.feature` |
+| Page shell | Header Export/History/Munin; save dialog | `export-btn`, `history-btn`, `open-munin-btn`, `save-view-confirm-btn`, `save-view-include-viewport`, `view-option-{slug}` | `view-browse.feature`, `view-browse-views.feature` |
+
+**Superseded in mockup (do not port to W15 without new CR):** `content-dropdown`, `content-editor-*`, `results-container`, `graph-node-count`, header-placed Views dropdown.
 
 ---
 
-## Scenario index (VIEW-BROWSE-1-01 … 76)
+## Scenario index (VIEW-BROWSE-1-01 … 79)
 
 | IDs | Status | Runner | Notes |
 |-----|--------|--------|-------|
@@ -29,8 +30,8 @@
 | 35–37, 45–46 | v0.3 canvas | AT | Graph JSON, mode SSR, canvas controls |
 | 48–54 | **W12 implemented** | AT + E2E | Model switcher; canonical `/models/{slug}/views/` |
 | 55–60 | **W13 shipped** | AT + E2E | Depth slider + BFS subgraph |
-| 61–68 | **Views v1 spec** (BPE-08 CR) | AT + E2E (@wip 62–66, 68) | Named Views — Filters + Levels; 73–74 extend to content/viewport in W15 |
-| 69–79 | **Views v2 spec** (BPE-08 CR) | AT + E2E (@wip 70–71, 73–79) | Content presets, field editor, viewport |
+| 61–68 | **Views v1 spec** (BPE-08 CR) | AT + E2E (@wip 62–66, 68) | Named Views — Filters + Levels |
+| 69–79 | **Views v2 spec** (BPE-08 CR, mockup-validated) | AT + E2E (@wip 70–71, 73–79) | Filters-first `field_map`, in-node labels, viewport |
 
 ---
 
@@ -46,11 +47,11 @@
 | W12 | **Model switcher** (shipped) | 48–54 |
 | W13 | **Depth traversal** — `browse_service.subgraph_from_roots`, slider, traversal tree, multi-hop `traverse` | 55–60 |
 | W14 | **Views v1** — `graph.BrowseView`, save/load dropdown, `browse_view=` URL, `mode=` migration | 61–68 |
-| W15 | **Views v2** — Content editor, presets, `content=` URL, viewport in payload, graph.json labels | 69–79 |
+| W15 | **Views v2** — Filters-first `content.field_map`, `field_{stereotype}=` URL, in-node labels, viewport in payload, graph.json labels | 69–79 |
 
 Deferred from v0.2 (unchanged): 09 export/history prod wiring, 11 time travel banner.
 
-W12 and W13 are **shipped**. Views v1 CR: [`VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md). Views v2 CR: [`VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md). W14 unblocked after BPE-01; W15 after W14.
+W12 and W13 are **shipped**. Views v1 CR: [`VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md). Views v2 CR + mockup reconciliation: [`VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md), [`VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md`](../../../plans/act-2-view-browser/VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md). W14 unblocked after BPE-01; W15 after W14.
 
 ---
 
@@ -71,20 +72,20 @@ Adopt from Mimir Content Browser (`browser_graph.html`):
 
 | Control | Yggdrasil | testid |
 |---------|-----------|--------|
-| Node count badge | yes | `graph-node-count` |
 | Re-plot | yes | `graph-replot-btn` |
 | Zoom in / out / fit | yes | `graph-zoom-in`, `graph-zoom-out`, `graph-zoom-fit` |
 | Depth slider | yes (Yggdrasil-specific) | `browser-depth-slider`, `browser-depth-value` |
 
 **Explicitly out of scope** (playbook methodology graph only — do not port):
 
+- Node count badge (`graph-node-count` — removed in mockup)
 - Custom layout toggle
 - Layout picker (Layered ▾)
 - Edge routing picker (Bezier ▾)
 - Compound / workflow grouping
 - Node size mode toggle
 
-Yggdrasil uses a fixed `cose` layout and bezier edges from depth-scoped `/views/graph.json`.
+Yggdrasil uses **grid** layout for sparse subgraphs and **cose** when connected; always **fit** after layout. Bezier edges from depth-scoped `/views/graph.json`.
 
 ---
 

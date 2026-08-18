@@ -804,8 +804,8 @@ The narrative block at the top of `MUNIN-BRIEFING-1`. Distinct from plain text �
 
 | Trigger | `hx-target` | `hx-swap` | Notes |
 |---|---|---|---|
-| View Browser filter form | `#results-container` | `innerHTML` | Debounced `hx-trigger="input changed delay:300ms"` |
-| Inline filter apply | `#results-container` | `innerHTML` | Full results refresh |
+| View Browser filter apply (mockup / W15) | — | full page | GET with filters + `field_*`; clears `browse_view` when custom |
+| View Browser filter form (HTMX partial, if used) | `#graph-cy-container` or canvas region | `innerHTML` | Debounced refresh — production TBD |
 | Detail drawer (element click) | `#detail-drawer` | `innerHTML` | Offcanvas right panel |
 | ChangeSet "Do Other" reprocess | `#cs-operation-{id}` | `outerHTML` | Replaces just that operation row |
 | Form submit | `#form-container` | `outerHTML` | Replaces form section on success |
@@ -882,15 +882,16 @@ The filter panel collapses to a single summary line when collapsed:
     </button>
   </div>
   <div id="filter-body" class="collapse show">
-    <!-- Package selector, stereotype multi-select, advanced filter builder, time-travel picker -->
+    <!-- Package multi-select, element stereotype multi-select, relationship stereotype multi-select -->
+    <!-- Stereotype-driven field sections: view-field-sections / view-fields-{slug} -->
     …
     <div class="d-flex gap-2 mt-2 align-items-center">
-      <button class="btn btn-outline-secondary btn-sm" data-testid="clear-filters-btn">Clear</button>
+      <button class="btn btn-outline-secondary btn-sm" data-testid="filter-panel-clear-btn">Clear</button>
       <div class="d-flex gap-2 ms-auto">
         <button class="btn btn-outline-secondary btn-sm" data-testid="save-view-btn">
           <i class="fa-solid fa-floppy-disk me-1"></i> Save View
         </button>
-        <button class="btn btn-primary btn-sm" data-testid="apply-filters-btn">Apply</button>
+        <button class="btn btn-primary btn-sm" data-testid="apply-filters-btn">Apply Filters</button>
       </div>
     </div>
   </div>
@@ -919,9 +920,47 @@ The filter panel collapses to a single summary line when collapsed:
 </div>
 ```
 
+### 6.3.1 View Browser Filters-first Content (Views v2)
+
+**Content** (which properties appear on graph nodes, edges, and table columns) is configured **inside the Filters panel** — not a separate toolbar control.
+
+```html
+<div id="viewFieldSections" data-testid="view-field-sections">
+  <div class="view-field-section" data-stereotype="component"
+       data-testid="view-fields-component">
+    <span class="form-label">Component — visible fields</span>
+    <input class="form-check-input view-field-checkbox" type="checkbox"
+           name="field_component" value="name"
+           data-testid="view-field-component-name">
+    <!-- additional paths from Stereotype.property_schema -->
+  </div>
+</div>
+```
+
+Rules:
+
+- **Package** multi-select (`filter-package`) narrows element/relationship stereotype option lists to stereotypes present in selected packages.
+- **Element stereotypes** (`filter-stereotype`) and **relationship stereotypes** (`filter-edge-stereotype`) are multi-select; each selected slug renders a field section.
+- Stereotype changes update field sections **immediately** (client preview); graph labels may refresh before Apply in mockup/W15.
+- **Apply Filters** (`apply-filters-btn`) is the **sole primary** — commits filters + `field_{stereotype}` query params (mockup: full navigation).
+- **Save View** persists `content.field_map` in `BrowseView.payload` alongside filters and depth.
+- **No** Content preset dropdown, **no** Content editor panel, **no** separate Apply content button.
+
+**Save View modal extension (graph mode):**
+
+```html
+<div class="form-check mt-2" id="saveViewViewportWrap">
+  <input class="form-check-input" type="checkbox" id="saveViewIncludeViewport"
+         data-testid="save-view-include-viewport">
+  <label class="form-check-label" for="saveViewIncludeViewport">
+    Include graph viewport (zoom and pan)
+  </label>
+</div>
+```
+
 ### 6.4 View Browser Views dropdown (named snapshots)
 
-Header control for loading and saving **Views** (Filters + Levels/depth + presentation mode) scoped to the current Model.
+Canvas-toolbar control (right cluster, **left of Table/Graph toggle**) for loading and saving **Views** (Filters + field_map + Levels/depth + presentation mode) scoped to the current Model.
 
 ```html
 <div class="dropdown">
@@ -964,77 +1003,7 @@ Header control for loading and saving **Views** (Filters + Levels/depth + presen
 
 Owner may **delete** a named View from a manage affordance on the dropdown or a context menu (`delete-view-btn`). Viewers see the dropdown but not save/delete/rename actions.
 
-### 6.4.1 View Browser Content preset dropdown (Views v2)
-
-Canvas-toolbar control for **Content** — which element/relationship properties annotate the graph and which columns appear in table mode.
-
-```html
-<div class="dropdown">
-  <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
-          data-bs-toggle="dropdown" aria-expanded="false" data-testid="content-dropdown"
-          aria-label="Content preset">
-    Content: Current State
-  </button>
-  <ul class="dropdown-menu dropdown-menu-end">
-    <li><a class="dropdown-item" href="?content=minimal"
-           data-testid="content-option-minimal">Minimal</a></li>
-    <li><a class="dropdown-item active" href="?content=current-state"
-           data-testid="content-option-current-state">Current State</a></li>
-    <li><a class="dropdown-item" href="?content=jira-info"
-           data-testid="content-option-jira-info">Jira Info</a></li>
-  </ul>
-</div>
-```
-
-**Save View modal extension (graph mode):**
-
-```html
-<div class="form-check mt-2" id="saveViewViewportWrap">
-  <input class="form-check-input" type="checkbox" id="saveViewIncludeViewport"
-         data-testid="save-view-include-viewport">
-  <label class="form-check-label" for="saveViewIncludeViewport">
-    Include graph viewport (zoom and pan)
-  </label>
-</div>
-```
-
-Rules:
-
-- Content dropdown visible in **graph and table** modes; picking a preset reloads with `?content={slug}` and clears unsaved custom bindings.
-- **Edit content** opens the **Content editor** collapse panel (`content-editor-panel`) for field-by-field binding (see §6.4.2).
-- After **Apply content**, URL uses `?content=custom`; full bindings persist in session until **Save View**.
-- Viewport checkbox visible when `mode=graph`; default **unchecked**; persisted only in `BrowseView.payload.viewport`.
-- Cytoscape node `label` is formatted from Content bindings (primary + secondary lines); see §8.2.
-
-### 6.4.2 View Browser Content editor (Views v2)
-
-Field-by-field binding panel — **mode-specific**. Graph View and Table View have separate content; the editor shows only the section for the active `mode`.
-
-**Graph View section** (`content-editor-graph-section`, visible when `mode=graph`):
-
-```html
-<div id="contentEditorGraphSection" data-testid="content-editor-graph-section">
-  <!-- preset select, node primary, node secondary checkboxes, edge label -->
-</div>
-```
-
-**Table View section** (`content-editor-table-section`, visible when `mode=table`):
-
-```html
-<div id="contentEditorTableSection" data-testid="content-editor-table-section">
-  <!-- preset select, table column checkboxes only -->
-</div>
-```
-
-Rules:
-
-- **Table columns** appear **only** in Table View editor — never in Graph View.
-- **Node/edge bindings** appear **only** in Graph View editor — never in Table View.
-- Field options derive from union of `Stereotype.property_schema` paths in scope.
-- **Apply content** updates the active mode only (graph labels **or** table columns).
-- **Save View** persists both graph and table binding halves in `BrowseView.payload.content`.
-
-### 6.3.1 View Browser Depth Slider (graph mode)
+### 6.3.2 View Browser Depth Slider (graph mode)
 
 Controls how many **levels** of the relationship graph are in scope. Filters define **roots**; the slider sets `?depth=N` (outgoing BFS hops + 1).
 
@@ -1248,7 +1217,7 @@ Standard series colour order: `HG.primary`, `HG.green`, `HG.orange`, `HG.red`, `
 
 Used in `VIEW-BROWSE-1` (graph mode), `ELEMENT-VIEW_ELEMENT-1` (ego-graph), `DIAGRAM-LIST+FIND-1` (Part II layout editor).
 
-**Standard Cytoscape styles** (base theme — node `label` value is **Content-driven** in VIEW-BROWSE-1; default preset `minimal` uses name only):
+**Standard Cytoscape styles** (base theme — node `label` is **Content-driven** in VIEW-BROWSE-1 from `content.field_map`; formatted as multiline **`Key: value`** lines **inside** round-rectangle nodes):
 
 ```js
 const cytoscapeStyle = [
@@ -1256,17 +1225,20 @@ const cytoscapeStyle = [
     selector: "node",
     style: {
       "background-color": "#e7eef7",      // --hg-primary-100
-      "border-width": 1.5,
+      "border-width": 2,
       "border-color": "#1f3a5f",          // --hg-primary
-      "label": "data(name)",
-      "font-size": "11px",
+      "label": "data(label)",
+      "font-size": "8px",
       "font-family": "Montserrat, system-ui, sans-serif",
       "color": "#1a1f2e",                 // --hg-ink
       "text-valign": "center",
-      "text-wrap": "ellipsis",
-      "text-max-width": "80px",
-      "width": 60,
-      "height": 60,
+      "text-halign": "center",
+      "text-wrap": "wrap",
+      "text-max-width": "140px",
+      "shape": "round-rectangle",
+      "width": "label",
+      "height": "label",
+      "padding": 10,
     },
   },
   {

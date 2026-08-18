@@ -49,9 +49,9 @@ Scenarios **01–15** (except 11 @wip) covered by `test_view_browse.py`.
 
 **Views v1** — named browse snapshots (Filters + Levels/depth); dual URL + DB persistence; `mode=` replaces `view=`. Specs: [`VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md`](VIEW-BROWSE-1_VIEWS_V1_CHANGE_RECONCILIATION.md). **W14** unblocked for Plan Feature.
 
-## Change request (BPE-08 pending approval 2026-08-18)
+## Change request (BPE-08 approved 2026-08-18)
 
-**Views v2** — Content presets + graph viewport in View payload; `?content=` live URL. Specs: [`VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md`](VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md). **W15** after W14.
+**Views v2** — Filters-first `content.field_map` + graph viewport in View payload; live URL uses `field_{stereotype}=` params (mockup-validated). Specs: [`VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md`](VIEW-BROWSE-1_VIEWS_V2_CONTENT_VIEWPORT_CR.md), [`VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md`](VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION.md). **W15** after W14.
 
 ## Change request (BPE-08 closed, approved 2026-08-17)
 

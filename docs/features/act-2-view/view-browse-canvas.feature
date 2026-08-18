@@ -5,9 +5,9 @@ Feature: VIEW-BROWSE-1 View Browser — Graph Canvas (centre panel)
 
   # Component: centre canvas · Pattern: Mimir FOB-CONTENT-BROWSER-03, 07
   # Production: /models/{slug}/views/ · graph data: GET /models/{slug}/views/graph.json
-  # Testids: graph-cy-container, toggle-table, toggle-graph, results-container,
+  # Testids: graph-cy-container, toggle-table, toggle-graph, views-dropdown,
   #          graph-replot-btn, graph-zoom-in, graph-zoom-out, graph-zoom-fit,
-  #          graph-node-count, browser-canvas-controls
+  #          browser-canvas-controls, active-view-name
   # Fixture: view_browser_explorer_fixture
 
   Background:
@@ -22,12 +22,13 @@ Feature: VIEW-BROWSE-1 View Browser — Graph Canvas (centre panel)
     And the user should see "elements"
     And the user should see "edges"
 
-  Scenario: VIEW-BROWSE-1-36 View-mode toggles and results container render in canvas toolbar
+  Scenario: VIEW-BROWSE-1-36 View-mode toggles and graph canvas render in toolbar
     When I GET "/models/yggdrasil/views/"
     Then the response status is 200
     And the element "toggle-table" should be visible
     And the element "toggle-graph" should be visible
-    And the element "results-container" should be visible
+    And the element "graph-cy-container" should be visible
+    And the element "views-dropdown" should be visible
 
   Scenario: VIEW-BROWSE-1-37 Table mode shows element rows inside the canvas panel
     When I GET "/models/yggdrasil/views/?mode=table"

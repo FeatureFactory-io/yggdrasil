@@ -7,9 +7,9 @@ Feature: VIEW-BROWSE-1 View Browser — Named Views (Filters + Levels + Content)
   # Production: /models/{slug}/views/ · persistence: graph.BrowseView (ORM, per user+model)
   # Testids: views-dropdown, save-view-btn, save-view-confirm-btn, save-view-name-input,
   #          view-option-{slug}, delete-view-btn, save-view-include-viewport (W15)
-  # Live URL: package, stereotype, health, as_of, depth, mode=graph|table, content={preset-slug}
-  # Named View: ?browse_view={slug} — expands filters, depth, mode, content, optional viewport
-  # Content scenarios: view-browse-content.feature (69–76) · W15 extends save/load here
+  # Live URL: package, stereotype, edge_stereotype, field_{st}, depth, mode=graph|table
+  # Named View: ?browse_view={slug} — expands filters, depth, mode, content.field_map, optional viewport
+  # Content scenarios: view-browse-content.feature (69–79) · mockup: Filters-first field_map
   # Fixture: view_browser_model (pytest) · view_browser_explorer_fixture (depth scenarios)
 
   Background:
@@ -23,6 +23,7 @@ Feature: VIEW-BROWSE-1 View Browser — Named Views (Filters + Levels + Content)
     Then the response status is 200
     And the element "views-dropdown" should be visible
     And the element "save-view-btn" should be visible
+    And the element "filters-toggle" should be visible
 
   @wip
   Scenario: VIEW-BROWSE-1-67 Clear filters does not remove named Views from catalog

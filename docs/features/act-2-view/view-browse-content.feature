@@ -1,39 +1,40 @@
-Feature: VIEW-BROWSE-1 View Browser — Content presets and viewport (Views v2)
+Feature: VIEW-BROWSE-1 View Browser — Content via Filters panel (Views v2)
   As a Software Architect (Priya)
-  I want to control which properties appear on graph nodes, edges, and table columns
-  So that I can scan the subgraph for the facts I care about and restore the graph camera in saved Views
+  I want visible fields configured alongside browse filters
+  So that graph nodes, edges, and table columns show the properties I care about in one Apply action
 
-  # Component: Content dropdown + extended View payload · CR: VIEW-BROWSE-1_VIEWS_V2
+  # Component: Filters panel field_map · CR: VIEW-BROWSE-1_VIEWS_V2_MOCKUP_RECONCILIATION
   # Prerequisite: W14 Views v1 (BrowseView ORM, save/load)
-  # Testids: content-dropdown, content-option-{slug}, content-editor-*,
+  # Testids: view-field-sections, view-fields-{stereotype}, view-field-{stereotype}-{path},
+  #          filter-package, filter-stereotype, filter-edge-stereotype, apply-filters-btn,
   #          save-view-include-viewport
-  # Live URL: ?content={preset-slug|custom}
-  # Viewport: saved in named View payload when save-view-include-viewport checked (graph mode)
+  # Live URL: repeated field_{stereotype}={path} params
+  # Mockup reference: mockups/view/browse.html
   # Fixture: view_browser_explorer_fixture
 
   Background:
     Given the user is logged in as "architect"
     And the model "yggdrasil" is loaded with the view browser explorer fixture
 
-  # ── AT: shell ─────────────────────────────────────────────────────────────
+  # ── AT: Filters-first Content shell ───────────────────────────────────────
 
-  Scenario: VIEW-BROWSE-1-69 Content dropdown renders in graph mode
+  Scenario: VIEW-BROWSE-1-69 Field sections render when stereotypes are selected
+    When I GET "/models/yggdrasil/views/?stereotype=component"
+    Then the response status is 200
+    And the element "view-field-sections" should be visible
+    And the element "view-fields-component" should be visible
+
+  Scenario: VIEW-BROWSE-1-72 field query params select visible fields
+    When I GET "/models/yggdrasil/views/?stereotype=component&field_component=name&field_component=owner"
+    Then the response status is 200
+    And the element "view-fields-component" should be visible
+
+  Scenario: VIEW-BROWSE-1-77 No separate Content editor or dropdown in toolbar
     When I GET "/models/yggdrasil/views/?mode=graph"
     Then the response status is 200
-    And the element "content-dropdown" should be visible
-
-  Scenario: VIEW-BROWSE-1-72 content query param selects built-in preset
-    When I GET "/models/yggdrasil/views/?mode=graph&content=current-state"
-    Then the response status is 200
-    And the element "content-dropdown" should be visible
-
-  Scenario: VIEW-BROWSE-1-77 Content editor panel is available from toolbar
-    When I GET "/models/yggdrasil/views/?mode=graph"
-    Then the response status is 200
-    And the element "content-editor-toggle" should be visible
-    And the element "content-editor-panel" should exist
-    And the element "content-editor-graph-section" should be visible
-    And the element "content-editor-table-section" should not be visible
+    And the element "content-dropdown" should not be visible
+    And the element "content-editor-toggle" should not be visible
+    And the element "filters-toggle" should be visible
 
   @wip
   Scenario: VIEW-BROWSE-1-76 Table mode does not restore graph viewport from saved View
@@ -43,40 +44,40 @@ Feature: VIEW-BROWSE-1 View Browser — Content presets and viewport (Views v2)
     And the view browser is in table mode
     And the graph canvas controls are hidden
 
-  # ── AT + E2E: content bindings (W15 — @wip until step defs ship) ─────────
+  # ── AT + E2E: field_map rendering (W15 — @wip until step defs ship) ───────
 
   @wip
-  Scenario: VIEW-BROWSE-1-70 Minimal preset shows element name on graph nodes
+  Scenario: VIEW-BROWSE-1-70 Graph node displays Key value lines for visible fields
     Given Priya is on the View Browser in graph mode
-    When Priya selects content preset "Minimal"
-    Then graph node "munin" displays label "munin"
-    And graph node "munin" does not display secondary property text
+    And Priya has applied filters with element stereotype "component" and fields "Name" and "Owner"
+    Then graph node "munin" displays label containing "Name: munin"
+    And graph node "munin" displays label containing "Owner: platform-team"
 
   @wip
-  Scenario: VIEW-BROWSE-1-71 Current State preset shows owner on nodes and table columns
-    Given Priya is on the View Browser in graph mode
-    When Priya selects content preset "Current State"
-    Then graph node "auth" displays secondary text containing "platform-team"
-    When Priya toggles to table mode
+  Scenario: VIEW-BROWSE-1-71 Apply Filters updates table columns from field_map
+    Given Priya is on the View Browser with element stereotype "component" selected
+    And Priya has checked visible fields "Name", "Owner", and "Health"
+    When Priya applies browse filters
+    And Priya toggles to table mode
     Then the table view is active
     And the table includes column "Owner"
 
   @wip
-  Scenario: VIEW-BROWSE-1-73 Save View persists content preset in payload
+  Scenario: VIEW-BROWSE-1-73 Save View persists field_map in payload
     Given Priya is on the View Browser in graph mode
-    And Priya has selected content preset "Current State"
+    And Priya has applied filters with element stereotype "component" and field "Owner" visible
     When Priya saves the current browse session as View "Owners visible"
     Then a BrowseView "owners-visible" exists for model "yggdrasil" owned by Priya
-    And the stored View payload includes content preset "current-state"
+    And the stored View payload includes field_map for stereotype "component"
 
   @wip
-  Scenario: VIEW-BROWSE-1-74 Load named View restores content annotations
-    Given Priya has saved a View named "Owners visible" with content preset "current-state"
-    When Priya selects View "Owners visible" from the Views dropdown
-    Then graph node "auth" displays secondary text containing "platform-team"
+  Scenario: VIEW-BROWSE-1-74 Load named View restores field_map labels
+    Given Priya has saved a View named "Application components" with field_map for "component"
+    When Priya selects View "Application components" from the Views dropdown
+    Then graph node "auth" displays label containing "Owner: platform-team"
 
   @wip
-  Scenario: VIEW-BROWSE-1-75 Saved viewport restores zoom and center on graph load
+  Scenario: VIEW-BROWSE-1-75 Saved viewport restores after layout fit in graph mode
     Given Priya is on the View Browser in graph mode
     And Priya has panned and zoomed the graph to focus element "munin"
     When Priya saves the current browse session as View "Munin focus" including viewport
@@ -84,18 +85,17 @@ Feature: VIEW-BROWSE-1 View Browser — Content presets and viewport (Views v2)
     Then graph node "munin" is centered in the canvas viewport
 
   @wip
-  Scenario: VIEW-BROWSE-1-78 Priya customizes node secondary fields and applies
+  Scenario: VIEW-BROWSE-1-78 Priya toggles visible fields and applies filters
     Given Priya is on the View Browser in graph mode
-    When Priya opens the Content editor
-    And Priya sets node secondary fields to include "Owner" and "Version"
-    And Priya applies content bindings
-    Then graph node "munin" displays secondary text containing "platform-team"
-    And the browser URL includes content=custom
+    When Priya selects element stereotype "component"
+    And Priya checks visible field "Jira key" for stereotype "component"
+    And Priya applies browse filters
+    Then the browser URL includes field_component=
+    And graph node "munin" displays label containing "Jira key:"
 
   @wip
-  Scenario: VIEW-BROWSE-1-79 Save View persists custom content bindings
-    Given Priya is on the View Browser in graph mode
-    And Priya has applied custom content with table column "Version"
-    When Priya saves the current browse session as View "Version column"
-    Then a BrowseView "version-column" exists for model "yggdrasil" owned by Priya
-    And the stored View payload includes custom content bindings
+  Scenario: VIEW-BROWSE-1-79 Package selection narrows stereotype options
+    Given Priya is on the View Browser with the filter panel open
+    When Priya selects package "application" in the filter panel
+    Then the element stereotype filter includes "component"
+    And the element stereotype filter does not include "person"

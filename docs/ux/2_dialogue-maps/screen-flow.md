@@ -172,7 +172,7 @@ from global nav and their internal CRUDLF sub-screens. Browse is always scoped t
 Model: canonical path `/models/{slug}/views/`; unscoped `/views/` 302s to the default
 Model. The left-navigator Model switcher changes `{slug}` and reloads the graph.
 
-**Named Views** are in-browser state on VIEW-BROWSE-1 (header **Views** dropdown + filter-panel save); no new Screen ID. Load via `?browse_view={slug}` or dropdown; live filter/depth state remains URL-encoded without saving.
+**Named Views** are in-browser state on VIEW-BROWSE-1 (canvas-toolbar **Views** dropdown + filter-panel save); no new Screen ID. Load via `?browse_view={slug}` or dropdown; live filter/depth/field state remains URL-encoded without saving.
 
 ```mermaid
 ---

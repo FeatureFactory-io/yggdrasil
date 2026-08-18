@@ -33,7 +33,11 @@ Scenarios **01–15** (except 11 @wip) covered by `test_view_browse.py`.
 | W12 | Model switcher | 48–54 | AT + E2E |
 | W13 | Depth traversal BFS + slider + element tree | 55–60 | AT + E2E · [#93](https://github.com/FeatureFactory-io/yggdrasil/issues/93) |
 | W14 | **Views v1** — `BrowseView`, save/load, `browse_view=`, `mode=` migration | 61–68 | [`BPE-W14-W15-views-implementation.md`](BPE-W14-W15-views-implementation.md) · [#94](https://github.com/FeatureFactory-io/yggdrasil/issues/94) |
-| W15 | **Views v2** — Filters-first `field_map`, viewport, in-node labels | 69–79 | Same plan · [#95](https://github.com/FeatureFactory-io/yggdrasil/issues/95) blocked on W14 |
+| W15 | **Views v2** — Filters-first `field_map`, viewport, in-node labels | 69–79 | Same plan · [#95](https://github.com/FeatureFactory-io/yggdrasil/issues/95) |
+| W16 | **Polish** — subtitle, toolbar sizing, header alignment, sticky Apply (#96–#99) | — | Shipped 2026-08-18 |
+| W17 | **Inspector custom properties** — `property_schema` rows (#100) | 27b | [`BPE-W17-inspector-custom-properties.md`](BPE-W17-inspector-custom-properties.md) · [`VIEW-BROWSE-1_INSPECTOR_PROPERTIES_CR.md`](VIEW-BROWSE-1_INSPECTOR_PROPERTIES_CR.md) |
+| W18 | **Filter custom properties** — dynamic field_map from metamodel (#101) | 81 | [`BPE-W18-filter-custom-properties.md`](BPE-W18-filter-custom-properties.md) · [`VIEW-BROWSE-1_FILTER_CUSTOM_PROPERTIES_CR.md`](VIEW-BROWSE-1_FILTER_CUSTOM_PROPERTIES_CR.md) |
+| W19 | **Navigator package defaults** — top-level packages at depth=1 (#102) | 25 | [`BPE-W19-navigator-default-tree.md`](BPE-W19-navigator-default-tree.md) · [`VIEW-BROWSE-1_NAVIGATOR_DEFAULTS_CR.md`](VIEW-BROWSE-1_NAVIGATOR_DEFAULTS_CR.md) |
 
 **TFK-07 before W8:** gaps #7–17 in [`docs/features/CATALOG.md`](../../features/CATALOG.md#known-gaps--tfk-07).
 

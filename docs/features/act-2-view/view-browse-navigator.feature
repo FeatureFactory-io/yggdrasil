@@ -25,6 +25,12 @@ Feature: VIEW-BROWSE-1 View Browser — Element Navigator (left panel)
     And the element "browser-nav-panel" should be visible
     And the element "browser-model-name" should be visible
     And the element "browser-element-tree" should be visible
+
+  Scenario: VIEW-BROWSE-1-25 Default navigator groups elements under top-level packages
+    When I GET "/models/yggdrasil/views/?mode=graph"
+    Then the response status is 200
+    And the element "package-toggle-application" should be visible
+    And the element "nav-element-auth" should be visible
     And the element "browser-search-input" should be visible
     And the user should see "Yggdrasil"
 

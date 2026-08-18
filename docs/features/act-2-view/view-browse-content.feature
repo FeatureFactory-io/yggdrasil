@@ -42,6 +42,13 @@ Feature: ✅ VIEW-BROWSE-1 View Browser — Content via Filters panel (Views v2)
     And the element "filter-panel-footer" should be visible
     And the element "apply-filters-btn" should be visible
 
+  Scenario: VIEW-BROWSE-1-81 Filter panel lists custom property_schema fields
+    Given the view browser metamodel includes actor stereotype with custom property schema
+    When I GET "/models/yggdrasil/views/?stereotype=actor"
+    Then the response status is 200
+    And the element "view-fields-actor" should be visible
+    And the element "view-field-actor-properties.actor_id" should be visible
+
   Scenario: VIEW-BROWSE-1-76 Table mode does not restore graph viewport from saved View
     Given a BrowseView "table-only" exists for model "yggdrasil" with presentation table and a saved viewport
     When I GET "/models/yggdrasil/views/?browse_view=table-only"

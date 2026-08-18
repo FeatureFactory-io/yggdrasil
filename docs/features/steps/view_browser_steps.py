@@ -55,6 +55,7 @@ from yggdrasil.graph.models import (
     BrowseView,
     Element,
     Relationship,
+    Stereotype,
     YggdrasilModel,
     ensure_c4_metamodel,
 )
@@ -107,6 +108,28 @@ def step_model_loaded_explorer_fixture(context, slug: str) -> None:
     )
     count = Element.objects.filter(model__slug=slug).count()
     assert count == 19, f"Expected 19 explorer elements, got {count}"
+
+
+@given("the view browser metamodel includes actor stereotype with custom property schema")
+def step_view_browser_actor_stereotype(context) -> None:
+    """Ensure Actor stereotype exists with custom property_schema for filter tests."""
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    model = YggdrasilModel.objects.get(slug=model_slug)
+    Stereotype.objects.update_or_create(
+        metamodel=model.metamodel,
+        slug="actor",
+        defaults={
+            "name": "Actor",
+            "is_edge": False,
+            "property_schema": {
+                "type": "object",
+                "properties": {
+                    "actor_id": {"type": "string", "title": "Actor ID"},
+                    "persona_name": {"type": "string"},
+                },
+            },
+        },
+    )
 
 
 @given('the models "{model_a}" and "{model_b}" exist and the architect can read both')
@@ -275,6 +298,21 @@ def step_inspector_shows_element(context, name: str) -> None:
 @when('I GET the view browser inspector element partial for "{slug}"')
 def step_get_inspector_element_partial(context, slug: str) -> None:
     """GET ``/views/inspector/element/<pk>/`` for an element slug on the loaded model."""
+    _fetch_inspector_element_partial(context, slug)
+
+
+@when('I GET the view browser inspector element partial for "{slug}" with custom properties')
+def step_get_inspector_element_partial_with_properties(context, slug: str) -> None:
+    """Seed custom properties on the element, then GET the inspector partial."""
+    model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
+    element = Element.objects.get(model__slug=model_slug, slug=slug)
+    element.properties = {"jira_key": "YGG-42", "persona_name": "Planner"}
+    element.save(update_fields=["properties"])
+    _fetch_inspector_element_partial(context, slug)
+
+
+def _fetch_inspector_element_partial(context, slug: str) -> None:
+    """Shared GET handler for element inspector partials."""
     model_slug = getattr(context, "view_browser_model_slug", "yggdrasil")
     element = Element.objects.get(model__slug=model_slug, slug=slug)
     path = reverse(

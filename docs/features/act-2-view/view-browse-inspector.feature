@@ -50,6 +50,12 @@ Feature: VIEW-BROWSE-1 View Browser — Property Inspector (right panel)
     And the user should not see "nav-view-browser"
     And the response is an embed partial
 
+  Scenario: VIEW-BROWSE-1-27b Inspector partial renders stored custom properties
+    When I GET the view browser inspector element partial for "munin" with custom properties
+    Then the response status is 200
+    And the element "inspector-property-key-jira_key" should be visible
+    And the user should see "YGG-42"
+
   Scenario: VIEW-BROWSE-1-28 Relationship inspector partial returns endpoints without page chrome
     When I GET the view browser inspector relationship partial from "munin" to "llm"
     Then the response status is 200

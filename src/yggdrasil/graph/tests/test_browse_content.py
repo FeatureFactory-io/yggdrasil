@@ -80,7 +80,22 @@ def test_parse_field_map_log_story(caplog) -> None:
     assert_log_story(
         caplog,
         where="browse_content.parse_field_map_from_query",
-        beats={"processing": ["field_stereotypes=", "field_path_count="]},
+        beats={
+            "processing": ["field_stereotypes=", "field_path_count="],
+            "branch": ["reason=populated"],
+        },
+    )
+
+
+def test_parse_field_map_log_story_empty(caplog) -> None:
+    """Empty query logs reason=empty."""
+    request = RequestFactory().get("/models/yggdrasil/views/")
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph"):
+        browse_content.parse_field_map_from_query(request.GET)
+    assert_log_story(
+        caplog,
+        where="browse_content.parse_field_map_from_query",
+        beats={"branch": ["reason=empty"]},
     )
 
 
@@ -92,7 +107,41 @@ def test_format_node_label_log_story(caplog) -> None:
     assert_log_story(
         caplog,
         where="browse_content.format_node_label_from_paths",
-        beats={"processing": ["element_id=", "path_count="]},
+        beats={
+            "processing": ["element_id=", "path_count="],
+            "exit": ["line_count="],
+        },
+    )
+
+
+def test_build_table_columns_log_story_happy(caplog) -> None:
+    """Table column derivation logs field_map vs default branch and count."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph"):
+        browse_content.build_table_columns(
+            element_stereotypes=["component"],
+            field_map={"component": ["name", "owner", "health"]},
+        )
+    assert_log_story(
+        caplog,
+        where="browse_content.build_table_columns",
+        beats={
+            "branch": ["reason=field_map_columns"],
+            "exit": ["column_count="],
+        },
+    )
+
+
+def test_build_view_field_sections_log_story_happy(caplog) -> None:
+    """Field sections log processing and exit counts."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph"):
+        browse_content.build_view_field_sections(["component"], ["depends_on"])
+    assert_log_story(
+        caplog,
+        where="browse_content.build_view_field_sections",
+        beats={
+            "processing": ["element_count=", "relationship_count="],
+            "exit": ["section_count="],
+        },
     )
 
 
@@ -111,5 +160,8 @@ def test_browse_content_log_story_happy(caplog) -> None:
     assert_log_story(
         caplog,
         where="browse_content.parse_field_map_from_query",
-        beats={"processing": ["field_stereotypes=", "field_path_count="]},
+        beats={
+            "processing": ["field_stereotypes=", "field_path_count="],
+            "branch": ["reason=populated"],
+        },
     )

@@ -84,6 +84,16 @@ def parse_field_map_from_query(query: Any) -> dict[str, list[str]]:
         len(field_map),
         sum(len(paths) for paths in field_map.values()),
     )
+    if field_map:
+        logger.info(
+            "browse_content.parse_field_map_from_query | branch | reason=populated "
+            "field_stereotypes=%s",
+            sorted(field_map),
+        )
+    else:
+        logger.info(
+            "browse_content.parse_field_map_from_query | branch | reason=empty",
+        )
     return field_map
 
 
@@ -150,8 +160,19 @@ def format_node_label_from_paths(element: dict[str, Any], field_paths: list[str]
         len(field_paths),
     )
     if lines:
+        logger.info(
+            "browse_content.format_node_label_from_paths | exit | element_id=%s "
+            "line_count=%s reason=populated_label",
+            element_id,
+            len(lines),
+        )
         return "\n".join(lines)
     name = element_field_value(element, "name") or "—"
+    logger.info(
+        "browse_content.format_node_label_from_paths | exit | element_id=%s "
+        "line_count=1 reason=fallback_name",
+        element_id,
+    )
     return f"{field_path_label('name')}: {name}"
 
 
@@ -175,10 +196,27 @@ def build_table_columns(
                 seen.add(path)
                 cols.append(path)
     if len(cols) <= 2:
+        logger.info(
+            "browse_content.build_table_columns | branch | reason=default_columns "
+            "stereotype_count=%s",
+            len(element_stereotypes),
+        )
         cols.extend(["owner", "package"])
-    return [
+    else:
+        logger.info(
+            "browse_content.build_table_columns | branch | reason=field_map_columns "
+            "stereotype_count=%s field_map_keys=%s",
+            len(element_stereotypes),
+            sorted(field_map),
+        )
+    columns = [
         {"key": key, "label": TABLE_COLUMN_LABELS.get(key, field_path_label(key))} for key in cols
     ]
+    logger.info(
+        "browse_content.build_table_columns | exit | column_count=%s",
+        len(columns),
+    )
+    return columns
 
 
 def _field_section(
@@ -209,6 +247,13 @@ def build_view_field_sections(
     """Build stereotype-grouped field checklists for the Filters panel."""
     selected_fields = selected_fields or {}
     catalog = stereotype_fields or {}
+    logger.info(
+        "browse_content.build_view_field_sections | processing | element_count=%s "
+        "relationship_count=%s catalog_count=%s",
+        len(element_stereotypes),
+        len(relationship_stereotypes),
+        len(catalog),
+    )
 
     def _fields_for(slug: str, *, is_edge: bool) -> list[dict[str, str]]:
         if slug in catalog:
@@ -240,7 +285,12 @@ def build_view_field_sections(
         )
         for slug in relationship_stereotypes
     ]
-    return element_sections + relationship_sections
+    sections = element_sections + relationship_sections
+    logger.info(
+        "browse_content.build_view_field_sections | exit | section_count=%s",
+        len(sections),
+    )
+    return sections
 
 
 def field_map_for_element(element: dict[str, Any], field_map: dict[str, list[str]]) -> list[str]:

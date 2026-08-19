@@ -33,6 +33,11 @@ def validate_payload_v1(payload: dict[str, Any]) -> dict[str, Any]:
     :raises ValidationError: When required keys or types are invalid.
     """
     if not isinstance(payload, dict):
+        logger.info(
+            "BrowseViewService.validate_payload_v1 | validation | reason=not_object "
+            "payload_type=%s",
+            type(payload).__name__,
+        )
         raise ValidationError({"payload": "Payload must be a JSON object."})
 
     normalized: dict[str, Any] = {
@@ -69,6 +74,15 @@ def save_view(
     cleaned_name = _validated_view_name(user, model, name)
     normalized_payload = validate_payload_v1(payload)
     slug = slugify(cleaned_name)
+    logger.info(
+        "BrowseViewService.save_view | processing | slug=%s",
+        slug,
+    )
+    logger.info(
+        "BrowseViewService.save_view | config | presentation=%s depth=%s",
+        normalized_payload.get("presentation"),
+        (normalized_payload.get("levels") or {}).get("depth"),
+    )
     _reject_duplicate_slug(user, model, slug, cleaned_name)
     return _create_browse_view(user, model, cleaned_name, slug, normalized_payload)
 
@@ -106,7 +120,19 @@ def list_views(user: User, model: YggdrasilModel) -> QuerySet[BrowseView]:
     :param model: Active YggdrasilModel.
     :return: QuerySet ordered by name.
     """
-    return BrowseView.objects.filter(model=model, owner=user).order_by("name")
+    logger.info(
+        "BrowseViewService.list_views | entry | user_pk=%s model_slug=%s",
+        user.pk,
+        model.slug,
+    )
+    queryset = BrowseView.objects.filter(model=model, owner=user).order_by("name")
+    logger.info(
+        "BrowseViewService.list_views | exit | user_pk=%s model_slug=%s count=%s",
+        user.pk,
+        model.slug,
+        queryset.count(),
+    )
+    return queryset
 
 
 def resolve_view_for_load(
@@ -122,8 +148,22 @@ def resolve_view_for_load(
     :param slug: View slug from ``?browse_view=``.
     :return: Matching BrowseView or None when not found.
     """
+    logger.info(
+        "BrowseViewService.resolve_view_for_load | entry | user_pk=%s model_slug=%s slug=%s",
+        user.pk,
+        model.slug,
+        slug,
+    )
     owned = BrowseView.objects.filter(model=model, owner=user, slug=slug).first()
     if owned is not None:
+        logger.info(
+            "BrowseViewService.resolve_view_for_load | branch | user_pk=%s model_slug=%s "
+            "slug=%s reason=owned browse_view_id=%s",
+            user.pk,
+            model.slug,
+            slug,
+            owned.pk,
+        )
         return owned
     shared = BrowseView.objects.filter(model=model, slug=slug).order_by("name").first()
     if shared is None:
@@ -133,6 +173,16 @@ def resolve_view_for_load(
             model.slug,
             slug,
         )
+        return None
+    logger.info(
+        "BrowseViewService.resolve_view_for_load | branch | user_pk=%s model_slug=%s "
+        "slug=%s reason=shared browse_view_id=%s owner_pk=%s",
+        user.pk,
+        model.slug,
+        slug,
+        shared.pk,
+        shared.owner_id,
+    )
     return shared
 
 
@@ -146,7 +196,30 @@ def get_view(user: User, model: YggdrasilModel, slug: str) -> BrowseView:
     :return: Matching BrowseView.
     :raises BrowseView.DoesNotExist: When no row matches.
     """
-    return BrowseView.objects.get(model=model, owner=user, slug=slug)
+    logger.info(
+        "BrowseViewService.get_view | entry | user_pk=%s model_slug=%s slug=%s",
+        user.pk,
+        model.slug,
+        slug,
+    )
+    try:
+        view = BrowseView.objects.get(model=model, owner=user, slug=slug)
+    except BrowseView.DoesNotExist:
+        logger.info(
+            "BrowseViewService.get_view | error | user_pk=%s model_slug=%s slug=%s "
+            "reason=not_found",
+            user.pk,
+            model.slug,
+            slug,
+        )
+        raise
+    logger.info(
+        "BrowseViewService.get_view | exit | user_pk=%s slug=%s browse_view_id=%s",
+        user.pk,
+        view.slug,
+        view.pk,
+    )
+    return view
 
 
 def delete_view(user: User, model: YggdrasilModel, slug: str) -> None:
@@ -194,6 +267,11 @@ def expand_to_query_params(view: BrowseView) -> dict[str, list[str]]:
     params = _filter_params_from_payload(payload)
     _append_content_params(params, payload)
     logger.info(
+        "BrowseViewService.expand_to_query_params | processing | slug=%s param_keys=%s",
+        view.slug,
+        sorted(params),
+    )
+    logger.info(
         "BrowseViewService.expand_to_query_params | exit | slug=%s depth=%s mode=%s",
         view.slug,
         params["depth"][0],
@@ -235,6 +313,9 @@ def _reject_duplicate_slug(
 def _normalize_filters(filters: Any) -> dict[str, list[str]]:
     """Validate and normalize payload filter lists."""
     if not isinstance(filters, dict):
+        logger.info(
+            "BrowseViewService.validate_payload_v1 | validation | reason=filters_not_object",
+        )
         raise ValidationError({"filters": "filters must be an object."})
     return {
         "packages": _coerce_str_list(filters.get("packages")),
@@ -246,12 +327,22 @@ def _normalize_filters(filters: Any) -> dict[str, list[str]]:
 def _normalize_levels(levels: Any) -> dict[str, int]:
     """Validate and normalize payload depth."""
     if not isinstance(levels, dict):
+        logger.info(
+            "BrowseViewService.validate_payload_v1 | validation | reason=levels_not_object",
+        )
         raise ValidationError({"levels": "levels must be an object."})
     try:
         depth = int(levels.get("depth", 1))
     except (TypeError, ValueError) as exc:
+        logger.info(
+            "BrowseViewService.validate_payload_v1 | validation | reason=depth_not_integer",
+        )
         raise ValidationError({"levels.depth": "depth must be an integer."}) from exc
     if depth < 1:
+        logger.info(
+            "BrowseViewService.validate_payload_v1 | validation | reason=depth_lt_1 depth=%s",
+            depth,
+        )
         raise ValidationError({"levels.depth": "depth must be >= 1."})
     return {"depth": depth}
 
@@ -259,6 +350,11 @@ def _normalize_levels(levels: Any) -> dict[str, int]:
 def _normalize_presentation(presentation: Any) -> str:
     """Validate presentation mode."""
     if presentation not in VALID_PRESENTATIONS:
+        logger.info(
+            "BrowseViewService.validate_payload_v1 | validation | "
+            "reason=invalid_presentation presentation=%s",
+            presentation,
+        )
         raise ValidationError({"presentation": f"Must be one of {sorted(VALID_PRESENTATIONS)}."})
     return str(presentation)
 

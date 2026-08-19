@@ -448,6 +448,216 @@ def test_bfs_subgraph_log_story_reject(view_browser_model, caplog) -> None:
 
 
 @pytest.mark.django_db
+def test_list_elements_log_story_happy(view_browser_model, caplog) -> None:
+    """list_elements logs limit cap, filter branch, and returned counts."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
+        browse_service.list_elements(model_slug="yggdrasil", package="technology", limit=50)
+    assert_log_story(
+        caplog,
+        where="browse_service.list_elements",
+        beats={
+            "entry": ["model_slug=yggdrasil"],
+            "validation": ["requested_limit=50", "capped="],
+            "branch": ["reason=filtered", "package=technology"],
+            "processing": ["total=", "returned="],
+            "exit": ["returned_count="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_list_elements_log_story_unfiltered(view_browser_model, caplog) -> None:
+    """Unfiltered list_elements logs reason=unfiltered."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
+        browse_service.list_elements(model_slug="yggdrasil", limit=500)
+    assert_log_story(
+        caplog,
+        where="browse_service.list_elements",
+        beats={
+            "validation": ["requested_limit=500", "capped=True"],
+            "branch": ["reason=unfiltered"],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_list_filter_options_log_story_happy(view_browser_model, caplog) -> None:
+    """Filter dropdowns log package and stereotype counts."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
+        browse_service.list_filter_options(model_slug="yggdrasil")
+    assert_log_story(
+        caplog,
+        where="browse_service.list_filter_options",
+        beats={
+            "entry": ["model_slug=yggdrasil"],
+            "exit": ["package_count=", "stereotype_count="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_stereotype_field_catalog_log_story_happy(view_browser_model, caplog) -> None:
+    """Catalog merge logs static-vs-base schema choice once."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
+        browse_service.stereotype_field_catalog(model_slug="yggdrasil")
+    assert_log_story(
+        caplog,
+        where="browse_service.stereotype_field_catalog",
+        beats={
+            "entry": ["model_slug=yggdrasil"],
+            "processing": ["reason=", "static_count=", "base_count="],
+            "exit": ["stereotype_count="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_list_all_element_summaries_log_story_happy(view_browser_model, caplog) -> None:
+    """Navigator summaries log entry and element_count."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
+        browse_service.list_all_element_summaries(model_slug="yggdrasil")
+    assert_log_story(
+        caplog,
+        where="browse_service.list_all_element_summaries",
+        beats={
+            "entry": ["model_slug=yggdrasil"],
+            "exit": ["element_count="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_build_package_scoped_filter_options_log_story_no_packages(
+    view_browser_model, caplog
+) -> None:
+    """Empty package selection returns base options with reason=no_packages."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
+        browse_service.build_package_scoped_filter_options(model_slug="yggdrasil", packages=())
+    assert_log_story(
+        caplog,
+        where="browse_service.build_package_scoped_filter_options",
+        beats={
+            "entry": ["package_count=0"],
+            "branch": ["reason=no_packages"],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_build_package_scoped_filter_options_log_story_scoped(view_browser_model, caplog) -> None:
+    """Package-scoped options log reason=scoped."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
+        browse_service.build_package_scoped_filter_options(
+            model_slug="yggdrasil", packages=("technology",)
+        )
+    assert_log_story(
+        caplog,
+        where="browse_service.build_package_scoped_filter_options",
+        beats={
+            "entry": ["package_count=1"],
+            "branch": ["reason=scoped"],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_resolve_model_log_story_happy(view_browser_model, caplog) -> None:
+    """Successful model resolve logs model_id and slug."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
+        browse_service.resolve_model("yggdrasil")
+    assert_log_story(
+        caplog,
+        where="browse_service.resolve_model",
+        beats={"exit": ["model_id=", "slug=yggdrasil"]},
+    )
+
+
+@pytest.mark.django_db
+def test_resolve_model_log_story_reject(caplog) -> None:
+    """Missing model logs reason=not_found."""
+    with (
+        caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"),
+        pytest.raises(ValueError, match="not found"),
+    ):
+        browse_service.resolve_model("missing-model")
+    assert_log_story(
+        caplog,
+        where="browse_service.resolve_model",
+        beats={"error": ["reason=not_found", "model_slug=missing-model"]},
+    )
+
+
+@pytest.mark.django_db
+def test_bfs_from_element_log_story_happy(view_browser_model, caplog) -> None:
+    """Single-element BFS logs adjacency choice and visited count."""
+    element = Element.objects.filter(model__slug="yggdrasil").order_by("name").first()
+    assert element is not None
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
+        browse_service.bfs_from_element(element, direction="outgoing", depth=2)
+    assert_log_story(
+        caplog,
+        where="browse_service.bfs_from_element",
+        beats={
+            "entry": ["element_id=", "direction=outgoing", "depth=2"],
+            "branch": ["reason=outgoing_adjacency"],
+            "processing": ["visited="],
+            "exit": ["node_count="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_bfs_from_element_log_story_reject(view_browser_model, caplog) -> None:
+    """Invalid BFS depth logs reason=invalid_depth."""
+    element = Element.objects.filter(model__slug="yggdrasil").first()
+    assert element is not None
+    with (
+        caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"),
+        pytest.raises(ValueError, match="depth must be >= 1"),
+    ):
+        browse_service.bfs_from_element(element, direction="outgoing", depth=0)
+    assert_log_story(
+        caplog,
+        where="browse_service.bfs_from_element",
+        beats={
+            "entry": ["element_id=", "depth=0"],
+            "validation": ["reason=invalid_depth"],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_subgraph_for_elements_log_story_legacy(view_browser_model, caplog) -> None:
+    """Legacy PK list uses reason=legacy_element_ids."""
+    ids = list(Element.objects.filter(model__slug="yggdrasil").values_list("pk", flat=True)[:2])
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
+        browse_service.subgraph_for_elements(model_slug="yggdrasil", element_ids=ids)
+    assert_log_story(
+        caplog,
+        where="browse_service.subgraph_for_elements",
+        beats={
+            "branch": ["reason=legacy_element_ids"],
+            "exit": ["node_count=", "edge_count="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_subgraph_for_elements_log_story_depth_bfs(view_browser_model, caplog) -> None:
+    """Default subgraph path uses reason=depth_bfs."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
+        browse_service.subgraph_for_elements(model_slug="yggdrasil", depth=1)
+    assert_log_story(
+        caplog,
+        where="browse_service.subgraph_for_elements",
+        beats={
+            "branch": ["reason=depth_bfs"],
+            "exit": ["node_count="],
+        },
+    )
+
+
+@pytest.mark.django_db
 def test_list_elements_mcp_delegates_to_service(view_browser_model, view_browser_user) -> None:
     """F0: MCP list_elements returns same count via shared service."""
     from yggdrasil.mcp.server import set_current_user_id

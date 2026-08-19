@@ -215,13 +215,27 @@ def resolve_model(model_slug: str) -> YggdrasilModel:
     :raises ValueError: If not found or ambiguous.
     """
     try:
-        return YggdrasilModel.objects.get(Q(slug__iexact=model_slug) | Q(name__iexact=model_slug))
+        ymodel = YggdrasilModel.objects.get(Q(slug__iexact=model_slug) | Q(name__iexact=model_slug))
     except YggdrasilModel.DoesNotExist as exc:
+        logger.info(
+            "browse_service.resolve_model | error | model_slug=%s reason=not_found",
+            model_slug,
+        )
         msg = f"Model {model_slug!r} not found"
         raise ValueError(msg) from exc
     except YggdrasilModel.MultipleObjectsReturned as exc:
+        logger.info(
+            "browse_service.resolve_model | error | model_slug=%s reason=ambiguous",
+            model_slug,
+        )
         msg = f"Model {model_slug!r} is ambiguous"
         raise ValueError(msg) from exc
+    logger.info(
+        "browse_service.resolve_model | exit | model_id=%s slug=%s",
+        ymodel.pk,
+        ymodel.slug,
+    )
+    return ymodel
 
 
 def element_summary(element: Element) -> dict[str, Any]:
@@ -293,7 +307,7 @@ def list_elements(
     """
     filters = BrowseFilters(stereotype=stereotype, package=package, health=health, as_of=as_of)
     logger.info(
-        "browse_service.list_elements | entry model_slug=%s filters=%s user_id=%s",
+        "browse_service.list_elements | entry | model_slug=%s filters=%s user_id=%s",
         model_slug,
         filters,
         user_id,
@@ -301,13 +315,36 @@ def list_elements(
     ymodel = resolve_model(model_slug)
     page_limit = min(max(limit, 1), MAX_LIMIT)
     page_offset = max(offset, 0)
+    logger.info(
+        "browse_service.list_elements | validation | requested_limit=%s page_limit=%s "
+        "capped=%s offset=%s",
+        limit,
+        page_limit,
+        limit != page_limit,
+        page_offset,
+    )
+    if stereotype or package or health:
+        logger.info(
+            "browse_service.list_elements | branch | reason=filtered stereotype=%s "
+            "package=%s health=%s",
+            stereotype,
+            package,
+            health,
+        )
+    else:
+        logger.info("browse_service.list_elements | branch | reason=unfiltered")
     qs = _filtered_queryset(ymodel, filters)
     total = qs.count()
     items = [
         element_summary(el) for el in qs.order_by("name")[page_offset : page_offset + page_limit]
     ]
     logger.info(
-        "browse_service.list_elements | exit model_slug=%s total=%s returned_count=%s user_id=%s",
+        "browse_service.list_elements | processing | total=%s returned=%s",
+        total,
+        len(items),
+    )
+    logger.info(
+        "browse_service.list_elements | exit | model_slug=%s total=%s returned_count=%s user_id=%s",
         model_slug,
         total,
         len(items),
@@ -330,6 +367,7 @@ def list_filter_options(*, model_slug: str) -> dict[str, list[dict[str, str]]]:
     :return: ``{"packages": [...], "stereotypes": [...], "health": [...]}``
     :raises ValueError: If model not found.
     """
+    logger.info("browse_service.list_filter_options | entry | model_slug=%s", model_slug)
     ymodel = resolve_model(model_slug)
     packages = [
         {"name": pkg.name, "slug": pkg.slug}
@@ -348,6 +386,14 @@ def list_filter_options(*, model_slug: str) -> dict[str, list[dict[str, str]]]:
         )
     ]
     health = [{"value": value, "label": label} for value, label in Element.HEALTH_CHOICES]
+    logger.info(
+        "browse_service.list_filter_options | exit | model_slug=%s package_count=%s "
+        "stereotype_count=%s rel_stereotype_count=%s",
+        model_slug,
+        len(packages),
+        len(stereotypes),
+        len(relationship_stereotypes),
+    )
     return {
         "packages": packages,
         "stereotypes": stereotypes,
@@ -366,13 +412,32 @@ def stereotype_field_catalog(*, model_slug: str) -> dict[str, list[dict[str, str
     """
     from yggdrasil.graph import browse_content
 
+    logger.info("browse_service.stereotype_field_catalog | entry | model_slug=%s", model_slug)
     ymodel = resolve_model(model_slug)
     catalog: dict[str, list[dict[str, str]]] = {}
+    static_count = 0
+    base_count = 0
     for stereotype in Stereotype.objects.filter(metamodel=ymodel.metamodel):
         static = browse_content.STEREOTYPE_FIELD_SCHEMA.get(stereotype.slug)
         if static is None:
             static = BASE_RELATIONSHIP_FIELDS if stereotype.is_edge else BASE_ELEMENT_FIELDS
+            base_count += 1
+        else:
+            static_count += 1
         catalog[stereotype.slug] = merge_field_definitions(static, stereotype.property_schema)
+    if static_count and base_count:
+        schema_reason = "mixed_catalog"
+    elif static_count:
+        schema_reason = "static_schema"
+    else:
+        schema_reason = "base_schema"
+    logger.info(
+        "browse_service.stereotype_field_catalog | processing | reason=%s "
+        "static_count=%s base_count=%s",
+        schema_reason,
+        static_count,
+        base_count,
+    )
     logger.info(
         "browse_service.stereotype_field_catalog | exit | model_slug=%s stereotype_count=%s",
         model_slug,
@@ -389,6 +454,10 @@ def list_all_element_summaries(*, model_slug: str) -> list[dict[str, Any]]:
     :return: Sorted element summary dicts.
     :raises ValueError: If model not found.
     """
+    logger.info(
+        "browse_service.list_all_element_summaries | entry | model_slug=%s",
+        model_slug,
+    )
     ymodel = resolve_model(model_slug)
     elements = Element.objects.filter(model=ymodel).select_related("stereotype", "package")
     summaries = [element_summary(el) for el in sorted(elements, key=lambda item: item.name)]
@@ -413,9 +482,22 @@ def build_package_scoped_filter_options(
     :return: Filter options with scoped ``stereotypes`` and ``relationship_stereotypes``.
     :raises ValueError: If model not found.
     """
+    logger.info(
+        "browse_service.build_package_scoped_filter_options | entry | model_slug=%s "
+        "package_count=%s",
+        model_slug,
+        len(packages),
+    )
     base = list_filter_options(model_slug=model_slug)
     if not packages:
+        logger.info(
+            "browse_service.build_package_scoped_filter_options | branch | reason=no_packages",
+        )
         return base
+    logger.info(
+        "browse_service.build_package_scoped_filter_options | branch | reason=scoped packages=%s",
+        packages,
+    )
     ymodel = resolve_model(model_slug)
     pkg_slugs = {pkg.lower() for pkg in packages}
     scoped_elements = Element.objects.filter(
@@ -790,19 +872,42 @@ def bfs_from_element(
     :return: ``DepthSubgraph`` scoped to the walk.
     :raises ValueError: If depth or direction is invalid.
     """
+    logger.info(
+        "browse_service.bfs_from_element | entry | element_id=%s direction=%s depth=%s",
+        element.pk,
+        direction,
+        depth,
+    )
     if depth < 1:
+        logger.info(
+            "browse_service.bfs_from_element | validation | depth=%s reason=invalid_depth",
+            depth,
+        )
         msg = f"depth must be >= 1, got {depth}"
         raise ValueError(msg)
     if direction not in {"outgoing", "incoming", "both"}:
+        logger.info(
+            "browse_service.bfs_from_element | validation | direction=%s reason=invalid_direction",
+            direction,
+        )
         msg = f"direction must be outgoing, incoming, or both, got {direction!r}"
         raise ValueError(msg)
     ymodel = element.model
     root_ids = {element.pk}
     if direction == "outgoing":
+        logger.info(
+            "browse_service.bfs_from_element | branch | reason=outgoing_adjacency",
+        )
         adjacency = _outgoing_adjacency(ymodel)
     elif direction == "incoming":
+        logger.info(
+            "browse_service.bfs_from_element | branch | reason=incoming_adjacency",
+        )
         adjacency = _incoming_adjacency(ymodel)
     else:
+        logger.info(
+            "browse_service.bfs_from_element | branch | reason=both_adjacency",
+        )
         outgoing = _outgoing_adjacency(ymodel)
         incoming = _incoming_adjacency(ymodel)
         merged: dict[int, list[int]] = defaultdict(list)
@@ -842,6 +947,17 @@ def bfs_from_element(
         for rel in rels
     ]
     max_depth = compute_max_depth(ymodel, root_ids)
+    logger.info(
+        "browse_service.bfs_from_element | processing | visited=%s edge_count=%s",
+        len(visited),
+        len(cytoscape_edges),
+    )
+    logger.info(
+        "browse_service.bfs_from_element | exit | element_id=%s node_count=%s max_depth=%s",
+        element.pk,
+        len(node_summaries),
+        max_depth,
+    )
     return DepthSubgraph(
         node_summaries=node_summaries,
         cytoscape_elements=cytoscape_elements,
@@ -880,6 +996,12 @@ def subgraph_for_elements(
     :raises ValueError: If model not found.
     """
     if element_ids is not None:
+        logger.info(
+            "browse_service.subgraph_for_elements | branch | reason=legacy_element_ids "
+            "count=%s user_id=%s",
+            len(element_ids),
+            user_id,
+        )
         ymodel = resolve_model(model_slug)
         elements = list(
             Element.objects.filter(model=ymodel, pk__in=element_ids).select_related(
@@ -910,7 +1032,8 @@ def subgraph_for_elements(
             for rel in rels.select_related("stereotype")
         ]
         logger.info(
-            "browse_service.subgraph_for_elements | exit model_slug=%s node_count=%s edge_count=%s user_id=%s",
+            "browse_service.subgraph_for_elements | exit | model_slug=%s node_count=%s "
+            "edge_count=%s user_id=%s",
             model_slug,
             len(nodes),
             len(edges),
@@ -918,6 +1041,11 @@ def subgraph_for_elements(
         )
         return {"elements": nodes, "edges": edges}
 
+    logger.info(
+        "browse_service.subgraph_for_elements | branch | reason=depth_bfs depth=%s user_id=%s",
+        depth,
+        user_id,
+    )
     scoped = subgraph_from_roots(
         model_slug=model_slug,
         stereotype=stereotype,
@@ -931,7 +1059,8 @@ def subgraph_for_elements(
         field_map=field_map,
     )
     logger.info(
-        "browse_service.subgraph_for_elements | exit model_slug=%s node_count=%s edge_count=%s user_id=%s",
+        "browse_service.subgraph_for_elements | exit | model_slug=%s node_count=%s "
+        "edge_count=%s user_id=%s",
         model_slug,
         len(scoped.cytoscape_elements),
         len(scoped.cytoscape_edges),

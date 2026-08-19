@@ -201,6 +201,8 @@ def test_save_browse_view_log_story_happy(browse_view_model, caplog) -> None:
         where="BrowseViewService.save_view",
         beats={
             "entry": ["user_pk=", "model_slug=", "name="],
+            "processing": ["slug="],
+            "config": ["presentation=", "depth="],
             "exit": ["slug=", "browse_view_id="],
         },
     )
@@ -246,6 +248,7 @@ def test_expand_browse_view_log_story_happy(browse_view_model, caplog) -> None:
         where="BrowseViewService.expand_to_query_params",
         beats={
             "entry": ["slug=", "model_slug=", "user_pk="],
+            "processing": ["param_keys="],
             "exit": ["depth=", "mode="],
         },
     )
@@ -285,4 +288,134 @@ def test_resolve_view_for_load_log_story_not_found(browse_view_model, caplog) ->
         beats={
             "branch": ["reason=not_found"],
         },
+    )
+
+
+@pytest.mark.django_db
+def test_list_views_log_story_happy(browse_view_model, caplog) -> None:
+    """list_views logs entry and catalog count."""
+    owner = UserFactory(is_architect=True)
+    browse_view_service.save_view(
+        owner,
+        browse_view_model,
+        name="Tech only",
+        payload=_sample_payload_v1(),
+    )
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph"):
+        browse_view_service.list_views(owner, browse_view_model)
+    assert_log_story(
+        caplog,
+        where="BrowseViewService.list_views",
+        beats={
+            "entry": ["user_pk=", "model_slug="],
+            "exit": ["count="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_resolve_view_for_load_log_story_owned(browse_view_model, caplog) -> None:
+    """Owned slug logs reason=owned."""
+    owner = UserFactory(is_architect=True)
+    saved = browse_view_service.save_view(
+        owner,
+        browse_view_model,
+        name="Tech only",
+        payload=_sample_payload_v1(),
+    )
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph"):
+        browse_view_service.resolve_view_for_load(owner, browse_view_model, saved.slug)
+    assert_log_story(
+        caplog,
+        where="BrowseViewService.resolve_view_for_load",
+        beats={
+            "entry": ["slug=", "user_pk="],
+            "branch": ["reason=owned"],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_resolve_view_for_load_log_story_shared(browse_view_model, caplog) -> None:
+    """Another user's slug on the same Model logs reason=shared."""
+    owner = UserFactory(is_architect=True)
+    reader = UserFactory(is_architect=True)
+    saved = browse_view_service.save_view(
+        owner,
+        browse_view_model,
+        name="Shared tech",
+        payload=_sample_payload_v1(),
+    )
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph"):
+        browse_view_service.resolve_view_for_load(reader, browse_view_model, saved.slug)
+    assert_log_story(
+        caplog,
+        where="BrowseViewService.resolve_view_for_load",
+        beats={"branch": ["reason=shared"]},
+    )
+
+
+@pytest.mark.django_db
+def test_get_view_log_story_happy(browse_view_model, caplog) -> None:
+    """get_view logs entry and exit with browse_view_id."""
+    owner = UserFactory(is_architect=True)
+    saved = browse_view_service.save_view(
+        owner,
+        browse_view_model,
+        name="Tech only",
+        payload=_sample_payload_v1(),
+    )
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph"):
+        browse_view_service.get_view(owner, browse_view_model, saved.slug)
+    assert_log_story(
+        caplog,
+        where="BrowseViewService.get_view",
+        beats={
+            "entry": ["slug=", "user_pk="],
+            "exit": ["browse_view_id="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_get_view_log_story_reject(browse_view_model, caplog) -> None:
+    """Missing owned View logs reason=not_found."""
+    owner = UserFactory(is_architect=True)
+    with (
+        caplog.at_level(logging.INFO, logger="yggdrasil.graph"),
+        pytest.raises(BrowseView.DoesNotExist),
+    ):
+        browse_view_service.get_view(owner, browse_view_model, "missing-view")
+    assert_log_story(
+        caplog,
+        where="BrowseViewService.get_view",
+        beats={
+            "entry": ["slug=missing-view"],
+            "error": ["reason=not_found"],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_validate_payload_v1_log_story_reject(caplog) -> None:
+    """Invalid presentation logs validation reason=."""
+    with (
+        caplog.at_level(logging.INFO, logger="yggdrasil.graph"),
+        pytest.raises(ValidationError),
+    ):
+        browse_view_service.validate_payload_v1(
+            {
+                "filters": {
+                    "packages": [],
+                    "element_stereotypes": [],
+                    "relationship_stereotypes": [],
+                },
+                "levels": {"depth": 1},
+                "presentation": "map",
+            }
+        )
+    assert_log_story(
+        caplog,
+        where="BrowseViewService.validate_payload_v1",
+        beats={"validation": ["reason=invalid_presentation"]},
     )

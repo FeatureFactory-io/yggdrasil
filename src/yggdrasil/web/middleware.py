@@ -13,6 +13,7 @@ import uuid
 from typing import TYPE_CHECKING
 
 from yggdrasil.log_context import bind_request_context, clear_request_context
+from yggdrasil.request_trace import traced_request
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -54,7 +55,8 @@ class RequestIdMiddleware:
             request.path,
         )
         try:
-            response = self.get_response(request)
+            with traced_request():
+                response = self.get_response(request)
         except Exception:
             logger.exception(
                 "RequestIdMiddleware | error | request failed | method=%s path=%s",

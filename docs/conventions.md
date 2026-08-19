@@ -26,7 +26,11 @@ All screens follow a consistent naming pattern for end-to-end traceability.
 - `ELEMENT-CREATE_ELEMENT-1` — Create new element
 - `ELEMENT-VIEW_ELEMENT-1` — View element details
 - `RELATIONSHIP-LIST+FIND-1` — Relationships list
-- `VIEW-BROWSE-1` — View browser (multi-level filters)
+- `VIEW-BROWSE-1` — View browser (multi-level filters; **Add Diagram** entry)
+- `DIAGRAM-CREATE_DIAGRAM-1` — Create diagram modal (Name + Package + Diagram kind)
+- `DIAGRAM-EDITOR-1` — Full-screen Cytoscape diagram editor (draft-first)
+- `DIAGRAM-DELETE_DIAGRAM-1` — Delete diagram confirmation modal
+- `DIAGRAM-MOVE_DIAGRAM-1` — Move diagram to package modal
 - `CHAT-ASSIST-1` — AI chat assistant
 - `CHANGESET-LIST+FIND-1` — Pending change review queue
 
@@ -39,7 +43,7 @@ All screens follow a consistent naming pattern for end-to-end traceability.
 | **RELATIONSHIP** | Edge between elements (depends_on, owns, etc.) |
 | **STEREOTYPE** | Metamodel definition: allowed properties, edge rules |
 | **PACKAGE** | Metamodel view root (Context, Technology, Application, Code) |
-| **DIAGRAM** | Cytoscape presentation layout instance on a Model |
+| **DIAGRAM** | Curated presentation view on a Model — kind from Metamodel catalog; Package scopes placement; draft + Munin Save |
 | **CHANGESET** | Staged writes from Ratatosk awaiting review |
 | **VIEW** | Saved query / filter configuration (view browser) |
 

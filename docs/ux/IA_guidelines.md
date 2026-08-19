@@ -323,6 +323,7 @@ Tooltips are initialised globally in `base.html` via `bootstrap.Tooltip` on `DOM
 | Stereotypes | `/metamodel/stereotypes/` | `STEREOTYPE-LIST+FIND-1` |
 | Packages | `/metamodel/packages/` | `PACKAGE-LIST+FIND-1` |
 | Diagrams | `/metamodel/diagrams/` | `DIAGRAM-LIST+FIND-1` |
+| Diagram editor | `/metamodel/diagrams/{id}/edit/` | `DIAGRAM-EDITOR-1` |
 
 ### 4.2 Breadcrumbs
 
@@ -1215,7 +1216,7 @@ Standard series colour order: `HG.primary`, `HG.green`, `HG.orange`, `HG.red`, `
 
 ### 8.2 Cytoscape.js (Graph Visualization)
 
-Used in `VIEW-BROWSE-1` (graph mode), `ELEMENT-VIEW_ELEMENT-1` (ego-graph), `DIAGRAM-LIST+FIND-1` (Part II layout editor).
+Used in `VIEW-BROWSE-1` (graph mode), `ELEMENT-VIEW_ELEMENT-1` (ego-graph), `DIAGRAM-EDITOR-1` (curated diagram editor).
 
 **Standard Cytoscape styles** (base theme — node `label` is **Content-driven** in VIEW-BROWSE-1 from `content.field_map`; formatted as multiline **`Key: value`** lines **inside** round-rectangle nodes):
 
@@ -1284,6 +1285,26 @@ const cytoscapeLayout = { name: "cose", animate: false, padding: 32 };
             border: 1px solid var(--hg-border);">
 </div>
 ```
+
+### 8.3 Diagram editor (`DIAGRAM-EDITOR-1`)
+
+Full-bleed canvas — **no standard page header** (same posture as View Browser graph mode). Entry from View Browser **Add Diagram** or list hover **Edit**.
+
+**Header bar (`diagram-editor-header`):** Diagram name · **`Draft`** badge (`diagram-draft-badge`, warning token when unsaved draft) · Package · Diagram kind · action cluster **[Discard]** (`diagram-discard-btn`) · **[Save]** (`diagram-save-btn`, primary).
+
+**Three-panel layout (`yrg-diagram-editor`):**
+
+| Panel | `data-testid` | Behavior |
+|---|---|---|
+| Left — model tree | `diagram-model-tree` | View Browser navigator; drag-to-canvas |
+| Center — canvas | `diagram-canvas` | Cytoscape `preset`; grabbable nodes; on-canvas **`+`** (`diagram-node-add-rel`) |
+| Right — Tools | `diagram-tools-panel` | Elements + Relationships palettes |
+
+**Create modal (`DIAGRAM-CREATE_DIAGRAM-1`):** `diagram-create-modal` — fields `diagram-name-input`, `diagram-package-select`, `diagram-kind-select`; **[Add]** `diagram-create-submit-btn`.
+
+**List row actions (`DIAGRAM-LIST+FIND-1`):** hover cluster — `diagram-edit-{id}`, `diagram-delete-{id}`, `diagram-move-{id}`.
+
+**View Browser entry:** `add-diagram-btn` immediately after `filters-toggle` on canvas toolbar.
 
 ---
 
@@ -1403,7 +1424,11 @@ Grep-friendly: `grep -r "ELEMENT-LIST+FIND-1" .` finds every artefact for that s
 | `RATATOSK_RUN-VIEW_RATATOSK_RUN-1` | 9 | Run detail (extraction log + Munin blackboard) | MVP |
 | `STEREOTYPE-LIST+FIND-1` | 10 | Stereotype definitions | Part II |
 | `PACKAGE-LIST+FIND-1` | 10 | Package hierarchy | Part II |
-| `DIAGRAM-LIST+FIND-1` | 10 | Diagram list + graph editor | Part II |
+| `DIAGRAM-LIST+FIND-1` | 10 | Diagram list + hover Edit/Delete/Move | Part II |
+| `DIAGRAM-CREATE_DIAGRAM-1` | 2/10 | Create diagram modal (Name + Package + Diagram kind) | Part II |
+| `DIAGRAM-EDITOR-1` | 2/10 | Full-screen Cytoscape diagram editor (draft-first) | Part II |
+| `DIAGRAM-DELETE_DIAGRAM-1` | 10 | Delete diagram confirmation modal | Part II |
+| `DIAGRAM-MOVE_DIAGRAM-1` | 10 | Move diagram to package modal | Part II |
 
 ---
 

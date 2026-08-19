@@ -208,7 +208,8 @@ Priya follows the printed link to `MUNIN-BRIEFING-1` — Munin's post-run archit
   - Footer: **[Clear]** left · **[Save View / Update View]** + **[Apply Filters]** right — **one primary only** (`Apply Filters`).
   - **Clear** resets to the loaded View's original state.
 - **Canvas toolbar (above graph/table):**
-  - **Filters** toggle; **active View name** badge when a named View is loaded (`active-view-name`)
+  - **Filters** toggle; **[Add Diagram]** (`add-diagram-btn`) immediately after Filters — opens **`DIAGRAM-CREATE_DIAGRAM-1`** modal without leaving the current Model context
+  - **active View name** badge when a named View is loaded (`active-view-name`)
   - **Depth slider** (graph mode only)
   - **Views** dropdown (load / save current view…) — left of Table/Graph toggle
   - **Table / Graph** mode toggle
@@ -285,6 +286,47 @@ Every filter state is encoded as a JSON query object appended to the URL — sha
 Munin (`Act 8`) and any MCP client can construct these URLs from natural language without touching the GUI (Key Feature 1). The filter builder always reflects the current URL state — paste a URL, restore the exact view.
 
 Priya switches the navigator to Model "Yggdrasil", selects Stereotype "Capability", sets depth **1** — she sees only capabilities. She moves the slider to **3** — apps that realize those capabilities and stacks they depend on appear in the navigator tree and graph. She adds rule `name contains "payment"` — URL updates live; she copies it to Slack. Marcus clicks it and lands on the identical subgraph of the same Model at the same depth. Priya **saves** the session as View "Payment capability review" and shares `?browse_view=payment-capability-review` with Elena, who loads the same filters and depth without re-entering them.
+
+Priya clicks **[Add Diagram]** on the canvas toolbar, names a new Container diagram under Technology, and lands in **`DIAGRAM-EDITOR-1`** with an empty canvas — she drags Payment API from the left navigator tree, adds a relationship via the on-canvas **`+`**, and **Save** commits through Munin with an auto-generated summary and tags for inventory search.
+
+#### Screen: DIAGRAM-CREATE_DIAGRAM-1
+
+**Context:** Create a curated diagram from the View Browser without navigating away from the active Model.
+
+**Trigger:** **[Add Diagram]** on `VIEW-BROWSE-1` canvas toolbar (after Filters).
+
+**Modal fields:**
+
+| Field | Rule |
+|---|---|
+| **Name** | Required |
+| **Package** | Required — options from the Model's Metamodel packages |
+| **Diagram kind** | Required — options from the Metamodel diagram catalog (C4 example: Context / Container / Component / Code); maps to `Diagram.diagram_type` |
+
+**Actions:** **[Add]** → **`DIAGRAM-EDITOR-1`** (Create mode) with empty canvas and server-side **draft session** (no committed `diagram_id` until first Save). **[Cancel]** closes modal.
+
+#### Screen: DIAGRAM-EDITOR-1
+
+**Context:** Full-screen Cytoscape editor for curated diagrams — membership + presentation. GUI, MCP, and diagram-scoped Munin chat all patch the same **server-side draft**; only **Save** commits via Munin → ChangeSet.
+
+**Modes:**
+
+| Mode | Entry | Canvas loads |
+|---|---|---|
+| **Create** | View Browser Add Diagram → modal → Add | Empty draft session |
+| **Edit** | `DIAGRAM-LIST+FIND-1` hover **Edit** | Draft if present, else committed presentation |
+
+**Layout (three-panel, View Browser visual language):**
+
+- **Header:** Diagram name · **`Draft`** pill when unsaved draft (`diagram-draft-badge`) · Package · Diagram kind · **[Discard]** · **[Save]**
+- **Left — Model tree:** Same navigator tree as View Browser; elements **draggable** onto canvas → draft membership
+- **Center — Canvas:** Cytoscape `preset` layout; grabbable nodes; on-canvas **`+`** starts relationship draw mode
+- **Right — Tools palette:** **Elements** — create from any node stereotype in the Metamodel; **Relationships** — edge stereotypes; disallowed stereotypes for the active node stereotype are greyed per metamodel edge rules
+- **Embedded `CHAT-MUNIN-1`:** Scoped to the active diagram — natural-language edits patch **draft** only; user commits via **[Save]** or MCP `save_diagram`
+
+**Discard:** Confirm if draft dirty → delete draft → return to list or View Browser (committed diagram unchanged).
+
+**Save:** POST full draft → **Munin** validates, enriches **`Diagram.summary`** and **`Diagram.tags`**, produces ChangeSet (`create_diagram`, `update_diagram`, `add_element`, `add_relationship`, `add_to_diagram`, `update_diagram_presentation` as needed) → clears draft. Auto-approval applies immediately; Manual-review opens **`CHANGESET-VIEW_CHANGESET-1`**.
 
 #### Screen: EXPORT-BRIEFING-1
 
@@ -465,8 +507,9 @@ Priya's `mcp_config.json` (from `AUTH-TOKEN-1`):
 | `traverse` | `from, direction?, depth?, stereotype?, as_of?` | Subgraph of elements and relationships | **read** |
 | `list_stereotypes` | `model?` | All stereotypes defined in the metamodel (populates filter dropdowns) | **read** |
 | `list_packages` | `model?` | All packages in the metamodel | **read** (spec — implement in MCP) |
-| `list_diagrams` | `model?, package?` | All C4 diagrams — id, type (Context/Container/Component/Code), package | — |
-| `get_diagram` | `id` | Diagram with element + relationship membership | — |
+| `list_diagrams` | `model_id?, package_id?, tag?, has_draft?` | Diagram inventory — id, name, `diagram_type`, package, summary, tags, **`has_draft`** | — |
+| `get_diagram` | `diagram_id` | Committed metadata + membership + presentation JSON | — |
+| `get_diagram_draft` | `diagram_id?`, `draft_session_id?` | Active draft JSON if exists | — |
 | `list_changesets` | `status?, source?` | Queue of pending/applied ChangeSets | — |
 | `get_changeset` | `id` | ChangeSet with full operations list and Munin reasoning | — |
 | `list_ratatosk_runs` | `model?, status?, limit?` | Paginated run list — id, trigger, status, timestamp, changeset_id | — |
@@ -484,6 +527,11 @@ Priya's `mcp_config.json` (from `AUTH-TOKEN-1`):
 | `delete_relationship` | `id` | Applies or queues |
 | `update_elements_batch` | `operations: list[{op, ...}]` | Batch create/update/delete; Munin plans as one ChangeSet |
 | `update_relationships_batch` | `operations: list[{op, ...}]` | Batch create/update/delete relationships |
+| `update_diagram_draft` | `diagram_id?`, `draft_session_id?`, patch or full draft | Merge into server draft — **no ChangeSet** |
+| `save_diagram` | `diagram_id?`, `draft_session_id?` | Draft → Munin → ChangeSet → commit → clear draft |
+| `discard_diagram_draft` | `diagram_id?`, `draft_session_id?` | Delete draft without ChangeSet |
+| `delete_diagram` | `diagram_id`, `confirm=true` | ChangeSet `delete_diagram`; drops draft |
+| `move_diagram` | `diagram_id`, `package_id` | ChangeSet `update_diagram` (package move) |
 
 #### ChangeSet tools
 
@@ -611,7 +659,7 @@ Marcus reviews 3 pending operations, accepts 2, uses [Do Other] on the third wit
 
 **Context:** Marcus is about to touch the Payment API and wants to know who owns it and how it has drifted since the last release, before writing a line of code.
 
-**Pattern:** Munin's chat is embedded **inside** the View Browser (`VIEW-BROWSE-1`) as a collapsible side panel — when Munin scopes a view or opens a form, it drives the surrounding screen directly. Also reachable headlessly via the `ask_munin` MCP tool (`Act 5`).
+**Pattern:** Munin's chat is embedded **inside** the View Browser (`VIEW-BROWSE-1`) as a collapsible side panel — when Munin scopes a view or opens a form, it drives the surrounding screen directly. When **`DIAGRAM-EDITOR-1`** is active, the same panel is **diagram-scoped**: chat and MCP patch the **diagram draft** via `update_diagram_draft`; Save commits via editor button or `save_diagram`. Also reachable headlessly via the `ask_munin` MCP tool (`Act 5`).
 
 #### Screen: CHAT-MUNIN-1 (embedded panel within VIEW-BROWSE-1)
 
@@ -636,6 +684,8 @@ Munin answers from ground truth only (never hallucinates), drives the surroundin
 **Example 5 — batch update:** "Link all Components in the Payment package to the new API Gateway" → Munin runs an agentic loop: searches for all Components in the Payment package, plans the relationship additions, calls `update_relationships_batch`, posts a ChangeSet for review if in Manual mode.
 
 **Example 6 — generate a briefing:** "Generate a Markdown briefing for the Payment System — one section per C4 level, Mermaid diagrams included, written for a non-technical audience" → Munin scopes the subgraph, generates Mermaid blocks for each level, writes a narrative per section, and returns a Markdown document in the chat — the user copies it or downloads it directly. (Same artifact as `EXPORT-BRIEFING-1`, generated conversationally rather than through the export UI.)
+
+**Example 7 — diagram draft edit:** While editing the Container Diagram in **`DIAGRAM-EDITOR-1`**, Marcus asks "Add Notification Service and link it to Payment API" → Munin patches the **diagram draft** (pending element + relationship + canvas placement); Marcus reviews on canvas and clicks **[Save]** → Munin commits a ChangeSet with summary/tags enrichment.
 
 ---
 
@@ -680,7 +730,33 @@ Package hierarchy (Business View, Application Layer, …).
 
 #### Screen: DIAGRAM-LIST+FIND-1
 
-Diagrams per package; [Open in Graph Editor] launches Cytoscape layout editor.
+**Context:** Inventory and lifecycle management for curated diagrams — package-grouped list with hover actions. Create also available from View Browser **Add Diagram**.
+
+**Layout:** Package-grouped table. Each row: name, **`Draft`** pill (`diagram-draft-badge`) when unsaved draft exists, diagram kind (from Metamodel catalog), package, Munin-generated summary and tags.
+
+**Row hover actions** (LIST+FIND row-actions pattern):
+
+| Action | Screen | Effect |
+|---|---|---|
+| **Edit** | → `DIAGRAM-EDITOR-1` | Loads draft if present, else committed |
+| **Delete** | → `DIAGRAM-DELETE_DIAGRAM-1` modal | Removes diagram presentation; graph Elements/Relationships preserved |
+| **Move** | → `DIAGRAM-MOVE_DIAGRAM-1` modal | Pick target Package (same Metamodel) |
+
+#### Screen: DIAGRAM-DELETE_DIAGRAM-1
+
+**Context:** Confirm removal of a curated diagram view.
+
+**Modal:** Diagram name, package, kind; blast-radius note — membership and presentation removed; **Elements and Relationships remain** in the graph unless deleted separately in an editor session.
+
+**Actions:** **[Delete Diagram]** → Munin `delete_diagram` ChangeSet (also drops any draft). **[Cancel]** closes modal.
+
+#### Screen: DIAGRAM-MOVE_DIAGRAM-1
+
+**Context:** Reposition a diagram under a different Package within the same Metamodel.
+
+**Modal:** Current package (read-only) · **Target package** select (required).
+
+**Actions:** **[Move]** → Munin `update_diagram` (package_id). **[Cancel]** closes modal.
 
 ---
 

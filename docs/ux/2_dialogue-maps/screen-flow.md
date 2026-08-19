@@ -309,6 +309,32 @@ flowchart TD
 
 ---
 
+## Diagram editor navigation (Part II)
+
+```mermaid
+flowchart LR
+    VB[VIEW-BROWSE-1]
+    CREATE[DIAGRAM-CREATE_DIAGRAM-1]
+    EDITOR[DIAGRAM-EDITOR-1]
+    LIST[DIAGRAM-LIST+FIND-1]
+    DEL[DIAGRAM-DELETE_DIAGRAM-1]
+    MOV[DIAGRAM-MOVE_DIAGRAM-1]
+    CS[CHANGESET-VIEW_CHANGESET-1]
+
+    VB -->|Add Diagram| CREATE
+    CREATE -->|Add| EDITOR
+    LIST -->|Edit| EDITOR
+    LIST -->|Delete| DEL
+    LIST -->|Move| MOV
+    EDITOR -->|Save Manual mode| CS
+    EDITOR -->|Save Auto mode| LIST
+    EDITOR -->|Discard| LIST
+```
+
+**Draft layer:** GUI, MCP `update_diagram_draft`, and diagram-scoped `CHAT-MUNIN-1` patch server draft only. **Save** (`save_diagram` MCP or editor button) → Munin → ChangeSet ops: `create_diagram`, `update_diagram`, `delete_diagram`, `update_diagram_presentation`, `add_element`, `add_relationship`, `add_to_diagram`.
+
+---
+
 ## Screen ID Index
 
 | Screen ID | Act | Description |
@@ -336,4 +362,8 @@ flowchart TD
 | `RATATOSK_RUN-VIEW_RATATOSK_RUN-1` | 9 | Run detail (extraction log + Munin blackboard) |
 | `STEREOTYPE-LIST+FIND-1` | 10 | Stereotype definitions (Part II) |
 | `PACKAGE-LIST+FIND-1` | 10 | Package hierarchy (Part II) |
-| `DIAGRAM-LIST+FIND-1` | 10 | Diagram list with graph editor (Part II) |
+| `DIAGRAM-LIST+FIND-1` | 10 | Diagram list — hover Edit/Delete/Move, Draft pill |
+| `DIAGRAM-CREATE_DIAGRAM-1` | 2/10 | Create diagram modal |
+| `DIAGRAM-EDITOR-1` | 2/10 | Full-screen Cytoscape diagram editor |
+| `DIAGRAM-DELETE_DIAGRAM-1` | 10 | Delete diagram confirmation |
+| `DIAGRAM-MOVE_DIAGRAM-1` | 10 | Move diagram to package |

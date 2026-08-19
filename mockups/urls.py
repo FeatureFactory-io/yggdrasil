@@ -30,4 +30,8 @@ urlpatterns = [
     # RATATOSK_RUN-LIST+FIND-1, RATATOSK_RUN-VIEW_RATATOSK_RUN-1
     path("ratatosk-run/", views.ratatosk_run_list, name="mockup_ratatosk_run_list"),
     path("ratatosk-run/<int:id>/", views.ratatosk_run_view, name="mockup_ratatosk_run_view"),
+    # DIAGRAM-LIST+FIND-1, DIAGRAM-EDITOR-1, DIAGRAM-CREATE_DIAGRAM-1
+    path("diagram/", views.diagram_list, name="mockup_diagram_list"),
+    path("diagram/create/", views.diagram_editor_create, name="mockup_diagram_editor_create"),
+    path("diagram/<int:id>/edit/", views.diagram_editor, name="mockup_diagram_editor"),
 ]

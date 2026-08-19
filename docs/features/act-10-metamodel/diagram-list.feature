@@ -1,16 +1,14 @@
-# @pending-mockup — No mockup template exists for Act 10 screens yet.
-# Testids are TBD; behavior spec from user_journey.md and IA_guidelines.md.
+# Mockup: src/yggdrasil/web/templates/mockups/diagram/list.html
+# Reconciliation: docs/plans/DIAGRAM_EDITOR_CHANGE_RECONCILIATION.md
 
 @wip
 Feature: DIAGRAM-LIST+FIND-1 Diagrams per Package
   As an Enterprise Architect (Elena)
-  I want to see all Cytoscape diagrams grouped by package
-  So that I can open the layout editor and manage how elements are visualised
+  I want to see all curated diagrams grouped by package with lifecycle actions
+  So that I can open the editor and manage diagram inventory
 
   # Screen: DIAGRAM-LIST+FIND-1
-  # Part II — Post-MVP (Elena's governance workflow)
-  # No mockup yet. Behavior spec from user_journey.md Act 10, line 582.
-  # Diagram types: Context, Container, Component, Code (C4 levels).
+  # Diagram kinds come from the Model's Metamodel catalog (C4 example below).
 
   Background:
     Given the user is logged in as "architect"
@@ -18,37 +16,45 @@ Feature: DIAGRAM-LIST+FIND-1 Diagrams per Package
   Scenario: DIAGRAM-LIST+FIND-1-01 Diagram list renders with diagrams grouped by package
     When Elena browses to the Diagram list screen
     Then she sees diagrams grouped by package
-    And the Technology package has a "Container Diagram" entry
+    And the Technology package has a "Container Diagram C1" entry
 
-  Scenario: DIAGRAM-LIST+FIND-1-02 Each diagram shows its type (Context/Container/Component/Code)
+  Scenario: DIAGRAM-LIST+FIND-1-02 Each diagram shows its kind from the metamodel catalog
     When Elena views the Diagram list
-    Then each entry shows a type from:
-      | type      |
+    Then each entry shows a diagram kind from the metamodel catalog
+    And C4 metamodel entries may include:
+      | kind      |
       | Context   |
       | Container |
       | Component |
       | Code      |
 
-  Scenario: DIAGRAM-LIST+FIND-1-03 Open in Graph Editor launches Cytoscape layout editor
-    When Elena clicks [Open in Graph Editor] for the Container Diagram
-    Then the Cytoscape layout editor opens for that diagram
-    And Elena can rearrange element positions
+  Scenario: DIAGRAM-LIST+FIND-1-03 Hover Edit opens DIAGRAM-EDITOR-1
+    When Elena hovers the row for "Container Diagram C1"
+    And Elena clicks Edit for "Container Diagram C1"
+    Then DIAGRAM-EDITOR-1 opens for "Container Diagram C1"
 
-  Scenario: DIAGRAM-LIST+FIND-1-04 Diagram instances may be created during bootstrap
-    # Diagram *types* are constrained by the Metamodel; *instances* live on the Model.
+  Scenario: DIAGRAM-LIST+FIND-1-04 Draft pill visible when unsaved draft exists
+    Given "Container Diagram C1" has an unsaved server-side draft
+    When Elena views the Diagram list
+    Then Elena sees the Draft pill on "Container Diagram C1"
+
+  Scenario: DIAGRAM-LIST+FIND-1-05 Hover actions include Edit Delete and Move
+    When Elena hovers the row for "Container Diagram C1"
+    Then Elena sees Edit Delete and Move actions for "Container Diagram C1"
+
+  Scenario: DIAGRAM-LIST+FIND-1-06 Diagram instances may be created during bootstrap
     Given the Metamodel "c4" exists with C4 stereotypes and packages
     And a new model is created with metamodel=c4
     When Elena browses to the Diagram list
-    Then at least one diagram of each C4 type is present
+    Then at least one diagram of each C4 kind is present
 
-  Scenario: DIAGRAM-LIST+FIND-1-05 Diagram list is filterable by package
+  Scenario: DIAGRAM-LIST+FIND-1-07 Diagram list is filterable by package
     Given the model has diagrams in Technology, Application, and Context packages
     When Elena selects "Technology" from the package filter
     Then only diagrams in the Technology package are shown
 
-  Scenario: DIAGRAM-LIST+FIND-1-06 Diagram membership is managed via create-element diagram hints
-    # When creating an element, diagram_hints specify which C4 diagrams it appears in.
-    # ELEMENT-CREATE_ELEMENT-1 diagram-C1 checkbox maps to the Container Diagram.
-    Given Priya creates "Notification Service" with diagram hint "Container Diagram C1"
-    Then "Notification Service" appears in the Container Diagram C1 element list
-    And the Container Diagram membership count increases by 1
+  Scenario: DIAGRAM-LIST+FIND-1-08 Row shows Munin summary and tags after save
+    Given diagram "Container Diagram C1" was saved with Munin enrichment
+    When Elena views the Diagram list
+    Then "Container Diagram C1" shows a summary line
+    And "Container Diagram C1" shows searchable tags

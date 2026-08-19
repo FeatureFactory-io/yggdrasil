@@ -1,0 +1,167 @@
+{% extends "mockups/base.html" %}
+{% block screen_id %}DIAGRAM-LIST+FIND-1{% endblock %}
+{% block title %}Diagrams{% endblock %}
+
+{% block page_header %}
+<div class="d-flex align-items-center justify-content-between">
+  <div>
+    <h1 class="hg-page-title">
+      Diagrams
+      <span class="badge ms-2 rounded-pill" style="background:var(--hg-primary);font-size:0.7rem;vertical-align:middle;">{{ diagram_count }}</span>
+    </h1>
+    <p class="text-muted small mb-0">DIAGRAM-LIST+FIND-1 · Curated presentation views grouped by package</p>
+  </div>
+  <a href="{% url 'mockup_diagram_editor_create' %}" class="btn btn-primary btn-sm"
+     data-testid="diagram-create-from-list-btn">
+    <i class="fa-solid fa-plus me-1" aria-hidden="true"></i>Create Diagram
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div data-testid="diagram-list-page">
+  <section aria-label="Filter panel" class="row g-2 mb-3">
+    <div class="col-md-5">
+      <div class="input-group input-group-sm">
+        <span class="input-group-text"><i class="fa-solid fa-magnifying-glass text-muted" aria-hidden="true"></i></span>
+        <input type="text" class="form-control" placeholder="Find diagrams…"
+               aria-label="Search diagrams">
+      </div>
+    </div>
+    <div class="col-auto">
+      <select class="form-select form-select-sm" data-testid="diagram-filter-package" aria-label="Filter by package">
+        <option>All packages</option>
+        <option>Context</option>
+        <option>Technology</option>
+        <option>Application</option>
+        <option>Code</option>
+      </select>
+    </div>
+  </section>
+
+  {% for group in diagram_groups %}
+  <section class="mb-4" aria-label="{{ group.package }} diagrams">
+    <h2 class="h6 text-uppercase text-muted mb-2">{{ group.package }}</h2>
+    <div class="hg-card">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0" aria-label="{{ group.package }} diagrams">
+          <thead>
+            <tr>
+              <th>Name</th><th>Kind</th><th>Summary</th><th>Tags</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in group.diagrams %}
+            <tr data-testid="diagram-row-{{ d.id }}" class="yrg-row-actions">
+              <td>
+                <a href="{% url 'mockup_diagram_editor' id=d.id %}" class="fw-semibold text-decoration-none">{{ d.name }}</a>
+                {% if d.has_draft %}
+                <span class="badge bg-warning text-dark ms-1" data-testid="diagram-draft-badge">Draft</span>
+                {% endif %}
+              </td>
+              <td><span class="badge bg-light text-dark border">{{ d.kind }}</span></td>
+              <td class="text-muted small">{{ d.summary }}</td>
+              <td class="text-muted small">
+                {% for tag in d.tags %}<span class="badge bg-secondary-subtle text-secondary me-1">{{ tag }}</span>{% endfor %}
+              </td>
+              <td class="text-end">
+                <div class="btn-group btn-group-sm yrg-hover-actions" role="group">
+                  <a href="{% url 'mockup_diagram_editor' id=d.id %}"
+                     class="btn btn-outline-secondary" title="Edit" aria-label="Edit {{ d.name }}"
+                     data-testid="diagram-edit-{{ d.id }}">
+                    <i class="fa-solid fa-pen" aria-hidden="true"></i>
+                  </a>
+                  <button type="button" class="btn btn-outline-secondary" title="Move"
+                          aria-label="Move {{ d.name }}" data-testid="diagram-move-{{ d.id }}"
+                          data-bs-toggle="modal" data-bs-target="#diagramMoveModal"
+                          onclick="prepareMove('{{ d.name|escapejs }}', '{{ d.package|escapejs }}')">
+                    <i class="fa-solid fa-folder-tree" aria-hidden="true"></i>
+                  </button>
+                  <button type="button" class="btn btn-outline-danger" title="Delete"
+                          aria-label="Delete {{ d.name }}" data-testid="diagram-delete-{{ d.id }}"
+                          data-bs-toggle="modal" data-bs-target="#diagramDeleteModal"
+                          onclick="prepareDelete('{{ d.name|escapejs }}')">
+                    <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+  {% endfor %}
+</div>
+
+{# DIAGRAM-DELETE_DIAGRAM-1 #}
+<div class="modal fade" id="diagramDeleteModal" tabindex="-1" aria-labelledby="diagramDeleteTitle"
+     data-testid="diagram-delete-modal">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title h5" id="diagramDeleteTitle">Delete diagram</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Delete <strong id="deleteDiagramName">—</strong>?</p>
+        <p class="small text-muted mb-0">
+          Removes this curated view and its saved layout. Elements and relationships remain in the graph.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger btn-sm" data-testid="diagram-confirm-delete-btn">Delete Diagram</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# DIAGRAM-MOVE_DIAGRAM-1 #}
+<div class="modal fade" id="diagramMoveModal" tabindex="-1" aria-labelledby="diagramMoveTitle"
+     data-testid="diagram-move-modal">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title h5" id="diagramMoveTitle">Move diagram</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted">Diagram: <strong id="moveDiagramName">—</strong></p>
+        <div class="mb-3">
+          <label class="form-label small">Current package</label>
+          <input type="text" class="form-control form-control-sm" id="moveCurrentPackage" readonly>
+        </div>
+        <div>
+          <label for="moveTargetPackage" class="form-label small">Target package</label>
+          <select class="form-select form-select-sm" id="moveTargetPackage" aria-label="Target package">
+            <option>Context</option><option>Technology</option>
+            <option>Application</option><option>Code</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" data-testid="diagram-confirm-move-btn">Move</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<style>
+  .yrg-hover-actions { opacity: 0.35; transition: opacity 0.15s; }
+  tr:hover .yrg-hover-actions { opacity: 1; }
+</style>
+<script>
+  function prepareDelete(name) {
+    document.getElementById('deleteDiagramName').textContent = name;
+  }
+  function prepareMove(name, pkg) {
+    document.getElementById('moveDiagramName').textContent = name;
+    document.getElementById('moveCurrentPackage').value = pkg;
+  }
+</script>
+{% endblock %}

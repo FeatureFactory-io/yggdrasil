@@ -1085,7 +1085,14 @@ All tools expose the read surface and write surface of the graph, changeset, and
 | `list_ratatosk_runs` | `ratatosk_service.list_runs()` | No | No | Filters: `model_id`, `status`, `limit` |
 | `get_ratatosk_run` | `ratatosk_service.get_run()` | No | No | By `run_id`; includes step-level status and ChangeSet proposal ID |
 | `trigger_ratatosk_run` | `ratatosk_service.trigger_run()` | **Yes** | No | Starts NER analysis run; returns `run_id` immediately (async via Celery) |
-| `get_diagram` | `diagram_service.get()` | No | No | Cytoscape-compatible JSON for a diagram; for AI visualisation context |
+| `get_diagram` | `diagram_service.get()` | No | No | Committed diagram metadata + membership + presentation JSON |
+| `list_diagrams` | `diagram_service.list()` | No | No | Diagram inventory; filters: `model_id`, `package_id`, `tag`, `has_draft` |
+| `get_diagram_draft` | `diagram_service.get_draft()` | No | No | Active draft JSON for diagram or create session |
+| `update_diagram_draft` | `diagram_service.patch_draft()` | **Yes** | No | Merge draft — **no ChangeSet**; GUI/MCP/chat auto-save |
+| `save_diagram` | `diagram_service.save()` | **Yes** | No | Draft → Munin → ChangeSet → commit; clears draft |
+| `discard_diagram_draft` | `diagram_service.discard_draft()` | **Yes** | No | Delete draft without ChangeSet |
+| `delete_diagram` | `diagram_service.delete()` | **Yes** | **Yes** | ChangeSet `delete_diagram`; requires `confirm=True`; drops draft |
+| `move_diagram` | `diagram_service.move()` | **Yes** | No | ChangeSet `update_diagram` (package move) |
 | `list_packages` | `graph_service.list_packages()` | No | No | Package hierarchy for a model; **Ratatosk scout read** (spec — implement in MCP query tools) |
 | `search` | `element_service.search()` | No | No | Name/substring search; **Ratatosk scout read** |
 | `traverse` | `browse_service.bfs_from_element()` | No | No | Multi-hop neighbourhood walk from element (`depth` ≥ 1); **Ratatosk scout read**; same BFS helper as View Browser |
@@ -1150,6 +1157,13 @@ Tools in the facade call these endpoints. All must return 200 on a health-check 
 | `get_ratatosk_run` | `/api/v1/ratatosk-runs/{id}/` | GET | Bearer |
 | `trigger_ratatosk_run` | `/api/v1/ratatosk-runs/` | POST | Bearer |
 | `get_diagram` | `/api/v1/diagrams/{id}/` | GET | Bearer |
+| `list_diagrams` | `/api/v1/diagrams/?model_id=…` | GET | Bearer |
+| `get_diagram_draft` | `/api/v1/diagrams/{id}/draft/` | GET | Bearer |
+| `update_diagram_draft` | `/api/v1/diagrams/{id}/draft/` or `/api/v1/diagrams/draft/` | PATCH | Bearer |
+| `save_diagram` | `/api/v1/diagrams/{id}/save/` | POST | Bearer |
+| `discard_diagram_draft` | `/api/v1/diagrams/{id}/draft/` | DELETE | Bearer |
+| `delete_diagram` | `/api/v1/diagrams/{id}/` | DELETE | Bearer |
+| `move_diagram` | `/api/v1/diagrams/{id}/move/` | POST | Bearer |
 | `list_packages` | `/api/v1/packages/?model_id=…` | GET | Bearer |
 
 **API readiness assertion:** smoke test in `tests/integration/mcp/test_mcp_api_readiness.py` — all tool-target endpoints return 200 (GET) or 201/202 (POST) with a valid test token. Runs in CI before facade image build.

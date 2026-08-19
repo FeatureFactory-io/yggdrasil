@@ -521,6 +521,52 @@ assertions and in form step fields.
 | Page container | `ratatosk-run-view-page` |
 | View changeset link | `view-changeset-btn` |
 
+### VIEW-BROWSE-1 — Add Diagram (`view/browse.html`)
+
+| Purpose | `data-testid` |
+|---------|---------------|
+| Add Diagram button | `add-diagram-btn` |
+
+### DIAGRAM-LIST+FIND-1 (`diagram/list.html`)
+
+| Purpose | `data-testid` |
+|---------|---------------|
+| Page container | `diagram-list-page` |
+| Package filter | `diagram-filter-package` |
+| Diagram row | `diagram-row-{id}` |
+| Draft badge | `diagram-draft-badge` |
+| Edit action | `diagram-edit-{id}` |
+| Delete action | `diagram-delete-{id}` |
+| Move action | `diagram-move-{id}` |
+| Delete modal | `diagram-delete-modal` |
+| Move modal | `diagram-move-modal` |
+| Confirm delete | `diagram-confirm-delete-btn` |
+| Confirm move | `diagram-confirm-move-btn` |
+
+### DIAGRAM-CREATE_DIAGRAM-1 (`diagram/editor.html` modal)
+
+| Purpose | `data-testid` |
+|---------|---------------|
+| Create modal | `diagram-create-modal` |
+| Name input | `diagram-name-input` |
+| Package select | `diagram-package-select` |
+| Diagram kind select | `diagram-kind-select` |
+| Submit Add | `diagram-create-submit-btn` |
+
+### DIAGRAM-EDITOR-1 (`diagram/editor.html`)
+
+| Purpose | `data-testid` |
+|---------|---------------|
+| Page container | `diagram-editor-page` |
+| Editor header | `diagram-editor-header` |
+| Draft badge | `diagram-draft-badge` |
+| Discard | `diagram-discard-btn` |
+| Save | `diagram-save-btn` |
+| Model tree | `diagram-model-tree` |
+| Canvas | `diagram-canvas` |
+| Tools panel | `diagram-tools-panel` |
+| Node add relationship | `diagram-node-add-rel` |
+
 ### Global nav (`base.html`)
 
 | Purpose | `data-testid` |

@@ -16,7 +16,9 @@ from yggdrasil.web.browse_helpers import (
     build_package_tree,
     build_traversal_tree,
     build_view_browse_context,
+    parse_browse_params_from_post,
     parse_view_browse_params,
+    user_can_save_views,
 )
 
 
@@ -82,7 +84,11 @@ def test_parse_view_browse_params_log_story_happy(caplog) -> None:
     assert_log_story(
         caplog,
         where="browse_helpers.parse_view_browse_params",
-        beats={"processing": ["field_stereotypes=", "field_path_count="]},
+        beats={
+            "entry": ["model_slug="],
+            "config": ["packages=", "stereotypes=", "depth=", "mode="],
+            "processing": ["field_stereotypes=", "field_path_count="],
+        },
     )
 
 
@@ -119,6 +125,7 @@ def test_apply_browse_view_expansion_log_story_happy(view_browser_model, caplog)
         where="browse_helpers.apply_browse_view_expansion",
         beats={
             "entry": ["browse_view=", "model_slug=", "user_pk="],
+            "expanded": ["reason=expanded"],
             "exit": ["expanded=true", "depth="],
         },
     )
@@ -186,3 +193,185 @@ def test_build_view_browse_context_returns_traversal_fields(view_browser_model) 
     assert context["traversal_roots"]
     assert context["model_name"] == "Yggdrasil"
     assert context["element_count"] == 4
+
+
+def test_parse_depth_log_story_default(caplog) -> None:
+    """Omitted depth logs reason=default."""
+    request = RequestFactory().get("/models/yggdrasil/views/")
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        parse_view_browse_params(request, "yggdrasil")
+    assert_log_story(
+        caplog,
+        where="browse_helpers._parse_depth",
+        beats={"default": ["reason=default"]},
+    )
+
+
+def test_parse_depth_log_story_invalid(caplog) -> None:
+    """Non-integer depth logs reason=invalid."""
+    request = RequestFactory().get("/models/yggdrasil/views/", {"depth": "abc"})
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        params = parse_view_browse_params(request, "yggdrasil")
+    assert params.depth == 1
+    assert_log_story(
+        caplog,
+        where="browse_helpers._parse_depth",
+        beats={"invalid": ["reason=invalid"]},
+    )
+
+
+def test_parse_depth_log_story_parsed(caplog) -> None:
+    """Numeric depth logs reason=parsed."""
+    request = RequestFactory().get("/models/yggdrasil/views/", {"depth": "3"})
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        params = parse_view_browse_params(request, "yggdrasil")
+    assert params.depth == 3
+    assert_log_story(
+        caplog,
+        where="browse_helpers._parse_depth",
+        beats={"parsed": ["reason=parsed", "depth=3"]},
+    )
+
+
+@pytest.mark.django_db
+def test_apply_browse_view_expansion_log_story_not_found(view_browser_model, caplog) -> None:
+    """Missing saved View logs reason=not_found (was silent)."""
+    owner = UserFactory(is_architect=True)
+    request = RequestFactory().get(
+        "/models/yggdrasil/views/",
+        {"browse_view": "does-not-exist"},
+    )
+    request.user = owner
+    params = parse_view_browse_params(request, "yggdrasil")
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        merged = apply_browse_view_expansion(request, owner, view_browser_model, params)
+    assert merged.browse_view is None
+    assert_log_story(
+        caplog,
+        where="browse_helpers.apply_browse_view_expansion",
+        beats={"not_found": ["reason=not_found", "browse_view=does-not-exist"]},
+    )
+
+
+@pytest.mark.django_db
+def test_apply_browse_view_expansion_log_story_no_browse_view(view_browser_model, caplog) -> None:
+    """No browse_view query param logs reason=no_browse_view."""
+    owner = UserFactory(is_architect=True)
+    request = RequestFactory().get("/models/yggdrasil/views/")
+    request.user = owner
+    params = parse_view_browse_params(request, "yggdrasil")
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        apply_browse_view_expansion(request, owner, view_browser_model, params)
+    assert_log_story(
+        caplog,
+        where="browse_helpers.apply_browse_view_expansion",
+        beats={"none": ["reason=no_browse_view"]},
+    )
+
+
+def test_parse_viewport_invalid_json_log_story(caplog) -> None:
+    """Invalid viewport JSON logs reason=invalid_json."""
+    request = RequestFactory().post(
+        "/models/yggdrasil/views/save/",
+        {"viewport": "{not-json"},
+    )
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        params = parse_browse_params_from_post(request, "yggdrasil")
+    assert params.viewport is None
+    assert_log_story(
+        caplog,
+        where="browse_helpers._parse_viewport_from_post",
+        beats={"invalid": ["reason=invalid_json"]},
+    )
+
+
+@pytest.mark.django_db
+def test_user_can_save_views_log_story_denied(caplog) -> None:
+    """Viewer is denied with reason=denied."""
+    viewer = UserFactory(is_viewer=True)
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        assert user_can_save_views(viewer) is False
+    assert_log_story(
+        caplog,
+        where="browse_helpers.user_can_save_views",
+        beats={"denied": ["reason=denied"]},
+    )
+
+
+@pytest.mark.django_db
+def test_user_can_save_views_log_story_architect(caplog) -> None:
+    """Architect is allowed with reason=architect."""
+    from django.contrib.auth.models import Group
+
+    architect = UserFactory()
+    group, _ = Group.objects.get_or_create(name="architect")
+    architect.groups.add(group)
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        assert user_can_save_views(architect) is True
+    assert_log_story(
+        caplog,
+        where="browse_helpers.user_can_save_views",
+        beats={"architect": ["reason=architect"]},
+    )
+
+
+@pytest.mark.django_db
+def test_user_can_save_views_log_story_superuser(caplog) -> None:
+    """Superuser is allowed with reason=superuser."""
+    admin = UserFactory(is_admin=True)
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        assert user_can_save_views(admin) is True
+    assert_log_story(
+        caplog,
+        where="browse_helpers.user_can_save_views",
+        beats={"superuser": ["reason=superuser"]},
+    )
+
+
+@pytest.mark.django_db
+def test_load_browse_subgraph_log_story_navigator(view_browser_model, caplog) -> None:
+    """Default scope uses package navigator."""
+    user = UserFactory(is_architect=True)
+    request = RequestFactory().get("/models/yggdrasil/views/")
+    request.user = user
+    params = parse_view_browse_params(request, "yggdrasil")
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        build_view_browse_context(request, params)
+    assert_log_story(
+        caplog,
+        where="browse_helpers._load_browse_subgraph",
+        beats={"navigator": ["reason=package_navigator"]},
+    )
+
+
+@pytest.mark.django_db
+def test_load_browse_subgraph_log_story_traversal(view_browser_model, caplog) -> None:
+    """Filtered/depth scope uses traversal tree."""
+    user = UserFactory(is_architect=True)
+    request = RequestFactory().get("/models/yggdrasil/views/", {"depth": "3"})
+    request.user = user
+    params = parse_view_browse_params(request, "yggdrasil")
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        build_view_browse_context(request, params)
+    assert_log_story(
+        caplog,
+        where="browse_helpers._load_browse_subgraph",
+        beats={"tree": ["reason=traversal_tree"]},
+    )
+
+
+@pytest.mark.django_db
+def test_load_browse_subgraph_log_story_model_not_found(caplog) -> None:
+    """Unknown model slug logs reason=model_not_found."""
+    user = UserFactory(is_architect=True)
+    request = RequestFactory().get("/models/missing/views/")
+    request.user = user
+    params = parse_view_browse_params(request, "missing-model")
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        context = build_view_browse_context(request, params)
+    assert context["element_count"] == 0
+    assert_log_story(
+        caplog,
+        where="browse_helpers._load_browse_subgraph",
+        beats={"missing": ["reason=model_not_found"]},
+    )

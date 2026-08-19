@@ -4,10 +4,13 @@ Unit tests for the /health/ endpoint.
 These tests use the Django test client and do NOT hit the database,
 confirming the health check is a true shallow liveness probe.
 """
+
 import json
+import logging
 
 import pytest
 from django.test import Client
+from tests.support.log_story import assert_log_story
 
 
 @pytest.fixture()
@@ -50,3 +53,18 @@ def test_health_is_not_cached(client: Client) -> None:
     response = client.get("/health/")
     cache_control = response.get("Cache-Control", "")
     assert "no-cache" in cache_control or "no-store" in cache_control
+
+
+@pytest.mark.django_db
+def test_health_log_story_happy(client: Client, caplog: pytest.LogCaptureFixture) -> None:
+    """Health view logs entry/exit beats."""
+    caplog.set_level(logging.INFO, logger="yggdrasil.web")
+    client.get("/health/")
+    assert_log_story(
+        caplog,
+        where="health |",
+        beats={
+            "entry": ["entry", "path=", "method=GET"],
+            "exit": ["exit", "status=ok"],
+        },
+    )

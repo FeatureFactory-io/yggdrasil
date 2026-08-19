@@ -106,6 +106,7 @@ def test_view_browse_save_log_story_happy(client, view_browser_user, view_browse
         where="ViewBrowseSaveView.post",
         beats={
             "entry": ["user_pk=", "model_slug="],
+            "can_save": ["reason=can_save", "can_save=true"],
             "exit": ["slug=", "model_slug="],
         },
     )
@@ -133,7 +134,9 @@ def test_view_browse_load_log_story_happy(client, view_browser_user, view_browse
 
 
 @pytest.mark.django_db
-def test_delete_view_post_removes_browse_view(client, view_browser_user, view_browser_model):
+def test_delete_view_post_removes_browse_view(
+    client, view_browser_user, view_browser_model, caplog
+):
     """VIEW-BROWSE-1-66: owner POST delete removes View from catalog."""
     saved = browse_view_service.save_view(
         view_browser_user,
@@ -142,9 +145,40 @@ def test_delete_view_post_removes_browse_view(client, view_browser_user, view_br
         payload=_payload_v1(),
     )
     client.force_login(view_browser_user)
-    response = client.post(_delete_url("yggdrasil", saved.slug))
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        response = client.post(_delete_url("yggdrasil", saved.slug))
     assert response.status_code == 302
     assert not BrowseView.objects.filter(pk=saved.pk).exists()
+    assert_log_story(
+        caplog,
+        where="ViewBrowseDeleteView.post",
+        beats={
+            "entry": ["user_pk=", "model_slug=", "view_slug="],
+            "can_save": ["reason=can_save", "can_save=true"],
+            "exit": ["view_slug="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_view_browse_save_log_story_reject(client, view_browser_model, caplog):
+    """Viewer POST save is denied and logs can_save=false."""
+    viewer = UserFactory(is_viewer=True)
+    client.force_login(viewer)
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        response = client.post(
+            _save_url(),
+            {"name": "Nope", "package": "technology", "depth": "1", "mode": "graph"},
+        )
+    assert response.status_code == 404
+    assert_log_story(
+        caplog,
+        where="ViewBrowseSaveView.post",
+        beats={
+            "entry": ["user_pk=", "model_slug="],
+            "denied": ["reason=not_architect", "can_save=false"],
+        },
+    )
 
 
 @pytest.mark.django_db

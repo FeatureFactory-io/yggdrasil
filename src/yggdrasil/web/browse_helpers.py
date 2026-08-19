@@ -155,10 +155,15 @@ def parse_view_browse_params(request: HttpRequest, model_slug: str) -> ViewBrows
     element_stereotypes = _get_query_list(request.GET, "stereotype")
     relationship_stereotypes = _get_query_list(request.GET, "edge_stereotype")
     field_map = _field_map_from_query(request.GET)
-    logger.info(
-        "browse_helpers.parse_view_browse_params | processing | field_stereotypes=%s field_path_count=%s",
-        len(field_map),
-        sum(len(paths) for paths in field_map.values()),
+    depth = _parse_depth(request.GET.get("depth"))
+    _log_parsed_browse_params(
+        model_slug,
+        packages,
+        element_stereotypes,
+        relationship_stereotypes,
+        depth,
+        view_mode,
+        field_map,
     )
     return ViewBrowseParams(
         model_slug=model_slug,
@@ -168,8 +173,38 @@ def parse_view_browse_params(request: HttpRequest, model_slug: str) -> ViewBrows
         health=_blank_to_none(request.GET.get("health")),
         as_of=_blank_to_none(request.GET.get("as_of")),
         view_mode=view_mode,
-        depth=_parse_depth(request.GET.get("depth")),
+        depth=depth,
         field_map=field_map,
+    )
+
+
+def _log_parsed_browse_params(
+    model_slug: str,
+    packages: tuple[str, ...],
+    element_stereotypes: tuple[str, ...],
+    relationship_stereotypes: tuple[str, ...],
+    depth: int,
+    view_mode: str,
+    field_map: dict[str, tuple[str, ...]],
+) -> None:
+    """Log entry/config/processing beats for parsed browse query params."""
+    logger.info(
+        "browse_helpers.parse_view_browse_params | entry | model_slug=%s",
+        model_slug,
+    )
+    logger.info(
+        "browse_helpers.parse_view_browse_params | config | packages=%s stereotypes=%s "
+        "edge_stereotypes=%s depth=%s mode=%s",
+        ",".join(packages) or "(none)",
+        ",".join(element_stereotypes) or "(none)",
+        ",".join(relationship_stereotypes) or "(none)",
+        depth,
+        view_mode,
+    )
+    logger.info(
+        "browse_helpers.parse_view_browse_params | processing | field_stereotypes=%s field_path_count=%s",
+        len(field_map),
+        sum(len(paths) for paths in field_map.values()),
     )
 
 
@@ -182,6 +217,9 @@ def apply_browse_view_expansion(
     """Expand ``?browse_view=`` into filter params; explicit query values win."""
     browse_view_slug = _blank_to_none(request.GET.get("browse_view"))
     if not browse_view_slug:
+        logger.info(
+            "browse_helpers.apply_browse_view_expansion | branch | reason=no_browse_view",
+        )
         return params
 
     logger.info(
@@ -192,9 +230,17 @@ def apply_browse_view_expansion(
     )
     saved = browse_view_service.resolve_view_for_load(user, ymodel, browse_view_slug)
     if saved is None:
+        logger.info(
+            "browse_helpers.apply_browse_view_expansion | branch | reason=not_found browse_view=%s",
+            browse_view_slug,
+        )
         return params
 
     merged = _expanded_browse_params(request, params, saved, browse_view_slug)
+    logger.info(
+        "browse_helpers.apply_browse_view_expansion | branch | reason=expanded browse_view=%s",
+        browse_view_slug,
+    )
     logger.info(
         "browse_helpers.apply_browse_view_expansion | exit | browse_view=%s expanded=true depth=%s package=%s",
         browse_view_slug,
@@ -313,8 +359,22 @@ def user_can_save_views(user: User) -> bool:
     :return: True when user is superuser or in the architect group.
     """
     if user.is_superuser:
+        logger.info(
+            "browse_helpers.user_can_save_views | branch | reason=superuser user_pk=%s",
+            user.pk,
+        )
         return True
-    return user.groups.filter(name="architect").exists()
+    if user.groups.filter(name="architect").exists():
+        logger.info(
+            "browse_helpers.user_can_save_views | branch | reason=architect user_pk=%s",
+            user.pk,
+        )
+        return True
+    logger.info(
+        "browse_helpers.user_can_save_views | branch | reason=denied user_pk=%s",
+        user.pk,
+    )
+    return False
 
 
 def build_payload_from_browse_params(params: ViewBrowseParams) -> dict[str, Any]:
@@ -350,12 +410,26 @@ def _parse_depth(raw: str | None) -> int:
     :return: Integer depth >= 1 (default ``DEFAULT_DEPTH``).
     """
     if raw is None or raw.strip() == "":
+        logger.info(
+            "browse_helpers._parse_depth | branch | reason=default depth=%s",
+            browse_service.DEFAULT_DEPTH,
+        )
         return browse_service.DEFAULT_DEPTH
     try:
         depth = int(raw.strip())
     except ValueError:
+        logger.info(
+            "browse_helpers._parse_depth | branch | reason=invalid raw=%s depth=%s",
+            raw,
+            browse_service.DEFAULT_DEPTH,
+        )
         return browse_service.DEFAULT_DEPTH
-    return max(depth, 1)
+    parsed = max(depth, 1)
+    logger.info(
+        "browse_helpers._parse_depth | branch | reason=parsed depth=%s",
+        parsed,
+    )
+    return parsed
 
 
 def build_empty_browse_context(request: HttpRequest) -> dict[str, Any]:
@@ -662,12 +736,22 @@ def _load_browse_subgraph(
             _row_from_summary(item, table_columns, field_map_dict) for item in scoped.node_summaries
         ]
         if _should_use_package_navigator(params):
+            logger.info(
+                "browse_helpers._load_browse_subgraph | branch | reason=package_navigator depth=%s",
+                params.depth,
+            )
             nav_summaries = browse_service.list_all_element_summaries(model_slug=params.model_slug)
             nav_rows = [
                 _row_from_summary(item, table_columns, field_map_dict) for item in nav_summaries
             ]
             traversal_roots = build_package_navigator_roots(nav_rows)
         else:
+            logger.info(
+                "browse_helpers._load_browse_subgraph | branch | reason=traversal_tree "
+                "depth=%s packages=%s",
+                params.depth,
+                ",".join(params.packages) or "(none)",
+            )
             traversal_roots = build_traversal_tree(elements, scoped.parent_map, scoped.root_ids)
         return _BrowseSubgraphContext(
             elements=elements,
@@ -679,6 +763,10 @@ def _load_browse_subgraph(
             ymodel=ymodel,
         )
     except ValueError:
+        logger.info(
+            "browse_helpers._load_browse_subgraph | branch | reason=model_not_found model_slug=%s",
+            params.model_slug,
+        )
         return _BrowseSubgraphContext(
             elements=[],
             element_count=0,
@@ -787,8 +875,18 @@ def _parse_viewport_from_post(request: HttpRequest) -> dict[str, Any] | None:
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
+        logger.info(
+            "browse_helpers._parse_viewport_from_post | branch | reason=invalid_json len=%s",
+            len(raw),
+        )
         return None
-    return parsed if isinstance(parsed, dict) else None
+    if not isinstance(parsed, dict):
+        logger.info(
+            "browse_helpers._parse_viewport_from_post | branch | reason=invalid_json type=%s",
+            type(parsed).__name__,
+        )
+        return None
+    return parsed
 
 
 def _package_key(element: dict[str, Any]) -> str:

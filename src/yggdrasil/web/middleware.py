@@ -77,7 +77,13 @@ class RequestIdMiddleware:
         :return: Non-empty request id. Example: ``"7f3a9b2c-4e1d-4a6b-9c0f-1a2b3c4d5e6f"``.
         """
         inbound = (request.META.get(_HEADER_META_KEY) or "").strip()
-        return inbound or str(uuid.uuid4())
+        if inbound:
+            logger.info(
+                "RequestIdMiddleware | branch | reason=client_supplied",
+            )
+            return inbound
+        logger.info("RequestIdMiddleware | branch | reason=generated")
+        return str(uuid.uuid4())
 
     def _bind_context(self, request: HttpRequest, request_id: str) -> None:
         """Bind correlation fields; replace any leftover context from a prior request."""

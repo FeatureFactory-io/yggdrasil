@@ -398,19 +398,25 @@ def test_view_browse_log_story_happy(
 
 
 @pytest.mark.django_db
-def test_htmx_partial_returns_results_only(client, view_browser_user, view_browser_model):
+def test_htmx_partial_returns_results_only(client, view_browser_user, view_browser_model, caplog):
     """HTMX partial path returns self-contained results without breaking."""
     client.force_login(view_browser_user)
-    response = client.get(_browse_url(), HTTP_HX_REQUEST="true")
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        response = client.get(_browse_url(), HTTP_HX_REQUEST="true")
     body = response.content.decode()
     assert response.status_code == 200
     assert 'data-testid="results-container"' in body
     assert 'data-testid="browser-nav-panel"' not in body
+    assert_log_story(
+        caplog,
+        where="ViewBrowseView.get",
+        beats={"htmx": ["reason=htmx_partial", "user_pk="]},
+    )
 
 
 @pytest.mark.django_db
 def test_inspector_element_partial_renders_properties(
-    client, view_browser_user, view_browser_explorer_model
+    client, view_browser_user, view_browser_explorer_model, caplog
 ):
     """Inspector element embed returns properties without navbar."""
     from yggdrasil.graph.models import Element
@@ -420,12 +426,13 @@ def test_inspector_element_partial_renders_properties(
     element.properties = {"jira_key": "YGG-42", "persona_name": "Planner"}
     element.save(update_fields=["properties"])
     client.force_login(view_browser_user)
-    response = client.get(
-        reverse(
-            "web:view_browse_inspector_element_model",
-            kwargs={"model_slug": "yggdrasil", "pk": element.pk},
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        response = client.get(
+            reverse(
+                "web:view_browse_inspector_element_model",
+                kwargs={"model_slug": "yggdrasil", "pk": element.pk},
+            )
         )
-    )
     body = response.content.decode()
     assert response.status_code == 200
     assert f'data-testid="inspector-element-{element.pk}"' in body
@@ -440,6 +447,14 @@ def test_inspector_element_partial_renders_properties(
     assert f'data-testid="inspector-open-full-{element.pk}"' in body
     assert 'title="not Yet implemented"' in body
     assert "disabled" in body
+    assert_log_story(
+        caplog,
+        where="ViewBrowseInspectorElementView.get",
+        beats={
+            "entry": ["user_pk=", "model_slug=", "element_pk="],
+            "exit": ["element_id=", "rel_count="],
+        },
+    )
 
 
 @pytest.mark.django_db
@@ -611,6 +626,7 @@ def test_view_browse_canonical_log_story_happy(
         beats={
             "entry": ["user_pk=", "model_slug="],
             "cookie": ["cookie=", "model_slug="],
+            "full_page": ["reason=full_page"],
             "exit": ["element_count="],
         },
     )
@@ -626,7 +642,7 @@ def test_view_browse_canonical_log_story_reject(client, view_browser_user, caplo
         caplog,
         where="ViewBrowseView.get",
         beats={
-            "reject": ["model not found"],
+            "reject": ["model not found", "reason=model_not_found"],
         },
     )
 
@@ -714,23 +730,37 @@ def test_view_browse_depth_log_story_happy(
     assert "depth=2" in messages
     assert "ViewBrowseGraphJsonView.get" in messages
     assert "node_count=" in messages
+    assert_log_story(
+        caplog,
+        where="ViewBrowseGraphJsonView.get",
+        beats={
+            "entry": ["user_pk=", "model_slug="],
+            "exit": ["node_count=", "edges=", "payload_nodes="],
+        },
+    )
 
 
 @pytest.mark.django_db
 def test_navigator_partial_returns_tree_without_full_page(
-    client, view_browser_user, view_browser_explorer_model
+    client, view_browser_user, view_browser_explorer_model, caplog
 ):
     """Depth slider refresh: partial=navigator returns tree HTML only."""
     client.force_login(view_browser_user)
-    response = client.get(
-        _browse_url("yggdrasil"),
-        {"partial": "navigator", "view": "graph", "stereotype": "component", "depth": "2"},
-    )
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        response = client.get(
+            _browse_url("yggdrasil"),
+            {"partial": "navigator", "view": "graph", "stereotype": "component", "depth": "2"},
+        )
     body = response.content.decode()
     assert response.status_code == 200
     assert 'data-testid="browser-nav-panel"' not in body
     assert 'id="elementTree"' not in body
     assert "yrg-tree-node" in body or 'data-testid="nav-element-' in body
+    assert_log_story(
+        caplog,
+        where="ViewBrowseView.get",
+        beats={"navigator": ["reason=navigator_partial", "partial=navigator"]},
+    )
 
 
 @pytest.mark.django_db
@@ -751,18 +781,24 @@ def test_depth_change_with_view_graph_stays_in_graph_mode_ssr(
 
 
 @pytest.mark.django_db
-def test_results_partial_via_query_param(client, view_browser_user, view_browser_model):
+def test_results_partial_via_query_param(client, view_browser_user, view_browser_model, caplog):
     """Clear-filters refresh: partial=results returns results container only."""
     client.force_login(view_browser_user)
-    response = client.get(
-        _browse_url("yggdrasil"),
-        {"partial": "results", "view": "graph"},
-    )
+    with caplog.at_level(logging.INFO, logger="yggdrasil.web"):
+        response = client.get(
+            _browse_url("yggdrasil"),
+            {"partial": "results", "view": "graph"},
+        )
     body = response.content.decode()
     assert response.status_code == 200
     assert 'data-testid="results-container"' in body
     assert 'data-element-count="' in body
     assert 'data-testid="browser-nav-panel"' not in body
+    assert_log_story(
+        caplog,
+        where="ViewBrowseView.get",
+        beats={"results": ["reason=results_partial", "partial=results"]},
+    )
 
 
 @pytest.mark.django_db

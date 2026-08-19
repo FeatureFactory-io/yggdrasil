@@ -42,8 +42,23 @@ def test_request_id_log_story_happy(client: Client, caplog: pytest.LogCaptureFix
         where="RequestIdMiddleware",
         beats={
             "entry": ["entry", "request started", "method=GET", "path=/health/"],
+            "generated": ["branch", "reason=generated"],
             "exit": ["exit", "request completed", "status_code=200", "duration_ms="],
         },
+    )
+
+
+@pytest.mark.django_db
+def test_request_id_log_story_client_supplied(
+    client: Client, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Inbound X-Request-Id logs reason=client_supplied."""
+    caplog.set_level(logging.INFO, logger="yggdrasil.web")
+    client.get("/health/", HTTP_X_REQUEST_ID="req-inbound-42")
+    assert_log_story(
+        caplog,
+        where="RequestIdMiddleware",
+        beats={"client_id": ["branch", "reason=client_supplied"]},
     )
 
 

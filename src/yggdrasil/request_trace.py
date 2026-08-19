@@ -29,7 +29,6 @@ _stack: ContextVar[list[float] | None] = ContextVar("request_trace_stack", defau
 _SKIP_PREFIXES = (
     "yggdrasil.log_context",
     "yggdrasil.request_trace",
-    "yggdrasil.web.log_story",
 )
 _SECRET_KEYS = frozenset({"password", "token", "secret", "api_key", "authorization", "cookie"})
 _SKIP_LOCALS = frozenset({"self", "cls", "args", "kwargs"})

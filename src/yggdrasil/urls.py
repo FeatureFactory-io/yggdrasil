@@ -7,7 +7,6 @@ URL namespacing convention:
   /mcp/       → MCP facade (FastMCP)
   /admin/     → Django admin
   /health/    → health check (no auth)
-  /__logs/    → request log story viewer (DEBUG only)
   /mockups/   → HTML mockups, DEBUG only
 """
 
@@ -16,13 +15,11 @@ from django.contrib import admin
 from django.urls import include, path
 
 from yggdrasil.mcp.http_bridge import dispatch_tool
-from yggdrasil.web.log_story_views import request_log_story
 from yggdrasil.web.views import health
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("health/", health, name="health"),
-    path("__logs/", request_log_story, name="request-log-story"),
     path("mcp/tools/<str:tool_name>/", dispatch_tool, name="mcp-tool-dispatch"),
     path("mcp/tools/<str:tool_name>", dispatch_tool),
     path("auth/", include("yggdrasil.auth.urls", namespace="auth")),

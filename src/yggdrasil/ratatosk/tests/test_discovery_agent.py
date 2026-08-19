@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from tests.fixtures.factories.model_factories import (
     StereotypeFactory,
     YggdrasilModelFactory,
 )
+from tests.support.log_story import assert_log_story
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
 from yggdrasil.graph.models import Element, ensure_c4_metamodel
@@ -298,7 +300,7 @@ def test_mcp_snapshot_failure_no_orm_fallback() -> None:
 
 
 @pytest.mark.django_db
-def test_non_json_llm_plan_no_hardcoded_elements() -> None:
+def test_non_json_llm_plan_no_hardcoded_elements(caplog) -> None:
     """DISC-14: non-JSON LLM → empty plan / no architecture changes; no orphans."""
     ensure_c4_metamodel()
     fake = FakeLLM(
@@ -310,16 +312,22 @@ def test_non_json_llm_plan_no_hardcoded_elements() -> None:
         ]
     )
     # Map returns non-JSON → falls back to tree targets; extracts also prose → []
-    run, buckets, output = bootstrap_repository(
-        repo_path=str(SAMPLE_WEBAPP),
-        model_name="Yggdrasil",
-        metamodel="c4",
-        llm=fake,
-        snapshot=LocalOrmSnapshotPort(),
-    )
+    with caplog.at_level(logging.INFO, logger="yggdrasil.ratatosk.agent"):
+        run, buckets, output = bootstrap_repository(
+            repo_path=str(SAMPLE_WEBAPP),
+            model_name="Yggdrasil",
+            metamodel="c4",
+            llm=fake,
+            snapshot=LocalOrmSnapshotPort(),
+        )
     assert buckets.total_ops == 0
     assert "no architecture changes detected" in output or "empty plan" in output
     assert Element.objects.filter(model=run.model).count() == 0
+    assert_log_story(
+        caplog,
+        where="RataskAgent._llm_project_map",
+        beats={"empty_plan": ["reason=empty_plan", "empty or non-JSON"]},
+    )
 
 
 @pytest.mark.django_db
@@ -458,7 +466,7 @@ def test_update_mcp_failure_no_changeset() -> None:
 
 
 @pytest.mark.django_db
-def test_mcp_snapshot_port_calls_list_elements() -> None:
+def test_mcp_snapshot_port_calls_list_elements(caplog) -> None:
     """MCP snapshot uses list_elements (CICD-03 plumbing)."""
     client = FakeMcpClient(
         elements=[
@@ -466,10 +474,19 @@ def test_mcp_snapshot_port_calls_list_elements() -> None:
         ]
     )
     port = McpSnapshotPort(client)
-    snap = port.fetch_model("yggdrasil")
+    with caplog.at_level(logging.INFO, logger="yggdrasil.ratatosk.snapshot"):
+        snap = port.fetch_model("yggdrasil")
     assert "list_elements" in client.calls
     assert snap["element_count"] == 1
     assert "payment-api" in snap["by_slug"]
+    assert_log_story(
+        caplog,
+        where="McpSnapshotPort.fetch_model",
+        beats={
+            "entry": ["entry", "model=yggdrasil"],
+            "exit": ["exit", "elements=", "relationships="],
+        },
+    )
 
 
 @pytest.mark.django_db

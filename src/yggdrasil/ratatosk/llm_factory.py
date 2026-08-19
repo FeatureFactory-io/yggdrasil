@@ -106,7 +106,7 @@ class ScriptedDiscoveryLLM:
         prompt = (messages[-1].content if messages else "").lower()
         content = self._smart_reply(prompt, system)
         logger.info(
-            "ScriptedDiscoveryLLM.complete | call=%s kind=%s",
+            "ScriptedDiscoveryLLM.complete | processing | call=%s kind=%s",
             self._call_count,
             "map" if "target" in prompt or "file tree" in prompt else "extract",
         )
@@ -179,6 +179,10 @@ def build_discovery_llm(
     :return: LLM client implementing ``complete``.
     """
     if llm is not None:
+        logger.info(
+            "build_discovery_llm | branch | reason=injected llm=%s",
+            getattr(llm, "model_id", type(llm).__name__),
+        )
         return cast("BaseLLM", llm)
     provider = os.environ.get("LLM_PROVIDER", "").strip().lower()
     if not provider:
@@ -190,10 +194,16 @@ def build_discovery_llm(
             provider = "ollama"
 
     if provider == "scripted" or empty_plan or extra_candidate is not None:
-        logger.info("build_discovery_llm | provider=scripted empty_plan=%s", empty_plan)
+        logger.info(
+            "build_discovery_llm | branch | reason=scripted_provider provider=scripted empty_plan=%s",
+            empty_plan,
+        )
         return ScriptedDiscoveryLLM(empty_plan=empty_plan, extra_candidate=extra_candidate)
 
-    logger.info("build_discovery_llm | provider=%s", provider)
+    logger.info(
+        "build_discovery_llm | branch | reason=env_or_settings provider=%s",
+        provider,
+    )
     from ratatosk.config import build_extract_llm_from_config, load_bootstrap_config
 
     config = load_bootstrap_config(env=os.environ)
@@ -208,10 +218,22 @@ def build_planning_discovery_llm(llm: object | None = None) -> object:
     :return: LLM client implementing ``complete``.
     """
     if llm is not None:
+        logger.info(
+            "build_planning_discovery_llm | branch | reason=injected llm=%s",
+            getattr(llm, "model_id", type(llm).__name__),
+        )
         return cast("BaseLLM", llm)
     provider = os.environ.get("LLM_PROVIDER", "").strip().lower()
     if provider == "scripted" or not provider:
+        logger.info(
+            "build_planning_discovery_llm | branch | reason=scripted_or_unset provider=%s",
+            provider or "unset",
+        )
         return build_discovery_llm()
+    logger.info(
+        "build_planning_discovery_llm | branch | reason=env_or_settings provider=%s",
+        provider,
+    )
     from ratatosk.config import build_planning_llm_from_config, load_bootstrap_config
 
     config = load_bootstrap_config(env=os.environ)

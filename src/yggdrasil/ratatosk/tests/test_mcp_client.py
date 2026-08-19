@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import logging
+
 import httpx
 import pytest
+from tests.support.log_story import assert_log_story
 
 from yggdrasil.ratatosk.mcp_client import McpClientError, RatatoskMcpClient
 
 
-def test_call_tool_posts_bearer_and_unwraps_result() -> None:
+def test_call_tool_posts_bearer_and_unwraps_result(caplog) -> None:
     """Successful tool call sends Bearer auth and returns result dict."""
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -26,9 +29,18 @@ def test_call_tool_posts_bearer_and_unwraps_result() -> None:
         token="test-token",
         transport=transport,
     )
-    result = client.call_tool("list_elements", {"model": "yggdrasil"})
+    with caplog.at_level(logging.INFO, logger="yggdrasil.ratatosk.mcp_client"):
+        result = client.call_tool("list_elements", {"model": "yggdrasil"})
     assert result["total"] == 1
     assert result["items"][0]["name"] == "Payment API"
+    assert_log_story(
+        caplog,
+        where="RatatoskMcpClient.call_tool",
+        beats={
+            "entry": ["tool=list_elements", "keys="],
+            "exit": ["tool=list_elements"],
+        },
+    )
 
 
 def test_call_tool_401_raises_mcp_error() -> None:

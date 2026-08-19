@@ -74,6 +74,12 @@ class LocalOrmHandoffPort:
         handoff_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create ChangeSet via ChangeSetService and auto-apply above threshold."""
+        logger.info(
+            "LocalOrmHandoffPort.propose | entry | model=%s ops=%s run_id=%s",
+            model_slug,
+            len(operations),
+            run_id,
+        )
         model = YggdrasilModel.objects.get(slug__iexact=model_slug)
         changeset = _service.propose(
             model_id=model.pk,
@@ -91,11 +97,16 @@ class LocalOrmHandoffPort:
             if float(item.confidence) >= confidence_threshold
         ]
         if auto_ids:
+            logger.info(
+                "LocalOrmHandoffPort.propose | branch | reason=auto_approve count=%s threshold=%s",
+                len(auto_ids),
+                confidence_threshold,
+            )
             changeset = _service.approve(changeset_id=changeset.pk, item_ids=auto_ids, user=user)
         applied = changeset.items.filter(status=ChangeSetItem.ITEM_STATUS_ACCEPTED).count()
         pending = changeset.items.filter(status=ChangeSetItem.ITEM_STATUS_PENDING).count()
         logger.info(
-            "LocalOrmHandoffPort.propose | changeset_id=%s applied=%s pending=%s",
+            "LocalOrmHandoffPort.propose | exit | changeset_id=%s applied=%s pending=%s",
             changeset.pk,
             applied,
             pending,
@@ -134,7 +145,7 @@ class LocalOrmHandoffPort:
             run.changeset_id = changeset_id
         run.save()
         logger.info(
-            "LocalOrmHandoffPort.record_run | run_id=%s changeset_id=%s",
+            "LocalOrmHandoffPort.record_run | exit | run_id=%s changeset_id=%s",
             run_id,
             changeset_id,
         )
@@ -168,7 +179,7 @@ class McpHandoffPort:
     ) -> dict[str, Any]:
         """Call MCP propose_changeset (server enforces token scope)."""
         logger.info(
-            "McpHandoffPort.propose | model=%s ops=%s run_id=%s handoff_keys=%s",
+            "McpHandoffPort.propose | entry | model=%s ops=%s run_id=%s handoff_keys=%s",
             model_slug,
             len(operations),
             run_id,
@@ -209,7 +220,7 @@ class McpHandoffPort:
     ) -> dict[str, Any]:
         """Call MCP record_ratatosk_run."""
         logger.info(
-            "McpHandoffPort.record_run | model=%s run_id=%s changeset_id=%s",
+            "McpHandoffPort.record_run | entry | model=%s run_id=%s changeset_id=%s",
             model_slug,
             run_id,
             changeset_id,

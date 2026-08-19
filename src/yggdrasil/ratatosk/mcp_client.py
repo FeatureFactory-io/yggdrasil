@@ -40,7 +40,10 @@ class RatatoskMcpClient:
         self._token = token
         self._timeout = timeout
         self._transport = transport
-        logger.info("RatatoskMcpClient: initialised | server=%s", self._server)
+        logger.info(
+            "RatatoskMcpClient.__init__ | entry | server=%s",
+            self._server,
+        )
 
     def call_tool(self, name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
         """
@@ -54,7 +57,7 @@ class RatatoskMcpClient:
         arguments = arguments or {}
         url = f"{self._server}/mcp/tools/{name}"
         logger.info(
-            "RatatoskMcpClient.call_tool | tool=%s url=%s keys=%s",
+            "RatatoskMcpClient.call_tool | entry | tool=%s url=%s keys=%s",
             name,
             url,
             sorted(arguments.keys()),
@@ -72,24 +75,50 @@ class RatatoskMcpClient:
                 )
         except httpx.HTTPError as exc:
             msg = f"MCP unreachable for tool {name!r}: {exc}"
-            logger.error("RatatoskMcpClient.call_tool | %s", msg)
+            logger.error(
+                "RatatoskMcpClient.call_tool | error | reason=unreachable tool=%s",
+                name,
+            )
             raise McpClientError(msg) from exc
 
         if response.status_code in {401, 403}:
             msg = f"MCP authentication failed for tool {name!r} (HTTP {response.status_code})"
-            logger.error("RatatoskMcpClient.call_tool | %s", msg)
+            logger.error(
+                "RatatoskMcpClient.call_tool | error | reason=auth_failed status=%s tool=%s",
+                response.status_code,
+                name,
+            )
             raise McpClientError(msg)
         if response.status_code >= 400:
             msg = f"MCP tool {name!r} failed: HTTP {response.status_code} {response.text[:200]}"
-            logger.error("RatatoskMcpClient.call_tool | %s", msg)
+            logger.error(
+                "RatatoskMcpClient.call_tool | error | reason=http_error status=%s tool=%s",
+                response.status_code,
+                name,
+            )
             raise McpClientError(msg)
 
         try:
             payload = response.json()
         except ValueError as exc:
             msg = f"MCP tool {name!r} returned non-JSON body"
+            logger.error(
+                "RatatoskMcpClient.call_tool | error | reason=non_json tool=%s",
+                name,
+            )
             raise McpClientError(msg) from exc
 
+        result = self._unwrap_payload(payload)
+        logger.info(
+            "RatatoskMcpClient.call_tool | exit | tool=%s keys=%s",
+            name,
+            sorted(result.keys()) if isinstance(result, dict) else type(result).__name__,
+        )
+        return result
+
+    @staticmethod
+    def _unwrap_payload(payload: object) -> dict[str, Any]:
+        """Normalize MCP JSON envelope into a result dict."""
         if isinstance(payload, dict) and "result" in payload:
             result = payload["result"]
             if isinstance(result, dict):

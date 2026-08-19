@@ -140,7 +140,8 @@ class RataskAgent:
         self._run = run
         self._snapshot = snapshot or LocalOrmSnapshotPort()
         logger.info(
-            "RataskAgent: initialised | run_id=%s repo=%s max_extract=%s planning_llm=%s extract_llm=%s",
+            "RataskAgent.__init__ | entry | run_id=%s repo=%s max_extract=%s "
+            "planning_llm=%s extract_llm=%s",
             run.run_id,
             run.repo_path,
             self._limits.max_extract_targets,
@@ -163,7 +164,7 @@ class RataskAgent:
             source_label=self._run.repo_path,
         )
         logger.info(
-            "execute | run_id=%s mode=%s",
+            "RataskAgent.execute | entry | run_id=%s mode=%s",
             self._run.run_id,
             d_input.mode,
         )
@@ -188,7 +189,7 @@ class RataskAgent:
         )
         self._update_blackboard("model_summary", summary_meta)
         logger.info(
-            "execute | building ModelSummary chars=%s depth=%s",
+            "RataskAgent.execute | processing | building ModelSummary chars=%s depth=%s",
             summary_meta.get("model_summary_chars"),
             summary_meta.get("depth_reached"),
         )
@@ -213,6 +214,11 @@ class RataskAgent:
         snapshot_ctx = f"ModelSummary:\n{summary_text}\n\n{snapshot_context_line(existing)}"
         raw_candidates = self._materialize_and_extract(d_input, ontology, snapshot_ctx)
         if raw_candidates is None:
+            logger.info(
+                "RataskAgent.execute | branch | reason=empty_input run_id=%s mode=%s",
+                self._run.run_id,
+                d_input.mode,
+            )
             return DeltaBuckets()
 
         merged = merge_candidates_by_slug(raw_candidates)
@@ -257,7 +263,7 @@ class RataskAgent:
             },
         )
         logger.info(
-            "execute | candidates=%s to_add=%s to_update=%s unchanged=%s",
+            "RataskAgent.execute | exit | candidates=%s to_add=%s to_update=%s unchanged=%s",
             len(cleaned),
             len(buckets.to_add),
             len(buckets.to_update),
@@ -355,7 +361,7 @@ class RataskAgent:
     def _fetch_snapshot(self) -> dict[str, Any]:
         """Step 1: fetch existing model via SnapshotPort (MCP in CLI mode)."""
         slug = self._run.model.slug
-        logger.info("_fetch_snapshot | model=%s", slug)
+        logger.info("RataskAgent._fetch_snapshot | entry | model=%s", slug)
         return self._snapshot.fetch_model(slug)
 
     def _build_file_tree(
@@ -388,13 +394,13 @@ class RataskAgent:
             if path_is_excluded(rel_posix, patterns):
                 skipped_exclude += 1
                 logger.info(
-                    "_build_file_tree | excluded path=%s reason=exclude_pattern",
+                    "RataskAgent._build_file_tree | branch | reason=exclude_pattern path=%s",
                     rel_posix,
                 )
                 continue
             paths.append(rel_posix)
         logger.info(
-            "_build_file_tree | root=%s files=%s skipped_exclude=%s",
+            "RataskAgent._build_file_tree | exit | root=%s files=%s skipped_exclude=%s",
             repo_path,
             len(paths),
             skipped_exclude,
@@ -433,7 +439,10 @@ class RataskAgent:
         ).content
         parsed = _parse_json_object(response)
         if not parsed:
-            logger.info("_llm_project_map | empty or non-JSON plan; using tree head as targets")
+            logger.info(
+                "RataskAgent._llm_project_map | branch | reason=empty_plan "
+                "empty or non-JSON plan fallback=tree_head",
+            )
             return {
                 "project_kind": "unknown",
                 "targets": tree[: self._limits.effective_cap],
@@ -506,7 +515,7 @@ class RataskAgent:
                 logger.warning("_llm_extract_from_files | skip %s: %s", rel, exc)
                 continue
             logger.info(
-                "_llm_extract_from_files | read index=%s path=%s chars=%s",
+                "RataskAgent._llm_extract_from_files | processing | read index=%s path=%s chars=%s",
                 index,
                 rel,
                 len(text),
@@ -560,7 +569,8 @@ class RataskAgent:
         candidates = _parse_candidate_json(response)
         if candidates is None:
             logger.info(
-                "_llm_extract_from_text | non-JSON or empty plan | source=%s; no hardcoded fallback",
+                "RataskAgent._llm_extract_from_text | branch | reason=empty_plan "
+                "source=%s non-JSON or empty plan",
                 label,
             )
             self._update_blackboard(
@@ -579,7 +589,12 @@ class RataskAgent:
         for item in constrained:
             conf = float(item.get("confidence", 0))
             if conf < 0.4:
-                logger.info("_cleanup_candidates | drop low confidence name=%s", item.get("name"))
+                logger.info(
+                    "RataskAgent._cleanup_candidates | branch | reason=drop_low_confidence "
+                    "drop low confidence name=%s conf=%s",
+                    item.get("name"),
+                    conf,
+                )
                 continue
             slug = slugify(str(item["name"]))
             prior = by_slug.get(slug)
@@ -689,7 +704,11 @@ class RataskAgent:
             board["stdin_kind"] = data.get("kind", "")
         self._run.blackboard = board
         self._run.save(update_fields=["blackboard"])
-        logger.info("_update_blackboard | run_id=%s step=%s", self._run.run_id, step)
+        logger.info(
+            "RataskAgent._update_blackboard | processing | run_id=%s step=%s",
+            self._run.run_id,
+            step,
+        )
 
     def _apply_confidence_threshold(
         self, buckets: DeltaBuckets, threshold: float
@@ -776,7 +795,7 @@ def update_from_stdin(
     """
     raw_bytes = stdin_text.encode("utf-8")
     if len(raw_bytes) > STDIN_SIZE_CAP_BYTES:
-        msg = f"stdin exceeds size limit of {STDIN_SIZE_CAP_BYTES} bytes " f"(got {len(raw_bytes)})"
+        msg = f"stdin exceeds size limit of {STDIN_SIZE_CAP_BYTES} bytes (got {len(raw_bytes)})"
         raise ValueError(msg)
     _assert_write_permission(require_write_token, token_scope)
     model = _ensure_model(model_name, metamodel)
@@ -956,7 +975,7 @@ def _run_discovery(
     )
     output = "\n".join(output_lines)
     logger.info(
-        "_run_discovery | run_id=%s trigger=%s changeset_id=%s ops=%s",
+        "_run_discovery | exit | run_id=%s trigger=%s changeset_id=%s ops=%s",
         run.run_id,
         trigger,
         changeset_id,
@@ -1089,7 +1108,7 @@ def _ensure_model(model_name: str, metamodel_slug: str) -> YggdrasilModel:
     if model is None:
         model = YggdrasilModel.objects.create(name=model_name, slug=slug, metamodel=mm)
         logger.info(
-            "_ensure_model | created model=%s metamodel=%s",
+            "_ensure_model | branch | reason=created model=%s metamodel=%s",
             model.slug,
             mm.slug,
         )
@@ -1125,14 +1144,16 @@ def _constrain_candidates_to_metamodel(
         pkg_slug = slugify(str(raw.get("package") or ""))
         if st_slug not in element_slugs:
             logger.warning(
-                "_constrain_candidates_to_metamodel | drop unknown stereotype=%s name=%s",
+                "_constrain_candidates_to_metamodel | branch | reason=unknown_stereotype "
+                "stereotype=%s name=%s",
                 st_slug,
                 raw.get("name"),
             )
             continue
         if pkg_slug and pkg_slug not in package_slugs:
             logger.warning(
-                "_constrain_candidates_to_metamodel | drop unknown package=%s name=%s",
+                "_constrain_candidates_to_metamodel | branch | reason=unknown_package "
+                "package=%s name=%s",
                 pkg_slug,
                 raw.get("name"),
             )

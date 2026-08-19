@@ -29,7 +29,7 @@ def build_model_summary(
     rels = relationships or []
     budget_chars = budget_tokens * _CHARS_PER_TOKEN
     logger.info(
-        "build_model_summary | budget_tokens=%s elements=%s relationships=%s",
+        "build_model_summary | entry | budget_tokens=%s elements=%s relationships=%s",
         budget_tokens,
         len(elements),
         len(rels),
@@ -48,7 +48,10 @@ def build_model_summary(
     if not elements:
         text = "\n".join(lines)
         meta["model_summary_chars"] = len(text)
-        logger.info("build_model_summary | chars=%s depth=L0 empty_model", len(text))
+        logger.info(
+            "build_model_summary | branch | reason=empty_model chars=%s depth=L0",
+            len(text),
+        )
         return text, meta
 
     pkg_counts: Counter[str] = Counter()
@@ -70,12 +73,16 @@ def build_model_summary(
         meta["depth_reached"] = "L2"
     else:
         meta["budget_exhausted"] = True
+        logger.info(
+            "build_model_summary | branch | reason=budget_exhausted depth=%s",
+            meta["depth_reached"],
+        )
 
     text = "\n".join(lines)
     meta["model_summary_chars"] = len(text)
     meta["budget_remaining"] = max(0, budget_chars - len(text))
     logger.info(
-        "build_model_summary | chars=%s depth=%s exhausted=%s",
+        "build_model_summary | exit | chars=%s depth=%s exhausted=%s",
         len(text),
         meta["depth_reached"],
         meta["budget_exhausted"],

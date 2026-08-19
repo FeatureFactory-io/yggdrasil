@@ -63,12 +63,20 @@ class LocalOrmSnapshotPort:
 
     def fetch_model(self, model_slug: str) -> dict[str, Any]:
         """Load elements and relationships from the local database."""
+        logger.info(
+            "LocalOrmSnapshotPort.fetch_model | entry | model=%s",
+            model_slug,
+        )
         try:
             model = YggdrasilModel.objects.get(slug__iexact=model_slug)
         except YggdrasilModel.DoesNotExist:
             try:
                 model = YggdrasilModel.objects.get(name__iexact=model_slug)
             except YggdrasilModel.DoesNotExist as exc:
+                logger.info(
+                    "LocalOrmSnapshotPort.fetch_model | branch | reason=model_not_found model=%s",
+                    model_slug,
+                )
                 msg = f"Model not found for snapshot: {model_slug!r}"
                 raise RuntimeError(msg) from exc
         elements = list(
@@ -82,7 +90,7 @@ class LocalOrmSnapshotPort:
             )
         )
         logger.info(
-            "LocalOrmSnapshotPort.fetch_model | model=%s elements=%s relationships=%s",
+            "LocalOrmSnapshotPort.fetch_model | exit | model=%s elements=%s relationships=%s",
             model.slug,
             len(elements),
             len(relationships),
@@ -109,7 +117,10 @@ class McpSnapshotPort:
         :param model_slug: Target model slug.
         :raises RuntimeError: On MCP/HTTP failure (no ORM fallback).
         """
-        logger.info("McpSnapshotPort.fetch_model | model=%s via MCP", model_slug)
+        logger.info(
+            "McpSnapshotPort.fetch_model | entry | model=%s via MCP",
+            model_slug,
+        )
         try:
             elements_page = self._client.call_tool(
                 "list_elements",
@@ -122,7 +133,10 @@ class McpSnapshotPort:
             relationships = list(rel_page.get("items") or [])
         except Exception as exc:
             msg = f"MCP snapshot failed for model {model_slug!r}: {exc}"
-            logger.error("McpSnapshotPort.fetch_model | %s", msg)
+            logger.error(
+                "McpSnapshotPort.fetch_model | error | reason=mcp_failed model=%s",
+                model_slug,
+            )
             raise RuntimeError(msg) from exc
 
         raw_items = list(elements_page.get("items") or [])
@@ -146,7 +160,7 @@ class McpSnapshotPort:
         if total:
             snapshot["element_count"] = total
         logger.info(
-            "McpSnapshotPort.fetch_model | model=%s elements=%s relationships=%s",
+            "McpSnapshotPort.fetch_model | exit | model=%s elements=%s relationships=%s",
             model_slug,
             snapshot["element_count"],
             snapshot["relationship_count"],

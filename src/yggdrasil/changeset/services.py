@@ -13,6 +13,7 @@ Never import from munin, ratatosk, or mcp here.
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
@@ -36,6 +37,29 @@ if TYPE_CHECKING:
     from django.db.models import QuerySet
 
 logger = logging.getLogger("yggdrasil.changeset")
+
+
+def _story(where: str, beat: str, *, level: int = logging.INFO, **fields: object) -> None:
+    """Emit a grep-friendly log story line: ``Class.method | beat | key=value``."""
+    payload = " ".join(f"{key}={value}" for key, value in fields.items())
+    if payload:
+        logger.log(level, "%s | %s | %s", where, beat, payload)
+        return
+    logger.log(level, "%s | %s", where, beat)
+
+
+def _op_type_counts(ops: list[Any]) -> dict[str, int]:
+    """Count op_type values from dicts, ChangeSetItem rows, or type strings."""
+    types: list[str] = []
+    for op in ops:
+        if isinstance(op, dict):
+            types.append(str(op.get("op_type", "unknown")))
+        elif isinstance(op, str):
+            types.append(op)
+        else:
+            types.append(str(op.op_type))
+    return dict(Counter(types))
+
 
 _INVERSE_OP_TYPES: dict[str, str] = {
     ChangeSetItem.OP_ADD_ELEMENT: ChangeSetItem.OP_DELETE_ELEMENT,
@@ -95,50 +119,36 @@ class ChangeSetService:
         >>> cs.status
         'pending'
         """
-        if not operations and not allow_empty:
-            msg = "operations must not be empty"
-            raise ValueError(msg)
-        valid_sources = {c[0] for c in ChangeSet.SOURCE_CHOICES}
-        if source not in valid_sources:
-            msg = f"Invalid source={source!r}; expected one of {sorted(valid_sources)}"
-            raise ValueError(msg)
-        user_label = getattr(user, "pk", None)
-        logger.info(
-            "propose | model_id=%s source=%s ops=%s user=%s",
-            model_id,
-            source,
-            len(operations),
-            user_label,
+        user_id = getattr(user, "pk", None)
+        _story(
+            "ChangeSetService.propose",
+            "entry",
+            model_id=model_id,
+            source=source,
+            ops=len(operations),
+            user_id=user_id,
+            allow_empty=allow_empty,
         )
+        self._validate_propose(operations, source, allow_empty)
         with transaction.atomic():
-            try:
-                model = YggdrasilModel.objects.get(pk=model_id)
-            except YggdrasilModel.DoesNotExist as exc:
-                msg = f"YggdrasilModel id={model_id} not found"
-                raise ValueError(msg) from exc
-            changeset = ChangeSet.objects.create(
-                model=model,
-                source=source,
-                status=ChangeSet.STATUS_PENDING,
-                review_mode=review_mode,
-                run_id=run_id,
-                munin_reasoning=munin_reasoning,
+            model = self._get_model_or_raise(model_id)
+            changeset = self._create_pending_changeset(
+                model, source, review_mode, run_id, munin_reasoning
             )
-            for order, op in enumerate(operations, start=1):
-                ChangeSetItem.objects.create(
-                    changeset=changeset,
-                    order=order,
-                    op_type=op["op_type"],
-                    detail=op.get("detail") or {},
-                    confidence=float(op.get("confidence", 1.0)),
-                    status=ChangeSetItem.ITEM_STATUS_PENDING,
-                )
-        logger.info(
-            "propose | changeset_id=%s model_id=%s ops=%s user=%s",
-            changeset.pk,
-            model_id,
-            len(operations),
-            user_label,
+            self._create_operation_items(changeset, operations)
+        counts = _op_type_counts(operations)
+        _story(
+            "ChangeSetService.propose",
+            "processing",
+            item_count=len(operations),
+            **counts,
+        )
+        _story(
+            "ChangeSetService.propose",
+            "exit",
+            changeset_id=changeset.pk,
+            status=changeset.status,
+            item_count=len(operations),
         )
         return changeset
 
@@ -170,27 +180,33 @@ class ChangeSetService:
         >>> cs.status
         'applied'
         """
-        user_label = getattr(user, "pk", None)
-        logger.info(
-            "approve | changeset_id=%s item_ids=%s user=%s",
-            changeset_id,
-            item_ids,
-            user_label,
+        user_id = getattr(user, "pk", None)
+        _story(
+            "ChangeSetService.approve",
+            "entry",
+            changeset_id=changeset_id,
+            item_ids=item_ids,
+            user=user_id,
         )
         with transaction.atomic():
             changeset = self._get_pending_changeset(changeset_id)
             targets = self._select_pending_items(changeset, item_ids)
+            _story(
+                "ChangeSetService.approve",
+                "processing",
+                selected_count=len(targets),
+            )
             for item in targets:
                 self._apply_item(item)
                 item.status = ChangeSetItem.ITEM_STATUS_ACCEPTED
                 item.save(update_fields=["status", "detail"])
             self._finalize_changeset_status(changeset, user)
-        logger.info(
-            "approve | changeset_id=%s applied_count=%s status=%s user=%s",
-            changeset.pk,
-            len(targets),
-            changeset.status,
-            user_label,
+        _story(
+            "ChangeSetService.approve",
+            "exit",
+            changeset_id=changeset.pk,
+            status=changeset.status,
+            applied_count=len(targets),
         )
         return changeset
 
@@ -224,14 +240,16 @@ class ChangeSetService:
         >>> MuninRule.objects.filter(source_item__changeset_id=1).count()
         1
         """
-        user_label = getattr(user, "pk", None)
-        logger.info(
-            "reject | changeset_id=%s item_ids=%s learn=%s user=%s",
-            changeset_id,
-            item_ids,
-            learn,
-            user_label,
+        user_id = getattr(user, "pk", None)
+        _story(
+            "ChangeSetService.reject",
+            "entry",
+            changeset_id=changeset_id,
+            item_ids=item_ids,
+            learn=learn,
+            user=user_id,
         )
+        self._log_reject_learn_branch(learn, reason)
         with transaction.atomic():
             changeset = self._get_pending_changeset(changeset_id)
             targets = self._select_pending_items(changeset, item_ids)
@@ -242,12 +260,11 @@ class ChangeSetService:
                 if learn and reason:
                     self._create_munin_rule(item, reason, user)
             self._finalize_changeset_status(changeset, user)
-        logger.info(
-            "reject | changeset_id=%s rejected_count=%s status=%s user=%s",
-            changeset.pk,
-            len(targets),
-            changeset.status,
-            user_label,
+        _story(
+            "ChangeSetService.reject",
+            "exit",
+            rejected_count=len(targets),
+            status=changeset.status,
         )
         return changeset
 
@@ -278,19 +295,15 @@ class ChangeSetService:
         >>> cs = svc.do_other(changeset_id=1, item_ids=[3],
         ...     instructions="It's an external system")
         """
-        if not item_ids:
-            msg = "do_other requires at least one item_id"
-            raise ValueError(msg)
-        if not instructions.strip():
-            msg = "do_other requires non-empty instructions"
-            raise ValueError(msg)
-        user_label = getattr(user, "pk", None)
-        logger.info(
-            "do_other | changeset_id=%s item_ids=%s user=%s",
-            changeset_id,
-            item_ids,
-            user_label,
+        user_id = getattr(user, "pk", None)
+        _story(
+            "ChangeSetService.do_other",
+            "entry",
+            changeset_id=changeset_id,
+            item_ids=item_ids,
+            user=user_id,
         )
+        self._validate_do_other(item_ids, instructions)
         # Reject + LEARNED first; Munin re-plan is synchronous for AT/MCP.
         changeset = self.reject(
             changeset_id=changeset_id,
@@ -299,30 +312,20 @@ class ChangeSetService:
             user=user,
             learn=True,
         )
-        from yggdrasil.llm.base import ScriptedLLM
-        from yggdrasil.munin.agent import MuninAgent
-
-        agent = MuninAgent(
-            llm=ScriptedLLM(responses=[f"Re-planned with: {instructions[:80]}"]),
-            model_id=changeset.model_id,
-            user_id=getattr(user, "pk", None),
-        )
-        replacement_ids: builtins.list[int] = []
-        for item_id in item_ids:
-            resp = agent.replan_operation(
-                rejected_item_id=item_id,
-                instructions=instructions,
-            )
-            if resp.changeset_id is not None:
-                replacement_ids.append(resp.changeset_id)
+        replacement_ids = self._replan_rejected_items(changeset, item_ids, instructions, user)
         # Stash for MCP tool response without changing the return contract.
         changeset._do_other_replacements = replacement_ids  # type: ignore[attr-defined]
-        logger.info(
-            "do_other | changeset_id=%s redirected=%s replacements=%s user=%s",
-            changeset.pk,
-            len(item_ids),
-            replacement_ids,
-            user_label,
+        _story(
+            "ChangeSetService.do_other",
+            "processing",
+            replacement_ids=replacement_ids,
+        )
+        _story(
+            "ChangeSetService.do_other",
+            "exit",
+            changeset_id=changeset.pk,
+            redirected=len(item_ids),
+            replacements=replacement_ids,
         )
         return changeset
 
@@ -348,22 +351,33 @@ class ChangeSetService:
         >>> rollback_cs.source
         'rollback'
         """
-        user_label = getattr(user, "pk", None)
-        logger.info(
-            "rollback | changeset_id=%s user=%s",
-            changeset_id,
-            user_label,
+        user_id = getattr(user, "pk", None)
+        _story(
+            "ChangeSetService.rollback",
+            "entry",
+            changeset_id=changeset_id,
+            user=user_id,
         )
         with transaction.atomic():
             source_cs = self._get_applied_changeset(changeset_id)
             accepted = self._accepted_items(source_cs)
+            inverse_types = [
+                _INVERSE_OP_TYPES[item.op_type]
+                for item in accepted
+                if item.op_type in _INVERSE_OP_TYPES
+            ]
+            _story(
+                "ChangeSetService.rollback",
+                "processing",
+                reversing=len(accepted),
+                **_op_type_counts(inverse_types),
+            )
             rollback_cs = self._create_rollback_changeset(source_cs, accepted)
-        logger.info(
-            "rollback | created rollback_id=%s reversing=%s from changeset_id=%s user=%s",
-            rollback_cs.pk,
-            len(accepted),
-            changeset_id,
-            user_label,
+        _story(
+            "ChangeSetService.rollback",
+            "exit",
+            rollback_id=rollback_cs.pk,
+            reversing=len(accepted),
         )
         return rollback_cs
 
@@ -397,13 +411,190 @@ class ChangeSetService:
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
+    def _validate_propose(
+        self,
+        operations: builtins.list[dict[str, Any]],
+        source: str,
+        allow_empty: bool,
+    ) -> None:
+        """Reject empty ops (unless allowed) and unknown sources."""
+        if not operations and not allow_empty:
+            _story(
+                "ChangeSetService.propose",
+                "validation",
+                ops=len(operations),
+                allow_empty=allow_empty,
+            )
+            _story(
+                "ChangeSetService.propose",
+                "error",
+                reason="empty_operations",
+                ops=len(operations),
+                level=logging.ERROR,
+            )
+            msg = "operations must not be empty"
+            raise ValueError(msg)
+        valid_sources = {choice[0] for choice in ChangeSet.SOURCE_CHOICES}
+        if source not in valid_sources:
+            _story("ChangeSetService.propose", "validation", source=source)
+            _story(
+                "ChangeSetService.propose",
+                "error",
+                reason="invalid_source",
+                source=source,
+                level=logging.ERROR,
+            )
+            msg = f"Invalid source={source!r}; expected one of {sorted(valid_sources)}"
+            raise ValueError(msg)
+        _story(
+            "ChangeSetService.propose",
+            "validation",
+            ops=len(operations),
+            source=source,
+        )
+
+    def _get_model_or_raise(self, model_id: int) -> YggdrasilModel:
+        """Load YggdrasilModel or raise ValueError with a model_not_found beat."""
+        try:
+            return YggdrasilModel.objects.get(pk=model_id)
+        except YggdrasilModel.DoesNotExist as exc:
+            msg = f"YggdrasilModel id={model_id} not found"
+            _story(
+                "ChangeSetService.propose",
+                "error",
+                reason="model_not_found",
+                model_id=model_id,
+                level=logging.ERROR,
+            )
+            raise ValueError(msg) from exc
+
+    def _create_pending_changeset(
+        self,
+        model: YggdrasilModel,
+        source: str,
+        review_mode: str,
+        run_id: str,
+        munin_reasoning: str,
+    ) -> ChangeSet:
+        """Insert a pending ChangeSet row for propose()."""
+        return ChangeSet.objects.create(
+            model=model,
+            source=source,
+            status=ChangeSet.STATUS_PENDING,
+            review_mode=review_mode,
+            run_id=run_id,
+            munin_reasoning=munin_reasoning,
+        )
+
+    def _create_operation_items(
+        self,
+        changeset: ChangeSet,
+        operations: builtins.list[dict[str, Any]],
+    ) -> None:
+        """Persist ordered ChangeSetItem rows from propose() operations."""
+        for order, op in enumerate(operations, start=1):
+            ChangeSetItem.objects.create(
+                changeset=changeset,
+                order=order,
+                op_type=op["op_type"],
+                detail=op.get("detail") or {},
+                confidence=float(op.get("confidence", 1.0)),
+                status=ChangeSetItem.ITEM_STATUS_PENDING,
+            )
+
+    def _log_reject_learn_branch(self, learn: bool, reason: str) -> None:
+        """Log whether reject() will create a MuninRule."""
+        if learn and reason:
+            _story(
+                "ChangeSetService.reject",
+                "branch",
+                reason="learn_rule",
+                learn=learn,
+            )
+            return
+        _story(
+            "ChangeSetService.reject",
+            "branch",
+            reason="no_rule",
+            learn=learn,
+            has_reason=bool(reason),
+        )
+
+    def _validate_do_other(
+        self,
+        item_ids: builtins.list[int],
+        instructions: str,
+    ) -> None:
+        """Require at least one item id and non-empty instructions."""
+        if not item_ids:
+            _story(
+                "ChangeSetService.do_other",
+                "validation",
+                item_ids_count=0,
+            )
+            _story(
+                "ChangeSetService.do_other",
+                "error",
+                reason="empty_item_ids",
+                level=logging.ERROR,
+            )
+            msg = "do_other requires at least one item_id"
+            raise ValueError(msg)
+        if not instructions.strip():
+            _story(
+                "ChangeSetService.do_other",
+                "validation",
+                instructions_len=0,
+            )
+            _story(
+                "ChangeSetService.do_other",
+                "error",
+                reason="empty_instructions",
+                level=logging.ERROR,
+            )
+            msg = "do_other requires non-empty instructions"
+            raise ValueError(msg)
+        _story(
+            "ChangeSetService.do_other",
+            "validation",
+            item_ids_count=len(item_ids),
+            instructions_len=len(instructions),
+        )
+
+    def _replan_rejected_items(
+        self,
+        changeset: ChangeSet,
+        item_ids: builtins.list[int],
+        instructions: str,
+        user: User | None,
+    ) -> builtins.list[int]:
+        """Ask Munin to re-plan rejected items; return replacement ChangeSet PKs."""
+        from yggdrasil.llm.base import ScriptedLLM
+        from yggdrasil.munin.agent import MuninAgent
+
+        agent = MuninAgent(
+            llm=ScriptedLLM(responses=[f"Re-planned with: {instructions[:80]}"]),
+            model_id=changeset.model_id,
+            user_id=getattr(user, "pk", None),
+        )
+        replacement_ids: builtins.list[int] = []
+        for item_id in item_ids:
+            resp = agent.replan_operation(
+                rejected_item_id=item_id,
+                instructions=instructions,
+            )
+            if resp.changeset_id is not None:
+                replacement_ids.append(resp.changeset_id)
+        return replacement_ids
+
     def _apply_item(self, item: ChangeSetItem) -> None:
         """Apply a single ChangeSetItem to the graph inside the caller's transaction."""
-        logger.info(
-            "_apply_item | item=%s op=%s changeset=%s",
-            item.pk,
-            item.op_type,
-            item.changeset_id,
+        _story(
+            "ChangeSetService._apply_item",
+            "processing",
+            item=item.pk,
+            op=item.op_type,
+            changeset=item.changeset_id,
         )
         model = item.changeset.model
         detail = item.detail or {}
@@ -421,6 +612,14 @@ class ChangeSetService:
             self._apply_add_to_diagram(detail)
         else:
             msg = f"Unsupported op_type={item.op_type!r} on item={item.pk}"
+            _story(
+                "ChangeSetService._apply_item",
+                "error",
+                reason="unsupported_op",
+                op=item.op_type,
+                item=item.pk,
+                level=logging.ERROR,
+            )
             raise ValueError(msg)
 
     def _invert_item(self, item: ChangeSetItem) -> dict[str, Any]:
@@ -436,11 +635,12 @@ class ChangeSetService:
             msg = f"Cannot invert unknown op_type={item.op_type!r} on item={item.pk}"
             raise ValueError(msg)
         detail = self._invert_detail(item.op_type, item.detail)
-        logger.info(
-            "_invert_item | item=%s op=%s → %s",
-            item.pk,
-            item.op_type,
-            inverse_type,
+        _story(
+            "ChangeSetService._invert_item",
+            "processing",
+            item=item.pk,
+            op=item.op_type,
+            inverse=inverse_type,
         )
         return {
             "op_type": inverse_type,
@@ -457,11 +657,12 @@ class ChangeSetService:
             created_by=user,
             is_active=True,
         )
-        logger.info(
-            "_create_munin_rule | rule_id=%s item=%s user=%s",
-            rule.pk,
-            item.pk,
-            getattr(user, "pk", None),
+        _story(
+            "ChangeSetService._create_munin_rule",
+            "processing",
+            rule_id=rule.pk,
+            item=item.pk,
+            user=getattr(user, "pk", None),
         )
         return rule
 
@@ -475,13 +676,41 @@ class ChangeSetService:
             )
         except ChangeSet.DoesNotExist as exc:
             msg = f"ChangeSet id={changeset_id} not found"
+            _story(
+                "ChangeSetService._get_applied_changeset",
+                "error",
+                reason="not_found",
+                changeset_id=changeset_id,
+                level=logging.ERROR,
+            )
             raise ValueError(msg) from exc
         if changeset.status != ChangeSet.STATUS_APPLIED:
             msg = (
                 f"ChangeSet id={changeset_id} status={changeset.status!r}; "
                 "rollback requires status='applied'"
             )
+            _story(
+                "ChangeSetService.rollback",
+                "validation",
+                reason="not_applied",
+                changeset_id=changeset_id,
+                status=changeset.status,
+            )
+            _story(
+                "ChangeSetService._get_applied_changeset",
+                "error",
+                reason="not_applied",
+                changeset_id=changeset_id,
+                status=changeset.status,
+                level=logging.ERROR,
+            )
             raise ValueError(msg)
+        _story(
+            "ChangeSetService.rollback",
+            "validation",
+            status=changeset.status,
+            changeset_id=changeset_id,
+        )
         return changeset
 
     def _accepted_items(self, changeset: ChangeSet) -> builtins.list[ChangeSetItem]:
@@ -544,9 +773,23 @@ class ChangeSetService:
             )
         except ChangeSet.DoesNotExist as exc:
             msg = f"ChangeSet id={changeset_id} not found"
+            _story(
+                "ChangeSetService._get_pending_changeset",
+                "error",
+                reason="not_found",
+                changeset_id=changeset_id,
+                level=logging.ERROR,
+            )
             raise ValueError(msg) from exc
         if changeset.status == ChangeSet.STATUS_APPLIED:
             msg = f"ChangeSet id={changeset_id} already applied"
+            _story(
+                "ChangeSetService._get_pending_changeset",
+                "error",
+                reason="already_applied",
+                changeset_id=changeset_id,
+                level=logging.ERROR,
+            )
             raise ValueError(msg)
         return changeset
 
@@ -562,34 +805,77 @@ class ChangeSetService:
             if item.status == ChangeSetItem.ITEM_STATUS_PENDING
         ]
         if item_ids is None:
+            _story(
+                "ChangeSetService._select_pending_items",
+                "branch",
+                reason="all_pending",
+                selected_count=len(pending),
+                changeset_id=changeset.pk,
+            )
             return pending
         wanted = set(item_ids)
         selected = [item for item in pending if item.pk in wanted]
         missing = wanted - {item.pk for item in selected}
         if missing:
             msg = f"Pending items not found on ChangeSet {changeset.pk}: {sorted(missing)}"
+            _story(
+                "ChangeSetService._select_pending_items",
+                "error",
+                reason="missing_ids",
+                missing=sorted(missing),
+                changeset_id=changeset.pk,
+                level=logging.ERROR,
+            )
             raise ValueError(msg)
+        _story(
+            "ChangeSetService._select_pending_items",
+            "branch",
+            reason="item_ids_filter",
+            selected_count=len(selected),
+            changeset_id=changeset.pk,
+        )
         return selected
 
     def _finalize_changeset_status(self, changeset: ChangeSet, user: User | None) -> None:
         """Set applied/rejected when no pending items remain; else leave status."""
         remaining = changeset.items.filter(status=ChangeSetItem.ITEM_STATUS_PENDING).count()
+        accepted = changeset.items.filter(status=ChangeSetItem.ITEM_STATUS_ACCEPTED).count()
+        rejected = changeset.items.filter(status=ChangeSetItem.ITEM_STATUS_REJECTED).count()
         if remaining > 0:
-            logger.info(
-                "_finalize_changeset_status | changeset_id=%s still_pending=%s",
-                changeset.pk,
-                remaining,
+            _story(
+                "ChangeSetService._finalize_changeset_status",
+                "branch",
+                reason="still_pending",
+                remaining=remaining,
+                accepted=accepted,
+                rejected=rejected,
+                changeset_id=changeset.pk,
             )
             return
-        accepted = changeset.items.filter(status=ChangeSetItem.ITEM_STATUS_ACCEPTED).count()
         if accepted > 0:
             changeset.status = ChangeSet.STATUS_APPLIED
             changeset.applied_at = timezone.now()
             changeset.applied_by = user
             changeset.save(update_fields=["status", "applied_at", "applied_by"])
-        else:
-            changeset.status = ChangeSet.STATUS_REJECTED
-            changeset.save(update_fields=["status"])
+            _story(
+                "ChangeSetService._finalize_changeset_status",
+                "branch",
+                reason="applied",
+                accepted=accepted,
+                rejected=rejected,
+                changeset_id=changeset.pk,
+            )
+            return
+        changeset.status = ChangeSet.STATUS_REJECTED
+        changeset.save(update_fields=["status"])
+        _story(
+            "ChangeSetService._finalize_changeset_status",
+            "branch",
+            reason="rejected",
+            accepted=accepted,
+            rejected=rejected,
+            changeset_id=changeset.pk,
+        )
 
     def _apply_add_element(
         self, model: YggdrasilModel, item: ChangeSetItem, detail: dict[str, Any]
@@ -617,11 +903,20 @@ class ChangeSetService:
             },
         )
         item.detail = {**detail, "element_id": element.pk}
-        logger.info(
-            "_apply_add_element | item=%s element_id=%s created=%s",
-            item.pk,
-            element.pk,
-            created,
+        created_reason = "created" if created else "existing_element"
+        _story(
+            "ChangeSetService._apply_add_element",
+            "processing",
+            item=item.pk,
+            element_id=element.pk,
+            created=created,
+        )
+        _story(
+            "ChangeSetService._apply_add_element",
+            "branch",
+            reason=created_reason,
+            element_id=element.pk,
+            item=item.pk,
         )
 
     def _apply_update_element(self, detail: dict[str, Any]) -> None:
@@ -663,6 +958,13 @@ class ChangeSetService:
         stereotype = self._get_or_create_stereotype(
             model, detail.get("stereotype_slug", "depends_on"), is_edge=True
         )
+        _story(
+            "ChangeSetService._apply_add_relationship",
+            "processing",
+            source_id=source_id,
+            target_id=target_id,
+            stereotype=stereotype.slug,
+        )
         Relationship.objects.get_or_create(
             model=model,
             source_id=source_id,
@@ -682,12 +984,34 @@ class ChangeSetService:
         if slug:
             el = qs.filter(slug=slug).first()
             if el:
+                _story(
+                    "ChangeSetService._resolve_element_id",
+                    "branch",
+                    reason="by_slug",
+                    slug=slug,
+                    element_id=el.pk,
+                )
                 return el.pk
         if name:
             el = qs.filter(name=name).first()
             if el:
+                _story(
+                    "ChangeSetService._resolve_element_id",
+                    "branch",
+                    reason="by_name",
+                    name=name,
+                    element_id=el.pk,
+                )
                 return el.pk
         msg = f"Element not found for relationship: name={name!r} slug={slug!r}"
+        _story(
+            "ChangeSetService._resolve_element_id",
+            "error",
+            reason="not_found",
+            name=name,
+            slug=slug,
+            level=logging.ERROR,
+        )
         raise ValueError(msg)
 
     def _apply_delete_relationship(self, detail: dict[str, Any]) -> None:
@@ -724,7 +1048,10 @@ class ChangeSetService:
                 f"Unknown {kind} stereotype {slug!r} on metamodel "
                 f"{model.metamodel.slug!r}. Add it in Django admin."
             )
-            logger.warning("_get_or_create_stereotype | %s", msg)
+            logger.warning(
+                "ChangeSetService._get_or_create_stereotype | error | reason=unknown_stereotype %s",
+                msg,
+            )
             raise ValueError(msg) from exc
 
     def _get_or_create_package(self, model: YggdrasilModel, slug: str) -> Package:
@@ -740,5 +1067,8 @@ class ChangeSetService:
                 f"Unknown package {slug!r} on metamodel {model.metamodel.slug!r}. "
                 "Add it in Django admin."
             )
-            logger.warning("_get_or_create_package | %s", msg)
+            logger.warning(
+                "ChangeSetService._get_or_create_package | error | reason=unknown_package %s",
+                msg,
+            )
             raise ValueError(msg) from exc

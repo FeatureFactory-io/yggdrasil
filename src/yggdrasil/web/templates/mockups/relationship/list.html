@@ -6,11 +6,8 @@
 {% block page_header %}
 <div class="d-flex align-items-center justify-content-between">
   <div>
-    <h1 class="hg-page-title">
-      Relationships
-      <span class="badge ms-2 rounded-pill" style="background:var(--hg-primary);font-size:0.7rem;vertical-align:middle;">{{ relationship_count }}</span>
-    </h1>
-    <p class="text-muted small mb-0">RELATIONSHIP-LIST+FIND-1 · Directed edges between elements</p>
+    <h1 class="hg-page-title">Relationships</h1>
+    <p class="text-muted small mb-0">{{ relationship_count }} relationships · Directed edges between elements</p>
   </div>
   <a href="{% url 'mockup_relationship_create' %}" class="btn btn-primary btn-sm"
      data-testid="create-relationship-btn">

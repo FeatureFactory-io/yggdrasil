@@ -857,6 +857,21 @@ Rules:
 - Zero Models: show the empty-state copy; disable the dropdown.
 - Tooltip two-sentence pattern (§4.1) is required on the toggle.
 
+#### Package tree — Elements and Diagrams
+
+When navigating the Model in **`VIEW-BROWSE-1`** (not diagram edit mode), each **Package** node lists:
+
+| Row kind | Icon | Icon color | `data-testid` | Action |
+|---|---|---|---|---|
+| **Element** | stereotype icon (§7.1) | `--hg-ink-muted` (default) | `nav-element-{slug}` | Select → graph + inspector |
+| **Diagram** | `fa-sitemap` | `--hg-accent` (gold) | `nav-diagram-{id}` | Open **`DIAGRAM-EDITOR-1`** |
+
+Diagram and Element rows share the same **`.yrg-element-item`** chrome (padding, hover, truncate). They differ **only** by icon glyph and icon color — no separate badges, borders, or row variants in the navigator. **`Draft`** / diagram kind appear on **`DIAGRAM-LIST+FIND-1`** and the editor header, not in the package tree.
+
+Diagram rows are **package-scoped inventory** — visible under the package even when element traversal is depth-filtered.
+
+**`DIAGRAM-EDITOR-1`** left pane reuses **element** rows only (drag onto canvas); diagram inventory in the editor header + list, not duplicated as draggable tree nodes.
+
 #### Mode-scoped controls (testability)
 
 Some interactive elements render only in one **view mode** (graph vs table, embed vs full page, collapsed vs expanded). When introducing a mode toggle:
@@ -1296,7 +1311,7 @@ Full-bleed canvas — **no standard page header** (same posture as View Browser 
 
 | Panel | `data-testid` | Behavior |
 |---|---|---|
-| Left — model tree | `diagram-model-tree` | View Browser navigator; drag-to-canvas |
+| Left — model tree | `diagram-model-tree` | **Elements only** (View Browser element rows under packages) — draggable onto canvas; Diagrams appear in **VIEW-BROWSE-1** navigator, not here |
 | Center — canvas | `diagram-canvas` | Cytoscape `preset`; grabbable nodes; on-canvas **`+`** (`diagram-node-add-rel`) |
 | Right — Tools | `diagram-tools-panel` | Elements + Relationships palettes |
 

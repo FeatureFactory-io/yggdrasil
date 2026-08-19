@@ -1717,6 +1717,135 @@ def build_table_columns_from_params(params: dict[str, Any]) -> list[dict[str, st
     return build_mock_table_columns({"table_columns": cols})
 
 
+MOCK_DIAGRAM_GROUPS = [
+    {
+        "package": "Technology",
+        "diagrams": [
+            {
+                "id": 1,
+                "name": "Container Diagram C1",
+                "kind": "Container",
+                "package": "Technology",
+                "summary": "Container view of Payment services and PostgreSQL dependencies",
+                "tags": ["payment", "tech-stack"],
+                "has_draft": True,
+            },
+            {
+                "id": 2,
+                "name": "System Context",
+                "kind": "Context",
+                "package": "Technology",
+                "summary": "External actors and platform boundary",
+                "tags": ["context"],
+                "has_draft": False,
+            },
+        ],
+    },
+    {
+        "package": "Application",
+        "diagrams": [
+            {
+                "id": 3,
+                "name": "Component Map",
+                "kind": "Component",
+                "package": "Application",
+                "summary": "Runtime components inside Payment API",
+                "tags": ["component", "payment-api"],
+                "has_draft": False,
+            },
+        ],
+    },
+]
+
+MOCK_DIAGRAM_EDITOR_NODES = [
+    {"id": "101", "label": "Payment API", "x": 120, "y": 100},
+    {"id": "102", "label": "PostgreSQL", "x": 320, "y": 180},
+]
+MOCK_DIAGRAM_EDITOR_EDGES = [
+    {"id": "e1", "source": "101", "target": "102", "label": "depends_on"},
+]
+
+MOCK_DIAGRAM_PACKAGES = ["Context", "Technology", "Application", "Code"]
+
+
+def _diagram_seed_payload() -> dict[str, Any]:
+    """JSON seed for client-side diagram mockup store."""
+    flat = [d for g in MOCK_DIAGRAM_GROUPS for d in g["diagrams"]]
+    presentations: dict[str, Any] = {}
+    for d in flat:
+        if d["id"] == 1:
+            presentations["1"] = {
+                "nodes": MOCK_DIAGRAM_EDITOR_NODES,
+                "edges": MOCK_DIAGRAM_EDITOR_EDGES,
+            }
+        else:
+            presentations[str(d["id"])] = {"nodes": [], "edges": []}
+    return {
+        "diagrams": flat,
+        "presentations": presentations,
+        "nextId": 100,
+    }
+
+
+def _diagram_urls() -> dict[str, str]:
+    """Named mockup URLs for JS navigation."""
+    return {
+        "list": "/mockups/diagram/",
+        "create": "/mockups/diagram/create/",
+        "editor": "/mockups/diagram/{id}/edit/",
+    }
+
+
+def _diagram_editor_context(
+    diagram: dict | None,
+    *,
+    mode: str = "edit",
+    session_id: str = "",
+) -> dict[str, Any]:
+    """Build shared context for DIAGRAM-EDITOR-1 mockup.
+
+    :param diagram: Diagram metadata dict or None for create mode.
+    :param mode: ``edit`` or ``create``.
+    :param session_id: Client create-session id from query string.
+    :return: Template context for ``mockups/diagram/editor.html``.
+    """
+    return {
+        "diagram": diagram or {"name": "New Diagram", "package": "Technology", "kind": "Container"},
+        "mode": mode,
+        "session_id": session_id,
+        "show_create_modal": mode == "create" and not session_id,
+        "tree_nodes": ["Payment API", "PostgreSQL", "Notification Service", "API Gateway"],
+        "element_stereotypes": ["System", "Container", "Component", "Person"],
+        "edge_stereotypes": [
+            {"name": "depends_on", "disabled": False},
+            {"name": "owns", "disabled": False},
+            {"name": "realizes", "disabled": True},
+        ],
+        "diagram_seed_json": json.dumps(_diagram_seed_payload()),
+        "diagram_editor_config_json": json.dumps(
+            {
+                "mode": mode,
+                "diagramId": diagram.get("id") if diagram else None,
+                "sessionId": session_id,
+                "urls": _diagram_urls(),
+            }
+        ),
+    }
+
+
+def attach_diagrams_to_package_tree(packages: list[dict]) -> list[dict]:
+    """Attach mock Diagram rows to each package node for VIEW-BROWSE-1 navigator."""
+    flat = [d for g in MOCK_DIAGRAM_GROUPS for d in g["diagrams"]]
+    by_package: dict[str, list[dict]] = {}
+    for diagram in flat:
+        by_package.setdefault(diagram["package"], []).append(diagram)
+    for pkg in packages:
+        diagrams = by_package.get(pkg["name"], [])
+        pkg["diagrams"] = diagrams
+        pkg["nav_child_count"] = len(pkg.get("elements", [])) + len(diagrams)
+    return packages
+
+
 def view_browse(request):
     """VIEW-BROWSE-1: View Browser — three-panel explorer (navigator + canvas + inspector)."""
     logger.info("Mockup: view_browse | user=%s", getattr(request.user, "username", "anonymous"))
@@ -1791,7 +1920,7 @@ def view_browse(request):
             "elements": display_elements,
             "elements_all": elements_all,
             "relationships": display_relationships,
-            "packages": build_package_tree(elements),
+            "packages": attach_diagrams_to_package_tree(build_package_tree(elements)),
             "model_name": "Yggdrasil",
             "model_slug": MOCK_MODEL_SLUG,
             "element_count": len(elements),
@@ -1817,6 +1946,8 @@ def view_browse(request):
             "filter_catalog": build_filter_catalog_payload(
                 elements_all, MOCK_VIEW_BROWSER_RELATIONSHIPS
             ),
+            "diagram_seed_json": json.dumps(_diagram_seed_payload()),
+            "diagram_browse_config_json": json.dumps({"urls": _diagram_urls()}),
         },
     )
 
@@ -1989,79 +2120,6 @@ def ratatosk_run_view(request, id):
     return render(request, "mockups/ratatosk_run/view.html", {"run": run, "changeset": cs})
 
 
-MOCK_DIAGRAM_GROUPS = [
-    {
-        "package": "Technology",
-        "diagrams": [
-            {
-                "id": 1,
-                "name": "Container Diagram C1",
-                "kind": "Container",
-                "package": "Technology",
-                "summary": "Container view of Payment services and PostgreSQL dependencies",
-                "tags": ["payment", "tech-stack"],
-                "has_draft": True,
-            },
-            {
-                "id": 2,
-                "name": "System Context",
-                "kind": "Context",
-                "package": "Technology",
-                "summary": "External actors and platform boundary",
-                "tags": ["context"],
-                "has_draft": False,
-            },
-        ],
-    },
-    {
-        "package": "Application",
-        "diagrams": [
-            {
-                "id": 3,
-                "name": "Component Map",
-                "kind": "Component",
-                "package": "Application",
-                "summary": "Runtime components inside Payment API",
-                "tags": ["component", "payment-api"],
-                "has_draft": False,
-            },
-        ],
-    },
-]
-
-MOCK_DIAGRAM_EDITOR_NODES = [
-    {"data": {"id": "101", "label": "Payment API"}, "position": {"x": 120, "y": 100}},
-    {"data": {"id": "102", "label": "PostgreSQL"}, "position": {"x": 320, "y": 180}},
-]
-MOCK_DIAGRAM_EDITOR_EDGES = [
-    {"data": {"id": "e1", "source": "101", "target": "102", "label": "depends_on"}},
-]
-
-
-def _diagram_editor_context(
-    diagram: dict | None, *, show_create_modal: bool = False
-) -> dict[str, Any]:
-    """Build shared context for DIAGRAM-EDITOR-1 mockup.
-
-    :param diagram: Diagram metadata dict or None for create mode.
-    :param show_create_modal: When True, overlay DIAGRAM-CREATE_DIAGRAM-1 modal.
-    :return: Template context for ``mockups/diagram/editor.html``.
-    """
-    return {
-        "diagram": diagram or {"name": "New Diagram", "package": "Technology", "kind": "Container"},
-        "show_create_modal": show_create_modal,
-        "tree_nodes": ["Payment API", "PostgreSQL", "Notification Service", "API Gateway"],
-        "element_stereotypes": ["System", "Container", "Component", "Person"],
-        "edge_stereotypes": [
-            {"name": "depends_on", "disabled": False},
-            {"name": "owns", "disabled": False},
-            {"name": "realizes", "disabled": True},
-        ],
-        "cytoscape_nodes": json.dumps(MOCK_DIAGRAM_EDITOR_NODES if diagram else []),
-        "cytoscape_edges": json.dumps(MOCK_DIAGRAM_EDITOR_EDGES if diagram else []),
-    }
-
-
 def diagram_list(request):
     """DIAGRAM-LIST+FIND-1: Diagram inventory grouped by package."""
     logger.info("Mockup: diagram_list | user=%s", getattr(request.user, "username", "anonymous"))
@@ -2069,7 +2127,12 @@ def diagram_list(request):
     return render(
         request,
         "mockups/diagram/list.html",
-        {"diagram_groups": MOCK_DIAGRAM_GROUPS, "diagram_count": count},
+        {
+            "diagram_groups": MOCK_DIAGRAM_GROUPS,
+            "diagram_count": count,
+            "diagram_seed_json": json.dumps(_diagram_seed_payload()),
+            "diagram_config_json": json.dumps({"urls": _diagram_urls()}),
+        },
     )
 
 
@@ -2078,14 +2141,8 @@ def diagram_editor_create(request):
     logger.info(
         "Mockup: diagram_editor_create | user=%s", getattr(request.user, "username", "anonymous")
     )
-    name = request.GET.get("name", "Payment Containers")
-    package = request.GET.get("package", "Technology")
-    kind = request.GET.get("kind", "Container")
-    show_modal = "name" not in request.GET
-    ctx = _diagram_editor_context(
-        {"name": name, "package": package, "kind": kind, "has_draft": False},
-        show_create_modal=show_modal,
-    )
+    session_id = request.GET.get("session", "")
+    ctx = _diagram_editor_context(None, mode="create", session_id=session_id)
     return render(request, "mockups/diagram/editor.html", ctx)
 
 
@@ -2096,4 +2153,8 @@ def diagram_editor(request, id):
     )
     flat = [d for g in MOCK_DIAGRAM_GROUPS for d in g["diagrams"]]
     diagram = next((d for d in flat if d["id"] == id), flat[0])
-    return render(request, "mockups/diagram/editor.html", _diagram_editor_context(diagram))
+    return render(
+        request,
+        "mockups/diagram/editor.html",
+        _diagram_editor_context(diagram, mode="edit"),
+    )

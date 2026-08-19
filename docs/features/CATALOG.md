@@ -336,6 +336,7 @@ assertions and in form step fields.
 | Element tree root | `browser-element-tree` |
 | Navigator node chevron | `nav-toggle-{slug}` |
 | Navigator element row | `nav-element-{slug}` |
+| Navigator diagram row | `nav-diagram-{id}` |
 | Navigator collapse toggle | `browser-toggle-nav-panel` |
 | **v0.3 — Depth control** | |
 | Depth slider | `browser-depth-slider` |

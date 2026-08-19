@@ -34,6 +34,14 @@ Feature: VIEW-BROWSE-1 View Browser — Element Navigator (left panel)
     And the element "browser-search-input" should be visible
     And the user should see "Yggdrasil"
 
+  Scenario: VIEW-BROWSE-1-25b Package navigator lists diagrams as normal tree nodes
+    When Elena opens the View Browser mockup in graph mode
+    And she expands the Technology package in the navigator
+    Then she sees diagram "Container Diagram C1" under Technology
+    And the diagram row uses the same layout as element rows
+    When she clicks diagram "Container Diagram C1" in the navigator
+    Then DIAGRAM-EDITOR-1 opens for that diagram
+
   Scenario: VIEW-BROWSE-1-18 Traversal tree at depth 1 shows filter roots only
     When I GET "/models/yggdrasil/views/?mode=graph&stereotype=component&depth=1"
     Then the response status is 200

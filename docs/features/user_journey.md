@@ -198,7 +198,7 @@ Priya follows the printed link to `MUNIN-BRIEFING-1` — Munin's post-run archit
 - **Left navigator (content-browser panel):**
   - **Model switcher** (navigator header — not a static title): dropdown showing the current Model name (`browser-model-name`) and listing every Model the signed-in user may read (`browser-model-switcher`). Selecting another Model navigates to `/models/{slug}/views/` and **reloads** package tree, filters, canvas, and inspector for that graph. Filters, time-travel, and selection are **not** carried across Models.
   - The switcher does **not** create Models. New Models are created by `ratatosk bootstrap` / MCP `ensure_model` (Act 1 / Act 5).
-  - **Traversal tree** + navigator search (below the switcher): roots = elements matching active filters; children = next **outgoing** hop (same subgraph as canvas). Chevron expand/collapse is **local UI only** — does not change `?depth=`.
+  - **Package navigator tree** + navigator search (below the switcher): each **Package** expands to show **Elements** and **Diagrams** as **the same row style** — Diagram rows use `fa-sitemap` in accent color; Element rows use stereotype icons in muted color. Click diagram → **`DIAGRAM-EDITOR-1`**; click element → graph + inspector. When filters or depth apply, element traversal follows BFS; **Diagrams** under each package remain visible (package inventory).
 - **Filter panel (canvas toolbar → Filters; this is how Priya works with Views):**
   - When a **named View** is active, toolbar shows the **View name** (`active-view-name`).
   - **Package** — multi-select

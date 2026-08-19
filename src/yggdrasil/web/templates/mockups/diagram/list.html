@@ -1,15 +1,17 @@
 {% extends "mockups/base.html" %}
+{% load static %}
 {% block screen_id %}DIAGRAM-LIST+FIND-1{% endblock %}
 {% block title %}Diagrams{% endblock %}
+
+{% block mockup_nav_extra %}
+ <span class="text-muted ms-2" data-testid="diagram-mockup-store-hint">· Reset store: clear sessionStorage key <code>ygg-mock-diagrams</code></span>
+{% endblock %}
 
 {% block page_header %}
 <div class="d-flex align-items-center justify-content-between">
   <div>
-    <h1 class="hg-page-title">
-      Diagrams
-      <span class="badge ms-2 rounded-pill" style="background:var(--hg-primary);font-size:0.7rem;vertical-align:middle;">{{ diagram_count }}</span>
-    </h1>
-    <p class="text-muted small mb-0">DIAGRAM-LIST+FIND-1 · Curated presentation views grouped by package</p>
+    <h1 class="hg-page-title">Diagrams</h1>
+    <p class="text-muted small mb-0">Curated views of your architecture, grouped by package</p>
   </div>
   <a href="{% url 'mockup_diagram_editor_create' %}" class="btn btn-primary btn-sm"
      data-testid="diagram-create-from-list-btn">
@@ -19,13 +21,16 @@
 {% endblock %}
 
 {% block content %}
+<script type="application/json" id="mock-diagram-seed">{{ diagram_seed_json|safe }}</script>
+<script type="application/json" id="mock-diagram-config">{{ diagram_config_json|safe }}</script>
+
 <div data-testid="diagram-list-page">
   <section aria-label="Filter panel" class="row g-2 mb-3">
     <div class="col-md-5">
       <div class="input-group input-group-sm">
         <span class="input-group-text"><i class="fa-solid fa-magnifying-glass text-muted" aria-hidden="true"></i></span>
         <input type="text" class="form-control" placeholder="Find diagrams…"
-               aria-label="Search diagrams">
+               aria-label="Search diagrams" data-testid="diagram-search">
       </div>
     </div>
     <div class="col-auto">
@@ -39,60 +44,11 @@
     </div>
   </section>
 
-  {% for group in diagram_groups %}
-  <section class="mb-4" aria-label="{{ group.package }} diagrams">
-    <h2 class="h6 text-uppercase text-muted mb-2">{{ group.package }}</h2>
-    <div class="hg-card">
-      <div class="table-responsive">
-        <table class="table table-hover mb-0" aria-label="{{ group.package }} diagrams">
-          <thead>
-            <tr>
-              <th>Name</th><th>Kind</th><th>Summary</th><th>Tags</th><th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for d in group.diagrams %}
-            <tr data-testid="diagram-row-{{ d.id }}" class="yrg-row-actions">
-              <td>
-                <a href="{% url 'mockup_diagram_editor' id=d.id %}" class="fw-semibold text-decoration-none">{{ d.name }}</a>
-                {% if d.has_draft %}
-                <span class="badge bg-warning text-dark ms-1" data-testid="diagram-draft-badge">Draft</span>
-                {% endif %}
-              </td>
-              <td><span class="badge bg-light text-dark border">{{ d.kind }}</span></td>
-              <td class="text-muted small">{{ d.summary }}</td>
-              <td class="text-muted small">
-                {% for tag in d.tags %}<span class="badge bg-secondary-subtle text-secondary me-1">{{ tag }}</span>{% endfor %}
-              </td>
-              <td class="text-end">
-                <div class="btn-group btn-group-sm yrg-hover-actions" role="group">
-                  <a href="{% url 'mockup_diagram_editor' id=d.id %}"
-                     class="btn btn-outline-secondary" title="Edit" aria-label="Edit {{ d.name }}"
-                     data-testid="diagram-edit-{{ d.id }}">
-                    <i class="fa-solid fa-pen" aria-hidden="true"></i>
-                  </a>
-                  <button type="button" class="btn btn-outline-secondary" title="Move"
-                          aria-label="Move {{ d.name }}" data-testid="diagram-move-{{ d.id }}"
-                          data-bs-toggle="modal" data-bs-target="#diagramMoveModal"
-                          onclick="prepareMove('{{ d.name|escapejs }}', '{{ d.package|escapejs }}')">
-                    <i class="fa-solid fa-folder-tree" aria-hidden="true"></i>
-                  </button>
-                  <button type="button" class="btn btn-outline-danger" title="Delete"
-                          aria-label="Delete {{ d.name }}" data-testid="diagram-delete-{{ d.id }}"
-                          data-bs-toggle="modal" data-bs-target="#diagramDeleteModal"
-                          onclick="prepareDelete('{{ d.name|escapejs }}')">
-                    <i class="fa-solid fa-trash" aria-hidden="true"></i>
-                  </button>
-                </div>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+  <div class="hg-card">
+    <div id="diagram-list-mount" class="table-responsive" aria-live="polite">
+      <div class="text-center text-muted py-5 small">Loading diagrams…</div>
     </div>
-  </section>
-  {% endfor %}
+  </div>
 </div>
 
 {# DIAGRAM-DELETE_DIAGRAM-1 #}
@@ -148,20 +104,10 @@
     </div>
   </div>
 </div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1300;"></div>
 {% endblock %}
 
 {% block extra_js %}
-<style>
-  .yrg-hover-actions { opacity: 0.35; transition: opacity 0.15s; }
-  tr:hover .yrg-hover-actions { opacity: 1; }
-</style>
-<script>
-  function prepareDelete(name) {
-    document.getElementById('deleteDiagramName').textContent = name;
-  }
-  function prepareMove(name, pkg) {
-    document.getElementById('moveDiagramName').textContent = name;
-    document.getElementById('moveCurrentPackage').value = pkg;
-  }
-</script>
+<script src="{% static 'js/mockup-diagram.js' %}"></script>
 {% endblock %}

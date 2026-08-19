@@ -111,9 +111,9 @@ Gaphor plugin; Mermaid/PNG export from curated diagram; Metamodel catalog entity
 ## Architectural notes
 
 1. **`Diagram.diagram_type`** is metamodel-scoped — intentional; ORM hard-codes C4 `TYPE_CHOICES` until DTA catalog entity.
-2. **Draft vs ChangeSet** — only Save invokes Munin; chat/MCP use `update_diagram_draft`.
-3. **Delete diagram** — removes presentation + Diagram row; graph Elements/Relationships remain unless deleted in editor session.
-4. **`add_to_diagram` rollback** — inverse map broken in as-built; fix in W24.
+2. **VIEW-BROWSE-1 navigator** — Diagrams under Package use the **same row chrome** as Elements; distinguish by `fa-sitemap` icon in accent color only (`st-icon-diagram`).
+3. **DIAGRAM-EDITOR-1 left pane** — Elements only (drag-to-canvas); not the full navigator with diagram rows.
+4. **New ChangeSet ops** — `create_diagram`, `update_diagram`, `delete_diagram`, `update_diagram_presentation`; rollback inverses must be specified (today `add_to_diagram` inverse is broken—identity map in [`changeset/services.py`](src/yggdrasil/changeset/services.py)).
 
 ---
 

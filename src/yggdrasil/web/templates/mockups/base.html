@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+{% load static %}
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -62,13 +63,24 @@
 
       --bs-primary: #1f3a5f;
       --bs-link-color: #1f3a5f;
+      --yrg-navbar-logo-size: 2.75rem;
+      --yrg-navbar-padding-y: 0.25rem;
+      --yrg-navbar-accent-border: 3px;
+      --yrg-navbar-offset: calc(
+        var(--yrg-navbar-logo-size) + (var(--yrg-navbar-padding-y) * 2) + var(--yrg-navbar-accent-border)
+      );
+      --yrg-mockup-banner-height: 24px;
+      --yrg-mockup-shell-offset: calc(var(--yrg-mockup-banner-height) + var(--yrg-navbar-offset));
     }
     body {
       font-family: "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       background: var(--hg-bg-body);
       color: var(--hg-ink);
-      padding-top: 81px; /* banner 24px + navbar 57px */
+      padding-top: var(--yrg-mockup-shell-offset);
       font-size: 0.9rem;
+    }
+    body.hg-mockup-login {
+      padding-top: var(--yrg-mockup-banner-height);
     }
     /* Mockup banner */
     .hg-mockup-banner {
@@ -78,10 +90,29 @@
       padding: 3px; color: #856404; letter-spacing: 0.06em;
       text-transform: uppercase;
     }
-    /* Navbar — §3.3 */
-    .yrg-navbar { background: var(--hg-primary); border-bottom: 3px solid var(--hg-accent); }
-    .yrg-navbar .navbar-brand { color: #fff; font-weight: 700; font-size: 1rem; }
+    /* Navbar — aligned with production base.html */
+    .yrg-navbar {
+      background: var(--hg-primary);
+      border-bottom: var(--yrg-navbar-accent-border) solid var(--hg-accent);
+      --bs-navbar-padding-y: var(--yrg-navbar-padding-y);
+      padding-top: var(--yrg-navbar-padding-y);
+      padding-bottom: var(--yrg-navbar-padding-y);
+      top: var(--yrg-mockup-banner-height);
+    }
+    .yrg-navbar .navbar-brand {
+      color: #fff;
+      font-weight: 700;
+      font-size: 1rem;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
     .yrg-navbar .navbar-brand .accent { color: var(--hg-accent); }
+    .yrg-navbar-brand-logo {
+      height: var(--yrg-navbar-logo-size);
+      width: var(--yrg-navbar-logo-size);
+      object-fit: contain;
+      flex-shrink: 0;
+    }
     .yrg-navbar .nav-link {
       color: rgba(255,255,255,0.82); font-size: 0.8rem; font-weight: 500;
       border-radius: 4px; padding: 6px 10px;
@@ -185,6 +216,11 @@
     }
     .hg-mockup-nav a { color: var(--hg-primary); text-decoration: none; }
     .hg-mockup-nav a:hover { text-decoration: underline; }
+    .hg-mockup-nav-wrap {
+      flex-shrink: 0;
+      border-top: 1px solid var(--hg-border);
+      background: var(--hg-bg-subtle);
+    }
     /* Offcanvas Munin panel */
     #muninPanel { width: 380px; }
     #muninPanel .offcanvas-header { background: var(--hg-primary); color: #fff; }
@@ -209,18 +245,19 @@
   </style>
   {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <!-- Screen: {% block screen_id %}{% endblock %} -->
 
   <div class="hg-mockup-banner">
     Mockup · design reference only · not connected to live data
   </div>
 
+  {% block app_navbar %}
   <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg yrg-navbar fixed-top" style="top:24px;" aria-label="Yggdrasil main navigation">
+  <nav class="navbar navbar-expand-lg yrg-navbar fixed-top" aria-label="Yggdrasil main navigation">
     <div class="container-fluid px-3">
       <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'mockup_view_browse' %}">
-        <i class="fa-solid fa-crow accent" aria-hidden="true"></i>
+        {% include "web/partials/nav_brand_logo.html" %}
         Yggdrasil
       </a>
       <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse"
@@ -273,24 +310,16 @@
           </li>
         </ul>
         <ul class="navbar-nav ms-auto align-items-lg-center">
-          <li class="nav-item">
-            <a class="nav-link" href="{% url 'mockup_auth_token' %}"
-               aria-label="Settings" data-bs-toggle="tooltip"
-               title="Enables you to manage API access tokens. Use it to generate tokens for the Ratatosk CLI and MCP clients."
-               data-testid="nav-settings">
-              <i class="fa-solid fa-gear" aria-hidden="true"></i>
-            </a>
-          </li>
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle d-flex align-items-center gap-2"
                href="#" role="button" data-bs-toggle="dropdown"
                aria-expanded="false" data-testid="user-menu">
               <i class="fa-solid fa-circle-user" aria-hidden="true"></i>
-              <span>Commander Donland</span>
+              <span class="d-none d-md-inline">elena@example.com</span>
             </a>
             <ul class="dropdown-menu dropdown-menu-end shadow-sm">
               <li>
-                <a class="dropdown-item" href="{% url 'mockup_auth_token' %}">
+                <a class="dropdown-item" href="{% url 'mockup_auth_token' %}" data-testid="nav-settings">
                   <i class="fa-solid fa-key me-2 text-muted" aria-hidden="true"></i>API Access
                 </a>
               </li>
@@ -306,6 +335,7 @@
       </div>
     </div>
   </nav>
+  {% endblock %}
 
   <!-- Page header -->
   <div class="hg-page-header">
@@ -357,24 +387,15 @@
   <div id="toast-container" class="toast-container position-fixed bottom-0 end-0 p-3"
        aria-live="polite" aria-atomic="true"></div>
 
-  <!-- Mockup nav -->
-  <div class="container-fluid px-4 pb-4 mt-3">
-    <div class="hg-mockup-nav">
-      <strong>Mockup screens:</strong>
-      <a href="{% url 'mockup_auth_login' %}">Login</a> ·
-      <a href="{% url 'mockup_auth_token' %}">Tokens</a> ·
-      <a href="{% url 'mockup_munin_briefing' %}">Briefing</a> ·
-      <a href="{% url 'mockup_view_browse' %}">View Browser</a> ·
-      <a href="{% url 'mockup_view_export' %}">Export</a> ·
-      <a href="{% url 'mockup_view_history' %}">History</a> ·
-      <a href="{% url 'mockup_element_list' %}">Elements</a> ·
-      <a href="{% url 'mockup_element_create' %}">Create Element</a> ·
-      <a href="{% url 'mockup_relationship_list' %}">Relationships</a> ·
-      <a href="{% url 'mockup_changeset_list' %}">ChangeSets</a> ·
-      <a href="{% url 'mockup_changeset_view' id=1 %}">ChangeSet review</a> ·
-      <a href="{% url 'mockup_ratatosk_run_list' %}">Runs</a>
+  <footer class="hg-mockup-nav-wrap" aria-label="Mockup screen index">
+    <div class="container-fluid px-4 pb-4 pt-3 mt-3">
+      <div class="hg-mockup-nav" data-testid="mockup-screen-nav">
+        <strong>Mockup screens:</strong>
+        {% include "mockups/_mockup_screen_nav_links.html" %}
+        {% block mockup_nav_extra %}{% endblock %}
+      </div>
     </div>
-  </div>
+  </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>

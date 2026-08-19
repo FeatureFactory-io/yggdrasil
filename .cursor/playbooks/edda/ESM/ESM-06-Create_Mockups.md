@@ -24,14 +24,17 @@ Mockups live in a dedicated `mockups/` package at the repo root — separate fro
 ```
 mockups/
   __init__.py          # package marker; demo/design reference only
-  urls.py              # URL patterns for all mockup screens
+  urls.py              # URL patterns for all mockup screens (canonical inventory)
   views.py             # views with hardcoded MOCK_* data fixtures
-templates/mockups/
+src/yggdrasil/web/templates/mockups/
+  base.html            # shared shell — banner, navbar, global mockup nav
   {entity}/
-    {operation}.html   # e.g. templates/mockups/pips/list.html
+    {operation}.html   # e.g. templates/mockups/diagram/list.html
+src/yggdrasil/web/static/js/
+  mockup-{feature}.js  # optional client-side interactivity (sessionStorage, etc.)
 ```
 
-`mockups` is **not** in `INSTALLED_APPS` — it is a plain module included from `mimir/urls.py`.
+`mockups` is **not** in `INSTALLED_APPS` — it is a plain module included from `yggdrasil/urls.py`.
 
 ---
 
@@ -41,12 +44,82 @@ Mockup routes are mounted only when `settings.DEBUG` is `True`.
 In all other environments (test, production) they return 404.
 
 ```python
-# mimir/urls.py
+# src/yggdrasil/urls.py
 if settings.DEBUG:
     urlpatterns.append(path("mockups/", include("mockups.urls")))
 ```
 
 This means mockups are automatically available with `runserver` (dev settings set `DEBUG=True`) and automatically disabled under pytest and production.
+
+---
+
+## Mockup chrome (required on every screen)
+
+Every mockup screen **must** extend `mockups/base.html`. Do **not** duplicate mockup chrome inside individual templates.
+
+Two elements are always visible (except where a full-bleed screen explicitly hides the footer — see below):
+
+### 1. Top banner — `.hg-mockup-banner`
+
+Fixed at the top of the viewport. Signals that the screen is design reference only.
+
+```html
+<div class="hg-mockup-banner">
+  Mockup · design reference only · not connected to live data
+</div>
+```
+
+- Lives in `templates/mockups/base.html` only.
+- Never remove or hide in individual mockup templates.
+- Navbar is offset below it (`top: 24px`).
+
+### 2. Global screen inventory — `.hg-mockup-nav`
+
+Footer bar listing **all** registered mockup screens. This is the canonical cross-link index for designers, reviewers, and agents jumping between prototypes.
+
+```html
+<div class="container-fluid px-4 pb-4 mt-3">
+  <div class="hg-mockup-nav" data-testid="mockup-screen-nav">
+    <strong>Mockup screens:</strong>
+    <!-- one link per registered mockups/urls.py route -->
+    …
+    {% block mockup_nav_extra %}{% endblock %}
+  </div>
+</div>
+```
+
+**Rules:**
+
+| Rule | Detail |
+|---|---|
+| **Single source** | Maintain links in `base.html` only — **never** add a second per-page “Mockup screens:” block. |
+| **Keep in sync** | When you add a route in `mockups/urls.py`, add a link to `base.html` in the same change. |
+| **Page-specific hints** | Use `{% block mockup_nav_extra %}` for optional suffix text (e.g. sessionStorage reset key on interactive mockups). Do not fork the nav. |
+| **`data-testid`** | Root footer nav: `mockup-screen-nav`. |
+
+**Current inventory** (maintain this list in `base.html` as routes grow):
+
+| Link label | URL name | Screen ID (typical) |
+|---|---|---|
+| Login | `mockup_auth_login` | AUTH-LOGIN-1 |
+| Tokens | `mockup_auth_token` | AUTH-TOKEN-1 |
+| Briefing | `mockup_munin_briefing` | MUNIN-BRIEFING-1 |
+| View Browser | `mockup_view_browse` | VIEW-BROWSE-1 |
+| Export | `mockup_view_export` | EXPORT-BRIEFING-1 |
+| History | `mockup_view_history` | VIEW-HISTORY-1 |
+| Elements | `mockup_element_list` | ELEMENT-LIST+FIND-1 |
+| Create Element | `mockup_element_create` | ELEMENT-CREATE_ELEMENT-1 |
+| Relationships | `mockup_relationship_list` | RELATIONSHIP-LIST+FIND-1 |
+| Diagrams | `mockup_diagram_list` | DIAGRAM-LIST+FIND-1 |
+| Create Diagram | `mockup_diagram_editor_create` | DIAGRAM-CREATE_DIAGRAM-1 |
+| Edit Diagram #1 | `mockup_diagram_editor` id=1 | DIAGRAM-EDITOR-1 |
+| ChangeSets | `mockup_changeset_list` | CHANGESET-LIST+FIND-1 |
+| ChangeSet review | `mockup_changeset_view` id=1 | CHANGESET-VIEW_CHANGESET-1 |
+| Runs | `mockup_ratatosk_run_list` | RATATOSK_RUN-LIST+FIND-1 |
+
+Representative **detail/edit** routes (element view, relationship view, run view, etc.) are reachable from list rows — they do not need footer links unless they are primary entry points.
+
+**Full-bleed exception:** `VIEW-BROWSE-1` hides `.hg-mockup-nav` via page CSS (`body.yrg-view-browser .hg-mockup-nav { display: none; }`) to preserve three-panel layout height. The **banner stays visible**.
 
 ---
 
@@ -66,6 +139,8 @@ urlpatterns = [
     path("{entity}/<int:id>/", views.{entity}_detail, name="mockup_{entity}_detail"),
 ]
 ```
+
+Then add a footer link in `templates/mockups/base.html` (see **Mockup chrome** above).
 
 ### 2. Create views with mock data
 
@@ -88,49 +163,53 @@ def {entity}_list(request):
 
 ### 3. Create templates
 
-**File location**: `templates/mockups/{entity}/{operation}.html`
+**File location:** `src/yggdrasil/web/templates/mockups/{entity}/{operation}.html`
 
-Required elements in every mockup template:
+**Always extend the mockup base:**
 
 ```html
-{% extends "base.html" %}
+{% extends "mockups/base.html" %}
 {% load static %}
 
-{% block title %}{Entity} — Mockup{% endblock %}
+{% block screen_id %}{ENTITY-LIST+FIND-1}{% endblock %}
+{% block title %}{Entity}{% endblock %}
 
 {% block content %}
-<div class="container mt-4" data-testid="{entity}-{operation}-page">
-
-    <!-- ... screen content ... -->
-
-    <!-- Mockup nav — cross-links to related screens -->
-    <div class="alert alert-light border mt-4 small">
-        <strong>Mockup screens:</strong>
-        <a href="{% url 'mockup_{entity}_list' %}">List</a> ·
-        <a href="{% url 'mockup_{entity}_create' %}">Create</a> ·
-        <a href="{% url 'mockup_{entity}_detail' id=1 %}">Detail</a>
-    </div>
-
+<div data-testid="{entity}-list-page">
+  <!-- screen content — LIST+FIND, VIEW, etc. per IA_guidelines.md -->
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-// Client-side flow simulation — log decisions, actions, results
 document.addEventListener('DOMContentLoaded', function () {
-    console.log('[mockup:{entity}-{operation}] page loaded');
-    // Log user interactions inline, e.g.:
-    // console.log('[mockup:{entity}-{operation}] submit clicked, field=' + value);
+  console.log('[mockup:{entity}-list+find-1] page loaded');
 });
 </script>
 {% endblock %}
 ```
 
+**Optional — interactive mockups** (play-pretend flows, sessionStorage):
+
+```html
+{% block mockup_nav_extra %}
+ <span class="text-muted ms-2" data-testid="{entity}-mockup-store-hint">
+   · Reset store: clear sessionStorage key <code>ygg-mock-{feature}</code>
+ </span>
+{% endblock %}
+```
+
 Additional conventions:
-- Bootstrap 5.3+ components throughout
-- Font Awesome Pro icons on all buttons
-- Bootstrap tooltips on all interactive elements
-- `data-testid` attributes on all interactive elements
-- Represent all UI states: loading, empty, error, success
-- Semantic HTML (`nav`, `main`, `section`), ARIA labels, keyboard navigation
+
+- Follow `docs/ux/IA_guidelines.md` for LIST+FIND tables, page headers, modals, and `data-testid` naming (`docs/features/CATALOG.md`).
+- Bootstrap 5.3+ components throughout.
+- Font Awesome icons on all buttons.
+- Bootstrap tooltips on interactive elements (initialized globally in `base.html`).
+- `data-testid` on all interactive elements.
+- Represent UI states: loading, empty, error, success.
+- Semantic HTML (`nav`, `main`, `section`), ARIA labels, keyboard navigation.
+- **Page headers look real:** Visible title and subtitle use production copy — no Screen IDs, no “interactive mockup” or sessionStorage jargon in `.hg-page-header`. Screen traceability: `{% block screen_id %}` → HTML comment in base; `data-testid` on containers and controls.
+- Mockup signaling is **only** via `.hg-mockup-banner` (top) and `.hg-mockup-nav` (footer inventory). Interactive mockups may append sessionStorage reset hints via `{% block mockup_nav_extra %}` in the footer nav only.
 
 ### 4. Add accessibility
 
@@ -145,10 +224,12 @@ Additional conventions:
 
 - ✅ `mockups/urls.py` — URL patterns for all CRUDLF screens, names as `mockup_{entity}_{operation}`
 - ✅ `mockups/views.py` — mock data constants + view functions with INFO-level logging
-- ✅ Templates at `templates/mockups/{entity}/{operation}.html`
+- ✅ Templates at `src/yggdrasil/web/templates/mockups/{entity}/{operation}.html`
+- ✅ Each template extends `mockups/base.html` (inherits `.hg-mockup-banner` + `.hg-mockup-nav`)
+- ✅ New routes linked in `base.html` global mockup nav inventory (`data-testid="mockup-screen-nav"`)
+- ✅ No duplicate per-page mockup nav blocks
 - ✅ Each template has `data-testid="{entity}-{operation}-page"` on the root container
-- ✅ Each template has a **Mockup nav** block with cross-links to all related mockup screens
-- ✅ Each template has `console.log('[mockup:{entity}-{operation}]')` calls at key interaction points
+- ✅ Each template has `console.log('[mockup:…]')` calls at key interaction points
 - ✅ All UI states represented (empty, loaded, error, success)
 - ✅ Accessibility attributes (ARIA, semantic HTML, keyboard nav)
 - ✅ Mockups accessible at `/mockups/{entity}/` when `DEBUG=True`; return 404 otherwise

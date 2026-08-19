@@ -9,7 +9,7 @@
 | Entity | ID | Change |
 |--------|-----|--------|
 | Rule Github Issues | 14 | `always_apply: true` + BPE/MIN traceability section |
-| Rule Small Increments | 4 | Active issue #N: commit + comment per slice |
+| Rule Small Increments | 4 | Pointer only: slice done = commit + issue update together; GitHub mechanics stay in `do-github-issues` |
 | Activity Plan Feature | 96 | Step 8 hard gate; commit strategy + success criteria |
 | Activity Implement Backend | 97 | Step 5 issue comment; required rule |
 | Activity Execute (MIN-04) | 181 | Per-slice trail; checkpoint footer Refs #N |

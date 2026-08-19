@@ -6,11 +6,8 @@
 {% block page_header %}
 <div class="d-flex align-items-center justify-content-between">
   <div>
-    <h1 class="hg-page-title">
-      Elements
-      <span class="badge ms-2 rounded-pill" style="background:var(--hg-primary);font-size:0.7rem;vertical-align:middle;">{{ element_count }}</span>
-    </h1>
-    <p class="text-muted small mb-0">ELEMENT-LIST+FIND-1 · C4 elements across all packages</p>
+    <h1 class="hg-page-title">Elements</h1>
+    <p class="text-muted small mb-0">{{ element_count }} elements · C4 elements across all packages</p>
   </div>
   <a href="{% url 'mockup_element_create' %}" class="btn btn-primary btn-sm"
      data-testid="create-element-btn">

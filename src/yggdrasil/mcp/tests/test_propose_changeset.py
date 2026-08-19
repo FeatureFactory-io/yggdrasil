@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import patch
 
 import pytest
 from tests.fixtures.factories import UserFactory
 from tests.fixtures.factories.model_factories import YggdrasilModelFactory
+from tests.support.log_story import assert_log_story
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
 from yggdrasil.graph.models import ensure_c4_metamodel
 from yggdrasil.mcp.server import set_current_user_id, set_token_scope
-from yggdrasil.mcp.tools.propose import propose_changeset, record_ratatosk_run
+from yggdrasil.mcp.tools.propose import ensure_model, propose_changeset, record_ratatosk_run
 from yggdrasil.ratatosk.models import RataskRun
 
 
@@ -200,3 +202,93 @@ def test_record_ratatosk_run_persists_blackboard(rw_user) -> None:
     run = RataskRun.objects.get(run_id=result["run_id"])
     assert "tree" in run.blackboard
     assert "docker-compose.yml" in run.blackboard["tree"]["paths"]
+
+
+@pytest.mark.django_db
+def test_propose_changeset_log_story_happy(rw_user, caplog) -> None:
+    """propose_changeset logs entry, skipped-planner reason, and exit counts."""
+    ensure_c4_metamodel()
+    YggdrasilModelFactory(name="Yggdrasil", slug="yggdrasil", metamodel=ensure_c4_metamodel())
+    with caplog.at_level(logging.INFO, logger="yggdrasil.mcp.tools.propose"):
+        propose_changeset(
+            model="yggdrasil",
+            operations=[],
+            allow_empty=True,
+            run_id="run-log-empty",
+        )
+    assert_log_story(
+        caplog,
+        where="propose_changeset",
+        beats={
+            "entry": ["model=yggdrasil", "ops=0", "allow_empty=True"],
+            "munin_planner_skipped": ["munin_planner_skipped", "reason="],
+            "exit": ["changeset_id=", "applied=", "pending="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_propose_changeset_log_story_reject(rw_user, caplog) -> None:
+    """Empty ops without allow_empty logs validation reason=empty_ops."""
+    ensure_c4_metamodel()
+    YggdrasilModelFactory(name="Yggdrasil", slug="yggdrasil", metamodel=ensure_c4_metamodel())
+    with (
+        caplog.at_level(logging.INFO, logger="yggdrasil.mcp.tools.propose"),
+        pytest.raises(ValueError, match="must not be empty"),
+    ):
+        propose_changeset(model="yggdrasil", operations=[], allow_empty=False)
+    assert_log_story(
+        caplog,
+        where="propose_changeset",
+        beats={
+            "entry": ["ops=0"],
+            "validation": ["reason=empty_ops"],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_ensure_model_log_story_created(rw_user, caplog) -> None:
+    """ensure_model logs reason=created for a new slug."""
+    ensure_c4_metamodel()
+    with caplog.at_level(logging.INFO, logger="yggdrasil.mcp.tools.propose"):
+        result = ensure_model(model="fresh-model", metamodel="c4")
+    assert result["created"] is True
+    assert_log_story(
+        caplog,
+        where="ensure_model",
+        beats={
+            "entry": ["model=fresh-model", "metamodel=c4"],
+            "branch": ["reason=created", "slug=fresh-model"],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_ensure_model_log_story_existing(rw_user, caplog) -> None:
+    """ensure_model logs reason=existing when the slug already exists."""
+    ensure_c4_metamodel()
+    YggdrasilModelFactory(name="Yggdrasil", slug="yggdrasil", metamodel=ensure_c4_metamodel())
+    with caplog.at_level(logging.INFO, logger="yggdrasil.mcp.tools.propose"):
+        result = ensure_model(model="yggdrasil", metamodel="c4")
+    assert result["created"] is False
+    assert_log_story(
+        caplog,
+        where="ensure_model",
+        beats={"branch": ["reason=existing", "slug=yggdrasil"]},
+    )
+
+
+@pytest.mark.django_db
+def test_ensure_model_log_story_reject(rw_user, caplog) -> None:
+    """Unknown metamodel logs reason=unknown_metamodel."""
+    with (
+        caplog.at_level(logging.INFO, logger="yggdrasil.mcp.tools.propose"),
+        pytest.raises(ValueError, match="Unknown metamodel"),
+    ):
+        ensure_model(model="x", metamodel="no-such-mm")
+    assert_log_story(
+        caplog,
+        where="ensure_model",
+        beats={"error": ["reason=unknown_metamodel"]},
+    )

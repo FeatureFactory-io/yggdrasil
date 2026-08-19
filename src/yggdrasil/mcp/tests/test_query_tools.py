@@ -9,6 +9,7 @@ from tests.fixtures.factories import UserFactory
 from tests.fixtures.factories.model_factories import (
     YggdrasilModelFactory,
 )
+from tests.support.log_story import assert_log_story
 
 from yggdrasil.changeset.models import ChangeSetItem
 from yggdrasil.graph.models import ensure_c4_metamodel
@@ -63,7 +64,35 @@ def bootstrapped_model(rw_user):
 
 
 @pytest.mark.django_db
-def test_list_elements_paginated(bootstrapped_model) -> None:
+def test_list_elements_log_story_happy(bootstrapped_model, caplog) -> None:
+    """list_elements tool logs entry, processing counts, and exit."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.mcp.tools.query"):
+        list_elements(model="yggdrasil", limit=10, offset=0)
+    assert_log_story(
+        caplog,
+        where="list_elements",
+        beats={
+            "entry": ["model=yggdrasil", "limit=10"],
+            "processing": ["total=", "returned="],
+            "exit": ["count="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_search_log_story_happy(bootstrapped_model, caplog) -> None:
+    """search tool logs entry and matched count."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.mcp.tools.query"):
+        search(query="Payment", model="yggdrasil")
+    assert_log_story(
+        caplog,
+        where="search",
+        beats={
+            "entry": ["query=Payment", "model=yggdrasil"],
+            "processing": ["matched="],
+            "exit": ["count="],
+        },
+    )
     """QUERY-01: list_elements returns manifest names."""
     result = list_elements(model="yggdrasil", limit=10, offset=0)
     names = {item["name"] for item in result["items"]}
@@ -106,10 +135,15 @@ def test_traverse_depth_2_log_story_happy(view_browser_explorer_model, caplog) -
     """W13: traverse emits entry and exit beats with depth=."""
     with caplog.at_level(logging.INFO, logger="yggdrasil.mcp.tools.query"):
         traverse(from_="munin", direction="outgoing", depth=2, model="yggdrasil")
-    messages = " ".join(record.message for record in caplog.records)
-    assert "traverse | from=munin" in messages
-    assert "depth=2" in messages
-    assert "node_count=" in messages
+    assert_log_story(
+        caplog,
+        where="traverse",
+        beats={
+            "entry": ["from=munin", "depth=2", "direction=outgoing"],
+            "processing": ["visited=", "edge_count="],
+            "exit": ["node_count="],
+        },
+    )
 
 
 @pytest.mark.django_db

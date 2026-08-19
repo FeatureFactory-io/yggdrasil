@@ -39,11 +39,18 @@ def approve_changeset(
     _require_write_scope()
     user = _resolve_current_user()
     logger.info(
-        "approve_changeset | id=%s user=%s item_ids=%s",
+        "approve_changeset | entry | id=%s user=%s item_ids=%s",
         id,
         getattr(user, "pk", None),
         item_ids,
     )
+    if item_ids is not None:
+        logger.info(
+            "approve_changeset | branch | reason=selected_items item_count=%s",
+            len(item_ids),
+        )
+    else:
+        logger.info("approve_changeset | branch | reason=all_pending")
     changeset = _service.approve(changeset_id=id, item_ids=item_ids, user=user)
     applied_count = changeset.items.filter(status=ChangeSetItem.ITEM_STATUS_ACCEPTED).count()
     if item_ids is not None:
@@ -57,10 +64,11 @@ def approve_changeset(
         "status": changeset.status,
     }
     logger.info(
-        "approve_changeset | id=%s user=%s result=%s",
+        "approve_changeset | exit | id=%s user=%s applied_count=%s status=%s",
         id,
         getattr(user, "pk", None),
-        result,
+        applied_count,
+        changeset.status,
     )
     return result
 
@@ -69,7 +77,9 @@ def _resolve_current_user() -> User | None:
     """Load the authenticated user from MCP ContextVar (never from tool args)."""
     user_id = get_current_user_id()
     if user_id is None:
-        logger.info("approve_changeset | no user in ContextVar — proceeding as system")
+        logger.info(
+            "approve_changeset | branch | reason=system_user",
+        )
         return None
     try:
         return User.objects.get(pk=user_id)
@@ -83,8 +93,9 @@ def _require_write_scope() -> None:
     scope = get_token_scope()
     if scope == "read-only":
         msg = "permission denied: read-only token cannot write"
-        logger.info("changeset | reject reason=permission scope=%s", scope)
+        logger.info("changeset | branch | reason=read_only scope=%s", scope)
         raise PermissionError(msg)
+    logger.info("changeset | branch | reason=ok scope=%s", scope)
 
 
 def reject_changeset(
@@ -108,12 +119,16 @@ def reject_changeset(
     """
     user = _resolve_current_user()
     logger.info(
-        "reject_changeset | id=%s user=%s item_ids=%s reason=%r",
+        "reject_changeset | entry | id=%s user=%s item_ids=%s rejection_text=%r",
         id,
         getattr(user, "pk", None),
         item_ids,
         reason[:80] if reason else "",
     )
+    if reason:
+        logger.info("reject_changeset | branch | reason=learn_from_rejection")
+    else:
+        logger.info("reject_changeset | branch | reason=reject_without_learning")
     before_rules = MuninRule.objects.filter(source_item__changeset_id=id).count() if reason else 0
     changeset = _service.reject(
         changeset_id=id,
@@ -136,10 +151,11 @@ def reject_changeset(
         "rule_created": rule_created,
     }
     logger.info(
-        "reject_changeset | id=%s user=%s result=%s",
+        "reject_changeset | exit | id=%s user=%s rejected_count=%s rule_created=%s",
         id,
         getattr(user, "pk", None),
-        result,
+        rejected_count,
+        rule_created,
     )
     return result
 
@@ -166,15 +182,20 @@ def do_other_changeset(
     """
     user = _resolve_current_user()
     logger.info(
-        "do_other_changeset | id=%s user=%s item_ids=%s instructions=%r",
+        "do_other_changeset | entry | id=%s user=%s item_ids=%s instructions=%r",
         id,
         getattr(user, "pk", None),
         item_ids,
         instructions[:80] if instructions else "",
     )
     if not item_ids:
+        logger.info("do_other_changeset | validation | reason=empty_item_ids")
         msg = "do_other_changeset requires at least one item_id"
         raise ValueError(msg)
+    logger.info(
+        "do_other_changeset | branch | reason=replan_queued item_count=%s",
+        len(item_ids),
+    )
     changeset = _service.do_other(
         changeset_id=id,
         item_ids=item_ids,
@@ -189,10 +210,10 @@ def do_other_changeset(
         "replacement_changeset_ids": replacements,
     }
     logger.info(
-        "do_other_changeset | id=%s user=%s result=%s",
+        "do_other_changeset | exit | id=%s user=%s redirected_count=%s",
         id,
         getattr(user, "pk", None),
-        result,
+        len(item_ids),
     )
     return result
 

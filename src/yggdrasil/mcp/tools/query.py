@@ -29,6 +29,12 @@ logger = logging.getLogger("yggdrasil.mcp.tools.query")
 _MAX_LIMIT = 200
 
 
+def _log(where: str, beat: str, **fields: object) -> None:
+    """Emit a grep-friendly MCP query-tool story beat."""
+    extras = " ".join(f"{key}={value}" for key, value in fields.items())
+    logger.info("%s | %s | %s", where, beat, extras)
+
+
 def list_elements(
     model: str,
     stereotype: str | None = None,
@@ -51,17 +57,27 @@ def list_elements(
     :raises ValueError: If model slug not found.
     """
     user_id = get_current_user_id()
-    logger.info(
-        "list_elements | model=%s user=%s stereotype=%s package=%s as_of=%s",
-        model,
-        user_id,
-        stereotype,
-        package,
-        as_of,
+    _log(
+        "list_elements",
+        "entry",
+        model=model,
+        user=user_id,
+        stereotype=stereotype,
+        package=package,
+        as_of=as_of,
+        limit=limit,
+        offset=offset,
     )
     ymodel = _resolve_model(model)
     page_limit = min(max(limit, 1), _MAX_LIMIT)
     page_offset = max(offset, 0)
+    _log(
+        "list_elements",
+        "validation",
+        requested_limit=limit,
+        page_limit=page_limit,
+        capped=limit != page_limit,
+    )
     result = browse_service.list_elements(
         model_slug=ymodel.slug,
         stereotype=stereotype,
@@ -80,11 +96,18 @@ def list_elements(
     }
     if result.as_of:
         payload["as_of"] = result.as_of
-    logger.info(
-        "list_elements | model=%s user=%s count=%s",
-        model,
-        user_id,
-        len(result.items),
+    _log(
+        "list_elements",
+        "processing",
+        total=result.total,
+        returned=len(result.items),
+    )
+    _log(
+        "list_elements",
+        "exit",
+        model=model,
+        user=user_id,
+        count=len(result.items),
     )
     return payload
 
@@ -104,7 +127,7 @@ def search(
     :raises PermissionError: If current user has no read access.
     """
     user_id = get_current_user_id()
-    logger.info("search | query=%r model=%s user=%s", query, model, user_id)
+    _log("search", "entry", query=query, model=model, user=user_id, limit=limit)
     ymodel = _resolve_model(model)
     page_limit = min(max(limit, 1), _MAX_LIMIT)
     qs = Element.objects.filter(model=ymodel, name__icontains=query).select_related(
@@ -112,7 +135,8 @@ def search(
     )[:page_limit]
     items = [_element_summary(el) for el in qs]
     result = {"items": items, "query": query}
-    logger.info("search | query=%r count=%s user=%s", query, len(items), user_id)
+    _log("search", "processing", matched=len(items), page_limit=page_limit)
+    _log("search", "exit", query=query, count=len(items), user=user_id)
     return result
 
 
@@ -131,10 +155,19 @@ def get_element(
     :raises PermissionError: If current user has no read access.
     """
     user_id = get_current_user_id()
-    logger.info("get_element | id_or_name=%r model=%s user=%s", id_or_name, model, user_id)
+    _log("get_element", "entry", id_or_name=id_or_name, model=model, user=user_id)
     element = _resolve_element(id_or_name, model)
     result = _element_detail(element)
-    logger.info("get_element | id=%s name=%s user=%s", element.pk, element.name, user_id)
+    incoming = len(result.get("incoming_relationships") or [])
+    outgoing = len(result.get("outgoing_relationships") or [])
+    _log(
+        "get_element",
+        "processing",
+        element_id=element.pk,
+        incoming=incoming,
+        outgoing=outgoing,
+    )
+    _log("get_element", "exit", id=element.pk, name=element.name, user=user_id)
     return result
 
 
@@ -155,12 +188,10 @@ def traverse(
     :raises ValueError: If from_ element not found or depth invalid.
     """
     user_id = get_current_user_id()
-    logger.info(
-        "traverse | from=%s direction=%s depth=%s user=%s",
-        from_,
-        direction,
-        depth,
-        user_id,
+    _log(
+        "traverse",
+        "entry",
+        **{"from": from_, "direction": direction, "depth": depth, "model": model, "user": user_id},
     )
     source = _resolve_element(from_, model)
     scoped = browse_service.bfs_from_element(source, direction=direction, depth=depth)
@@ -183,7 +214,13 @@ def traverse(
         "nodes": nodes,
         "depth": depth,
     }
-    logger.info("traverse | from=%s node_count=%s user=%s", from_, len(nodes), user_id)
+    _log(
+        "traverse",
+        "processing",
+        visited=len(scoped.node_summaries),
+        edge_count=len(edges),
+    )
+    _log("traverse", "exit", **{"from": from_, "node_count": len(nodes), "user": user_id})
     return result
 
 
@@ -202,18 +239,23 @@ def list_changesets(
     :raises PermissionError: If current user has no read access.
     """
     user_id = get_current_user_id()
-    logger.info("list_changesets | model=%s status=%s user=%s", model, status, user_id)
+    _log("list_changesets", "entry", model=model, status=status, user=user_id, limit=limit)
     qs = ChangeSet.objects.all().prefetch_related("items")
     if model:
         ymodel = _resolve_model(model)
         qs = qs.filter(model=ymodel)
+        _log("list_changesets", "branch", reason="model_filter", model=model)
+    else:
+        _log("list_changesets", "branch", reason="all_models")
     if status:
         qs = qs.filter(status=status)
+        _log("list_changesets", "branch", reason="status_filter", status=status)
     page_limit = min(max(limit, 1), _MAX_LIMIT)
     total = qs.count()
     items = [_changeset_summary(cs) for cs in qs.order_by("-created_at")[:page_limit]]
     result = {"items": items, "total": total}
-    logger.info("list_changesets | count=%s user=%s", len(items), user_id)
+    _log("list_changesets", "processing", total=total, returned=len(items))
+    _log("list_changesets", "exit", count=len(items), user=user_id)
     return result
 
 
@@ -227,14 +269,16 @@ def get_changeset(id: int) -> dict[str, Any]:
     :raises PermissionError: If current user has no read access.
     """
     user_id = get_current_user_id()
-    logger.info("get_changeset | id=%s user=%s", id, user_id)
+    _log("get_changeset", "entry", id=id, user=user_id)
     try:
         changeset = ChangeSet.objects.prefetch_related("items").get(pk=id)
     except ChangeSet.DoesNotExist as exc:
+        _log("get_changeset", "error", id=id, reason="not_found")
         msg = f"ChangeSet id={id} not found"
         raise ValueError(msg) from exc
     result = _changeset_detail(changeset)
-    logger.info("get_changeset | id=%s ops=%s user=%s", id, len(result["operations"]), user_id)
+    _log("get_changeset", "processing", ops=len(result["operations"]), status=changeset.status)
+    _log("get_changeset", "exit", id=id, ops=len(result["operations"]), user=user_id)
     return result
 
 
@@ -247,7 +291,7 @@ def list_stereotypes(model: str) -> dict[str, Any]:
     :raises ValueError: If model not found.
     """
     user_id = get_current_user_id()
-    logger.info("list_stereotypes | model=%s user=%s", model, user_id)
+    _log("list_stereotypes", "entry", model=model, user=user_id)
     ymodel = _resolve_model(model)
     items = [
         {
@@ -261,7 +305,8 @@ def list_stereotypes(model: str) -> dict[str, Any]:
         for st in Stereotype.objects.filter(metamodel=ymodel.metamodel).order_by("name")
     ]
     result = {"items": items}
-    logger.info("list_stereotypes | model=%s count=%s user=%s", model, len(items), user_id)
+    _log("list_stereotypes", "processing", count=len(items))
+    _log("list_stereotypes", "exit", model=model, count=len(items), user=user_id)
     return result
 
 
@@ -278,7 +323,7 @@ def list_packages(
     :raises ValueError: If model slug not found.
     """
     user_id = get_current_user_id()
-    logger.info("list_packages | model=%s user=%s", model, user_id)
+    _log("list_packages", "entry", model=model, user=user_id, limit=limit)
     ymodel = _resolve_model(model)
     page_limit = min(max(limit, 1), _MAX_LIMIT)
     qs = Package.objects.filter(metamodel=ymodel.metamodel).order_by("name")[:page_limit]
@@ -286,7 +331,8 @@ def list_packages(
         {"name": pkg.name, "slug": pkg.slug, "description": pkg.description or ""} for pkg in qs
     ]
     result = {"items": items, "total": Package.objects.filter(metamodel=ymodel.metamodel).count()}
-    logger.info("list_packages | model=%s count=%s user=%s", model, len(items), user_id)
+    _log("list_packages", "processing", total=result["total"], returned=len(items))
+    _log("list_packages", "exit", model=model, count=len(items), user=user_id)
     return result
 
 
@@ -311,18 +357,32 @@ def list_relationships(
     :raises ValueError: If model slug not found.
     """
     user_id = get_current_user_id()
-    logger.info(
-        "list_relationships | model=%s user=%s stereotype=%s from_id=%s to_id=%s",
-        model,
-        user_id,
-        stereotype,
-        from_id,
-        to_id,
+    _log(
+        "list_relationships",
+        "entry",
+        model=model,
+        user=user_id,
+        stereotype=stereotype,
+        from_id=from_id,
+        to_id=to_id,
+        limit=limit,
+        offset=offset,
     )
     ymodel = _resolve_model(model)
     page_limit = min(max(limit, 1), _MAX_LIMIT)
     page_offset = max(offset, 0)
     qs = Relationship.objects.filter(model=ymodel).select_related("source", "target", "stereotype")
+    if stereotype or from_id is not None or to_id is not None:
+        _log(
+            "list_relationships",
+            "branch",
+            reason="filtered",
+            stereotype=stereotype,
+            from_id=from_id,
+            to_id=to_id,
+        )
+    else:
+        _log("list_relationships", "branch", reason="unfiltered")
     if stereotype:
         qs = qs.filter(
             Q(stereotype__slug__iexact=stereotype) | Q(stereotype__name__iexact=stereotype)
@@ -350,12 +410,14 @@ def list_relationships(
         "limit": page_limit,
         "offset": page_offset,
     }
-    logger.info(
-        "list_relationships | model=%s user=%s count=%s total=%s",
-        model,
-        user_id,
-        len(items),
-        total,
+    _log("list_relationships", "processing", total=total, returned=len(items))
+    _log(
+        "list_relationships",
+        "exit",
+        model=model,
+        user=user_id,
+        count=len(items),
+        total=total,
     )
     return result
 
@@ -370,7 +432,7 @@ def list_ratatosk_runs(model: str, limit: int = 20) -> dict[str, Any]:
     :raises PermissionError: If current user has no read access.
     """
     user_id = get_current_user_id()
-    logger.info("list_ratatosk_runs | model=%s user=%s", model, user_id)
+    _log("list_ratatosk_runs", "entry", model=model, user=user_id, limit=limit)
     ymodel = _resolve_model(model)
     page_limit = min(max(limit, 1), _MAX_LIMIT)
     runs = RataskRun.objects.filter(model=ymodel).order_by("-created_at")[:page_limit]
@@ -385,7 +447,8 @@ def list_ratatosk_runs(model: str, limit: int = 20) -> dict[str, Any]:
         for run in runs
     ]
     result = {"items": items}
-    logger.info("list_ratatosk_runs | count=%s user=%s", len(items), user_id)
+    _log("list_ratatosk_runs", "processing", returned=len(items))
+    _log("list_ratatosk_runs", "exit", count=len(items), user=user_id)
     return result
 
 
@@ -394,14 +457,7 @@ def list_ratatosk_runs(model: str, limit: int = 20) -> dict[str, Any]:
 
 def _resolve_model(model: str) -> YggdrasilModel:
     """Resolve model by slug or name (case-insensitive)."""
-    try:
-        return YggdrasilModel.objects.get(Q(slug__iexact=model) | Q(name__iexact=model))
-    except YggdrasilModel.DoesNotExist as exc:
-        msg = f"Model {model!r} not found"
-        raise ValueError(msg) from exc
-    except YggdrasilModel.MultipleObjectsReturned as exc:
-        msg = f"Model {model!r} is ambiguous"
-        raise ValueError(msg) from exc
+    return browse_service.resolve_model(model)
 
 
 def _element_summary(element: Element) -> dict[str, Any]:
@@ -433,14 +489,17 @@ def _resolve_element(id_or_name: str, model: str | None) -> Element:
         try:
             return qs.get(pk=int(id_or_name))
         except Element.DoesNotExist as exc:
+            _log("query._resolve_element", "error", id_or_name=id_or_name, reason="not_found")
             msg = f"Element id={id_or_name} not found"
             raise ValueError(msg) from exc
     try:
         return qs.get(Q(slug__iexact=id_or_name) | Q(name__iexact=id_or_name))
     except Element.DoesNotExist as exc:
+        _log("query._resolve_element", "error", id_or_name=id_or_name, reason="not_found")
         msg = f"Element {id_or_name!r} not found"
         raise ValueError(msg) from exc
     except Element.MultipleObjectsReturned as exc:
+        _log("query._resolve_element", "error", id_or_name=id_or_name, reason="ambiguous")
         msg = f"Element {id_or_name!r} is ambiguous — pass model="
         raise ValueError(msg) from exc
 

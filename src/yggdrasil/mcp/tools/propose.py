@@ -13,12 +13,12 @@ import logging
 from typing import Any
 
 from django.contrib.auth.models import User
-from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
 from yggdrasil.changeset.services import ChangeSetService
+from yggdrasil.graph import browse_service
 from yggdrasil.graph.models import Metamodel, YggdrasilModel, ensure_c4_metamodel
 from yggdrasil.mcp.server import get_current_user_id, get_token_scope
 from yggdrasil.ratatosk.models import RataskRun
@@ -43,7 +43,7 @@ def ensure_model(model: str, metamodel: str = "c4") -> dict[str, Any]:
     user = _resolve_current_user()
     mm_slug = (metamodel or Metamodel.SLUG_C4).strip().lower()
     logger.info(
-        "ensure_model | model=%s metamodel=%s user=%s",
+        "ensure_model | entry | model=%s metamodel=%s user=%s",
         model,
         mm_slug,
         getattr(user, "pk", None),
@@ -54,20 +54,39 @@ def ensure_model(model: str, metamodel: str = "c4") -> dict[str, Any]:
         try:
             mm = Metamodel.objects.get(slug=mm_slug)
         except Metamodel.DoesNotExist as exc:
+            logger.info(
+                "ensure_model | error | reason=unknown_metamodel metamodel=%s",
+                mm_slug,
+            )
             msg = f"Unknown metamodel slug: {mm_slug!r}. Create it in Django admin first."
             raise ValueError(msg) from exc
     slug = slugify(model)
     existing = YggdrasilModel.objects.filter(slug=slug).first()
     if existing is None:
         created = YggdrasilModel.objects.create(name=model, slug=slug, metamodel=mm)
-        logger.info("ensure_model | created slug=%s metamodel=%s", created.slug, mm.slug)
+        logger.info(
+            "ensure_model | branch | reason=created slug=%s metamodel=%s",
+            created.slug,
+            mm.slug,
+        )
         return {"slug": created.slug, "metamodel": mm.slug, "created": True}
     if existing.metamodel.slug != mm.slug:
+        logger.info(
+            "ensure_model | error | reason=metamodel_mismatch slug=%s existing=%s requested=%s",
+            existing.slug,
+            existing.metamodel.slug,
+            mm.slug,
+        )
         msg = (
             f"Model {existing.slug!r} is bound to metamodel {existing.metamodel.slug!r}; "
             f"cannot use --metamodel={mm.slug}."
         )
         raise ValueError(msg)
+    logger.info(
+        "ensure_model | branch | reason=existing slug=%s metamodel=%s",
+        existing.slug,
+        mm.slug,
+    )
     return {"slug": existing.slug, "metamodel": mm.slug, "created": False}
 
 
@@ -102,7 +121,7 @@ def propose_changeset(
     user = _resolve_current_user()
     ops = list(operations or [])
     logger.info(
-        "propose_changeset | model=%s user=%s ops=%s source=%s run_id=%s allow_empty=%s",
+        "propose_changeset | entry | model=%s user=%s ops=%s source=%s run_id=%s allow_empty=%s",
         model,
         getattr(user, "pk", None),
         len(ops),
@@ -113,14 +132,14 @@ def propose_changeset(
     if handoff_context:
         synth = handoff_context.get("synthesize") or {}
         logger.info(
-            "propose_changeset | handoff_context keys=%s synthesize_canonical_count=%s",
+            "propose_changeset | processing | handoff_context keys=%s synthesize_canonical_count=%s",
             sorted(handoff_context.keys()),
             synth.get("canonical_count"),
         )
     ymodel = _resolve_model(model)
     if not ops and not allow_empty:
         msg = "operations must not be empty"
-        logger.info("propose_changeset | reject reason=empty_ops")
+        logger.info("propose_changeset | validation | reason=empty_ops")
         raise ValueError(msg)
 
     from yggdrasil.munin.bootstrap_planner import (
@@ -206,7 +225,7 @@ def propose_changeset(
         "munin_reasoning": reasoning,
     }
     logger.info(
-        "propose_changeset | changeset_id=%s status=%s applied=%s pending=%s",
+        "propose_changeset | exit | changeset_id=%s status=%s applied=%s pending=%s",
         changeset.pk,
         changeset.status,
         applied_count,
@@ -305,8 +324,9 @@ def _require_write_scope() -> None:
     scope = get_token_scope()
     if scope == "read-only":
         msg = "permission denied: read-only token cannot write"
-        logger.info("propose | reject reason=permission scope=%s", scope)
+        logger.info("propose | branch | reason=read_only scope=%s", scope)
         raise PermissionError(msg)
+    logger.info("propose | branch | reason=ok scope=%s", scope)
 
 
 def _resolve_current_user() -> User | None:
@@ -323,8 +343,4 @@ def _resolve_current_user() -> User | None:
 
 def _resolve_model(model: str) -> YggdrasilModel:
     """Resolve model by slug or name."""
-    try:
-        return YggdrasilModel.objects.get(Q(slug__iexact=model) | Q(name__iexact=model))
-    except YggdrasilModel.DoesNotExist as exc:
-        msg = f"Model {model!r} not found"
-        raise ValueError(msg) from exc
+    return browse_service.resolve_model(model)

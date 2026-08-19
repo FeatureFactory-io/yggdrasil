@@ -20,6 +20,8 @@ from django.views.decorators.http import require_POST
 from yggdrasil.auth.models import PersonalAccessToken
 from yggdrasil.auth.services import TokenService
 from yggdrasil.mcp.server import (
+    get_current_user_id,
+    get_token_scope,
     initialize_mcp,
     set_current_user_id,
     set_token_scope,
@@ -83,33 +85,48 @@ def dispatch_tool(request: HttpRequest, tool_name: str) -> JsonResponse:
     registry = _tool_registry()
     fn = registry.get(tool_name)
     if fn is None:
-        logger.info("http_bridge | unknown tool=%s", tool_name)
+        logger.info(
+            "http_bridge.dispatch_tool | branch | tool=%s reason=unknown_tool",
+            tool_name,
+        )
         return JsonResponse({"error": f"unknown tool {tool_name!r}"}, status=404)
 
     try:
         body = json.loads(request.body.decode("utf-8") or "{}")
     except json.JSONDecodeError:
+        logger.info(
+            "http_bridge.dispatch_tool | error | tool=%s reason=invalid_json",
+            tool_name,
+        )
         return JsonResponse({"error": "invalid JSON body"}, status=400)
 
     arguments: dict[str, Any] = body.get("arguments") or body
     logger.info(
-        "http_bridge.dispatch | tool=%s user=%s keys=%s",
+        "http_bridge.dispatch_tool | entry | tool=%s user_id=%s scope=%s arg_keys=%s",
         tool_name,
-        request.META.get("REMOTE_USER"),
+        get_current_user_id(),
+        get_token_scope(),
         sorted(arguments.keys()),
     )
     try:
         result = fn(**arguments)
     except PermissionError as exc:
-        logger.info("http_bridge | permission denied tool=%s reason=%s", tool_name, exc)
+        logger.info(
+            "http_bridge.dispatch_tool | error | tool=%s reason=permission_denied",
+            tool_name,
+        )
         return JsonResponse({"error": str(exc)}, status=403)
     except ValueError as exc:
-        logger.info("http_bridge | bad request tool=%s reason=%s", tool_name, exc)
+        logger.info(
+            "http_bridge.dispatch_tool | error | tool=%s reason=bad_request",
+            tool_name,
+        )
         return JsonResponse({"error": str(exc)}, status=400)
     except Exception as exc:
-        logger.exception("http_bridge | tool=%s failed", tool_name)
+        logger.exception("http_bridge.dispatch_tool | error | tool=%s reason=unhandled", tool_name)
         return JsonResponse({"error": str(exc)}, status=500)
 
+    logger.info("http_bridge.dispatch_tool | exit | tool=%s", tool_name)
     return JsonResponse({"result": result})
 
 
@@ -117,10 +134,16 @@ def _authenticate_request(request: HttpRequest) -> JsonResponse | None:
     """Validate Bearer token and set MCP context vars."""
     header = request.META.get("HTTP_AUTHORIZATION", "")
     if not header.startswith("Bearer "):
+        logger.info(
+            "http_bridge._authenticate_request | branch | reason=missing_bearer",
+        )
         return JsonResponse({"error": "missing Bearer token"}, status=401)
     raw = header[7:].strip()
     user = TokenService().authenticate(raw)
     if user is None:
+        logger.info(
+            "http_bridge._authenticate_request | branch | reason=invalid_token",
+        )
         return JsonResponse({"error": "invalid token"}, status=401)
     token_hash = hashlib.sha256(raw.encode()).hexdigest()
     try:
@@ -128,8 +151,15 @@ def _authenticate_request(request: HttpRequest) -> JsonResponse | None:
             token_hash=token_hash
         )
     except PersonalAccessToken.DoesNotExist:
+        logger.info(
+            "http_bridge._authenticate_request | branch | reason=invalid_token",
+        )
         return JsonResponse({"error": "invalid token"}, status=401)
     set_current_user_id(user.pk)
     set_token_scope(scope)
-    logger.info("http_bridge | authenticated user_pk=%s scope=%s", user.pk, scope)
+    logger.info(
+        "http_bridge._authenticate_request | branch | user_pk=%s scope=%s reason=authenticated",
+        user.pk,
+        scope,
+    )
     return None

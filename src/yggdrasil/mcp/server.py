@@ -61,7 +61,7 @@ def initialize_mcp() -> None:
     """
     global _mcp_instance, _initialized
     if _initialized:
-        logger.info("initialize_mcp | already initialised — no-op")
+        logger.info("initialize_mcp | branch | reason=already_initialized")
         return
     _ensure_stderr_logging()
     from fastmcp import FastMCP
@@ -70,7 +70,7 @@ def initialize_mcp() -> None:
     _register_tools(mcp)
     _mcp_instance = mcp
     _initialized = True
-    logger.info("initialize_mcp | FastMCP singleton ready")
+    logger.info("initialize_mcp | exit | reason=ready")
 
 
 def _ensure_stderr_logging() -> None:
@@ -154,7 +154,11 @@ def set_current_user_id(user_id: int | None) -> None:
     :param user_id: Authenticated user PK. Example: 42
     """
     _current_user_id.set(user_id)
-    logger.debug("mcp.server: user context set[Any] | user_id=%s", user_id)
+    logger.info(
+        "mcp.server.set_current_user_id | branch | user_id=%s reason=%s",
+        user_id,
+        "cleared" if user_id is None else "authenticated",
+    )
 
 
 def get_token_scope() -> str:
@@ -168,8 +172,13 @@ def set_token_scope(scope: str | None) -> None:
 
     :param scope: ``read-write`` or ``read-only``. None resets to read-write.
     """
-    _current_token_scope.set(scope or "read-write")
-    logger.debug("mcp.server: token scope set[Any] | scope=%s", scope)
+    resolved = scope or "read-write"
+    _current_token_scope.set(resolved)
+    logger.info(
+        "mcp.server.set_token_scope | branch | scope=%s reason=%s",
+        resolved,
+        "default_read_write" if not scope else "explicit",
+    )
 
 
 def redirect_print_to_stderr() -> None:

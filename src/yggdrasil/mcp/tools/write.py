@@ -13,15 +13,21 @@ import logging
 from typing import Any
 
 from django.contrib.auth.models import User
-from django.db.models import Q
 
 from yggdrasil.changeset.models import ChangeSet
+from yggdrasil.graph import browse_service
 from yggdrasil.graph.models import Element, YggdrasilModel
 from yggdrasil.mcp.server import get_current_user_id, get_token_scope
 from yggdrasil.munin.agent import MuninAgent, set_model_review_mode
 from yggdrasil.munin.llm_factory import build_munin_planning_llm
 
 logger = logging.getLogger("yggdrasil.mcp.tools.write")
+
+
+def _log(where: str, beat: str, **fields: object) -> None:
+    """Emit a grep-friendly MCP write-tool story beat."""
+    extras = " ".join(f"{key}={value}" for key, value in fields.items())
+    logger.info("%s | %s | %s", where, beat, extras)
 
 
 def create_element(
@@ -48,14 +54,17 @@ def create_element(
     :raises PermissionError: If current user token has read-only scope.
     :raises ValueError: If stereotype or model not found.
     """
+    _log(
+        "create_element",
+        "entry",
+        name=name,
+        model=model,
+        stereotype=stereotype,
+        package=package,
+        user=get_current_user_id(),
+    )
     _require_write_scope()
     user = _resolve_current_user()
-    logger.info(
-        "create_element | name=%s model=%s user=%s",
-        name,
-        model,
-        getattr(user, "pk", None),
-    )
     ymodel = _resolve_model(model)
     llm = build_munin_planning_llm()
     agent = MuninAgent(
@@ -71,9 +80,17 @@ def create_element(
         message += f"|properties={properties!r}"
     resp = agent.chat(message, history=[])
     if resp.changeset_id is None:
+        _log("create_element", "error", reason="no_changeset", name=name)
         msg = "Munin did not produce a ChangeSet for create_element"
         raise ValueError(msg)
     cs = ChangeSet.objects.get(pk=resp.changeset_id)
+    _log(
+        "create_element",
+        "processing",
+        changeset_id=cs.pk,
+        status=cs.status,
+        munin_ok=True,
+    )
     op = cs.items.first()
     result = {
         "changeset_id": cs.pk,
@@ -83,11 +100,12 @@ def create_element(
             "detail": op.detail if op else {},
         },
     }
-    logger.info(
-        "create_element | name=%s changeset_id=%s status=%s",
-        name,
-        cs.pk,
-        cs.status,
+    _log(
+        "create_element",
+        "exit",
+        name=name,
+        changeset_id=cs.pk,
+        status=cs.status,
     )
     return result
 
@@ -111,17 +129,19 @@ def update_element(
     :raises PermissionError: If current user token has read-only scope.
     :raises ValueError: If element not found or fields empty.
     """
+    updates = fields or {}
+    _log(
+        "update_element",
+        "entry",
+        id=id,
+        model=model,
+        fields=sorted(updates.keys()),
+        user=get_current_user_id(),
+    )
     _require_write_scope()
     user = _resolve_current_user()
-    updates = fields or {}
-    logger.info(
-        "update_element | id=%s model=%s fields=%s user=%s",
-        id,
-        model,
-        sorted(updates.keys()),
-        getattr(user, "pk", None),
-    )
     if not updates:
+        _log("update_element", "validation", reason="empty_fields", id=id)
         msg = "update_element requires at least one field to update"
         raise ValueError(msg)
     ymodel = _resolve_model(model) if model else None
@@ -132,9 +152,17 @@ def update_element(
     message = f"TOOL:update_element|id={id}|{field_parts}"
     resp = agent.chat(message, history=[])
     if resp.changeset_id is None:
+        _log("update_element", "error", reason="no_changeset", id=id)
         msg = "Munin did not produce a ChangeSet for update_element"
         raise ValueError(msg)
     cs = ChangeSet.objects.get(pk=resp.changeset_id)
+    _log(
+        "update_element",
+        "processing",
+        changeset_id=cs.pk,
+        status=cs.status,
+        munin_ok=True,
+    )
     op = cs.items.first()
     result = {
         "changeset_id": cs.pk,
@@ -144,12 +172,7 @@ def update_element(
             "detail": op.detail if op else {},
         },
     }
-    logger.info(
-        "update_element | id=%s changeset_id=%s status=%s",
-        id,
-        cs.pk,
-        cs.status,
-    )
+    _log("update_element", "exit", id=id, changeset_id=cs.pk, status=cs.status)
     return result
 
 
@@ -166,23 +189,26 @@ def delete_element(id: int, model: str | None = None) -> dict[str, Any]:
     :raises PermissionError: If read-only scope.
     :raises ValueError: If element not found.
     """
+    _log("delete_element", "entry", id=id, model=model, user=get_current_user_id())
     _require_write_scope()
     user = _resolve_current_user()
-    logger.info(
-        "delete_element | id=%s model=%s user=%s",
-        id,
-        model,
-        getattr(user, "pk", None),
-    )
     ymodel = _resolve_model(model) if model else None
     model_id = ymodel.pk if ymodel else _model_id_for_element(id)
     llm = build_munin_planning_llm()
     agent = MuninAgent(llm=llm, model_id=model_id, user_id=getattr(user, "pk", None))
     resp = agent.chat(f"TOOL:delete_element|id={id}", history=[])
     if resp.changeset_id is None:
+        _log("delete_element", "error", reason="no_changeset", id=id)
         msg = "Munin did not produce a ChangeSet for delete_element"
         raise ValueError(msg)
     cs = ChangeSet.objects.get(pk=resp.changeset_id)
+    _log(
+        "delete_element",
+        "processing",
+        changeset_id=cs.pk,
+        status=cs.status,
+        munin_ok=True,
+    )
     blast_radius = next(
         (
             call.get("blast_radius")
@@ -200,11 +226,12 @@ def delete_element(id: int, model: str | None = None) -> dict[str, Any]:
             "detail": (first.detail if (first := cs.items.first()) else {}),
         },
     }
-    logger.info(
-        "delete_element | id=%s changeset_id=%s blast_radius=%s",
-        id,
-        cs.pk,
-        blast_radius,
+    _log(
+        "delete_element",
+        "exit",
+        id=id,
+        changeset_id=cs.pk,
+        blast_radius=blast_radius,
     )
     return result
 
@@ -226,29 +253,40 @@ def create_relationship(
     :param properties: Edge properties. Example: {"label": "HTTP"}
     :return: {"changeset_id": N, "status": ..., "operation": {...}}
     """
+    _log(
+        "create_relationship",
+        "entry",
+        **{
+            "from": from_id,
+            "to": to_id,
+            "stereotype": stereotype,
+            "model": model,
+            "user": get_current_user_id(),
+        },
+    )
     _require_write_scope()
     user = _resolve_current_user()
-    logger.info(
-        "create_relationship | from=%s to=%s stereotype=%s user=%s",
-        from_id,
-        to_id,
-        stereotype,
-        getattr(user, "pk", None),
-    )
     ymodel = _resolve_model(model) if model else None
     model_id = ymodel.pk if ymodel else _model_id_for_element(from_id)
     llm = build_munin_planning_llm()
     agent = MuninAgent(llm=llm, model_id=model_id, user_id=getattr(user, "pk", None))
     props = f"|properties={properties!r}" if properties else ""
     message = (
-        f"TOOL:create_relationship|from_id={from_id}|to_id={to_id}"
-        f"|stereotype={stereotype}{props}"
+        f"TOOL:create_relationship|from_id={from_id}|to_id={to_id}|stereotype={stereotype}{props}"
     )
     resp = agent.chat(message, history=[])
     if resp.changeset_id is None:
+        _log("create_relationship", "error", reason="no_changeset", from_id=from_id, to_id=to_id)
         msg = "Munin did not produce a ChangeSet for create_relationship"
         raise ValueError(msg)
     cs = ChangeSet.objects.get(pk=resp.changeset_id)
+    _log(
+        "create_relationship",
+        "processing",
+        changeset_id=cs.pk,
+        status=cs.status,
+        munin_ok=True,
+    )
     op = cs.items.first()
     result = {
         "changeset_id": cs.pk,
@@ -266,11 +304,10 @@ def create_relationship(
             True,
         ),
     }
-    logger.info(
-        "create_relationship | from=%s to=%s changeset_id=%s",
-        from_id,
-        to_id,
-        cs.pk,
+    _log(
+        "create_relationship",
+        "exit",
+        **{"from": from_id, "to": to_id, "changeset_id": cs.pk},
     )
     return result
 
@@ -287,17 +324,19 @@ def update_relationships_batch(
     :param model: Model slug. Example: "yggdrasil"
     :return: {"changeset_id": N, "status": "pending", "operations_count": N}
     """
+    _log(
+        "update_relationships_batch",
+        "entry",
+        ops=len(operations),
+        model=model,
+        user=get_current_user_id(),
+    )
     _require_write_scope()
     user = _resolve_current_user()
     if not operations:
+        _log("update_relationships_batch", "validation", reason="empty_operations")
         msg = "update_relationships_batch requires at least one operation"
         raise ValueError(msg)
-    logger.info(
-        "update_relationships_batch | ops=%s model=%s user=%s",
-        len(operations),
-        model,
-        getattr(user, "pk", None),
-    )
     ymodel = _resolve_model(model) if model else None
     first_from = operations[0].get("from_id") or operations[0].get("source_id")
     model_id = ymodel.pk if ymodel else _model_id_for_element(int(first_from or 0))
@@ -306,18 +345,27 @@ def update_relationships_batch(
     message = f"TOOL:update_relationships_batch|count={len(operations)}|operations={operations!r}"
     resp = agent.chat(message, history=[])
     if resp.changeset_id is None:
+        _log("update_relationships_batch", "error", reason="no_changeset")
         msg = "Munin did not produce a ChangeSet for update_relationships_batch"
         raise ValueError(msg)
     cs = ChangeSet.objects.get(pk=resp.changeset_id)
+    _log(
+        "update_relationships_batch",
+        "processing",
+        changeset_id=cs.pk,
+        status=cs.status,
+        munin_ok=True,
+    )
     result = {
         "changeset_id": cs.pk,
         "status": cs.status,
         "operations_count": cs.items.count(),
     }
-    logger.info(
-        "update_relationships_batch | changeset_id=%s ops=%s",
-        cs.pk,
-        result["operations_count"],
+    _log(
+        "update_relationships_batch",
+        "exit",
+        changeset_id=cs.pk,
+        ops=result["operations_count"],
     )
     return result
 
@@ -330,22 +378,30 @@ def set_model_mode(model_id: str, mode: str) -> dict[str, Any]:
     :param mode: "auto" or "manual". Example: "auto"
     :return: {"model": "yggdrasil", "review_mode": "auto"}
     """
+    _log(
+        "set_model_mode",
+        "entry",
+        model_id=model_id,
+        mode=mode,
+        user=get_current_user_id(),
+    )
     _require_write_scope()
     user = _resolve_current_user()
-    logger.info(
-        "set_model_mode | model_id=%s mode=%s user=%s",
-        model_id,
-        mode,
-        getattr(user, "pk", None),
-    )
     normalized = mode.strip().lower()
     if normalized not in {"auto", "manual"}:
+        _log("set_model_mode", "validation", reason="invalid_mode", mode=mode)
         msg = f"Invalid mode={mode!r}; expected 'auto' or 'manual'"
         raise ValueError(msg)
     ymodel = _resolve_model(model_id)
     set_model_review_mode(ymodel.pk, normalized)
     result = {"model": ymodel.slug, "review_mode": normalized}
-    logger.info("set_model_mode | model=%s review_mode=%s", ymodel.slug, normalized)
+    _log(
+        "set_model_mode",
+        "exit",
+        model=ymodel.slug,
+        review_mode=normalized,
+        user=getattr(user, "pk", None),
+    )
     return result
 
 
@@ -354,8 +410,9 @@ def _require_write_scope() -> None:
     scope = get_token_scope()
     if scope == "read-only":
         msg = "permission denied: read-only token cannot write"
-        logger.info("_require_write_scope | denied scope=%s", scope)
+        _log("_require_write_scope", "branch", reason="read_only", scope=scope)
         raise PermissionError(msg)
+    _log("_require_write_scope", "branch", reason="ok", scope=scope)
 
 
 def _resolve_current_user() -> User | None:
@@ -372,11 +429,7 @@ def _resolve_current_user() -> User | None:
 
 def _resolve_model(model: str) -> YggdrasilModel:
     """Resolve model by slug or name."""
-    try:
-        return YggdrasilModel.objects.get(Q(slug__iexact=model) | Q(name__iexact=model))
-    except YggdrasilModel.DoesNotExist as exc:
-        msg = f"Model {model!r} not found"
-        raise ValueError(msg) from exc
+    return browse_service.resolve_model(model)
 
 
 def _model_id_for_element(element_id: int) -> int:

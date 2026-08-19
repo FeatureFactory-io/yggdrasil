@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 from tests.fixtures.factories import UserFactory
 from tests.fixtures.factories.model_factories import YggdrasilModelFactory
+from tests.support.log_story import assert_log_story
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
 from yggdrasil.graph.models import Element, ensure_c4_metamodel
@@ -78,3 +81,75 @@ def test_approve_changeset_rejects_readonly(rw_user) -> None:
     set_token_scope("read-only")
     with pytest.raises(PermissionError):
         approve_changeset(id=result["changeset_id"])
+
+
+@pytest.mark.django_db
+def test_approve_changeset_log_story_happy(rw_user, caplog) -> None:
+    """approve_changeset logs entry, selected-items branch, and exit."""
+    ensure_c4_metamodel()
+    YggdrasilModelFactory(name="Yggdrasil", slug="yggdrasil", metamodel=ensure_c4_metamodel())
+    result = propose_changeset(
+        model="yggdrasil",
+        operations=[
+            {
+                "op_type": ChangeSetItem.OP_ADD_ELEMENT,
+                "detail": {
+                    "name": "Log Story Service",
+                    "stereotype_slug": "container",
+                    "package_slug": "technology",
+                },
+                "confidence": 0.5,
+            }
+        ],
+        confidence_threshold=0.80,
+        run_id="run-log-approve",
+    )
+    cs = ChangeSet.objects.get(pk=result["changeset_id"])
+    pending_ids = list(
+        cs.items.filter(status=ChangeSetItem.ITEM_STATUS_PENDING).values_list("pk", flat=True)
+    )
+    with caplog.at_level(logging.INFO, logger="yggdrasil.mcp.tools.changeset"):
+        approve_changeset(id=cs.pk, item_ids=pending_ids)
+    assert_log_story(
+        caplog,
+        where="approve_changeset",
+        beats={
+            "entry": ["id=", "item_ids="],
+            "branch": ["reason=selected_items"],
+            "exit": ["applied_count=", "status="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_approve_changeset_log_story_reject(rw_user, caplog) -> None:
+    """Read-only approve logs reason=read_only."""
+    ensure_c4_metamodel()
+    YggdrasilModelFactory(name="Yggdrasil", slug="yggdrasil", metamodel=ensure_c4_metamodel())
+    result = propose_changeset(
+        model="yggdrasil",
+        operations=[
+            {
+                "op_type": ChangeSetItem.OP_ADD_ELEMENT,
+                "detail": {
+                    "name": "Readonly Guard",
+                    "stereotype_slug": "container",
+                    "package_slug": "technology",
+                },
+                "confidence": 0.5,
+            }
+        ],
+        confidence_threshold=0.80,
+        run_id="run-log-ro-approve",
+    )
+    set_token_scope("read-only")
+    with (
+        caplog.at_level(logging.INFO, logger="yggdrasil.mcp.tools.changeset"),
+        pytest.raises(PermissionError),
+    ):
+        approve_changeset(id=result["changeset_id"])
+    assert_log_story(
+        caplog,
+        where="changeset",
+        beats={"branch": ["reason=read_only"]},
+    )

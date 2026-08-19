@@ -10,7 +10,11 @@ from pathlib import Path
 import environ
 import structlog
 
-from yggdrasil.log_context import install_log_record_factory
+from yggdrasil.log_context import (
+    add_stdlib_callsite,
+    install_log_record_factory,
+    omit_console_context_fields,
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent  # repo root
 
@@ -192,6 +196,7 @@ LOGS_DIR.mkdir(exist_ok=True)
 _STRUCTLOG_PRE_CHAIN = [
     structlog.contextvars.merge_contextvars,
     structlog.stdlib.ExtraAdder(),
+    add_stdlib_callsite,
     structlog.stdlib.add_log_level,
     structlog.stdlib.add_logger_name,
     structlog.processors.TimeStamper(fmt="iso"),
@@ -216,6 +221,7 @@ LOGGING = {
             "()": "structlog.stdlib.ProcessorFormatter",
             "processors": [
                 structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                omit_console_context_fields,
                 structlog.dev.ConsoleRenderer(),
             ],
             "foreign_pre_chain": _STRUCTLOG_PRE_CHAIN,

@@ -16,6 +16,19 @@ _FACTORY_INSTALLED = False
 # Only copy correlation ids onto LogRecord. Binding HTTP ``path``/``method``
 # onto the record collides with stdlib ``extra={"path": ...}`` (KeyError).
 _RECORD_CONTEXT_KEYS = ("request_id", "user_id")
+_CONSOLE_DROP_KEYS = (
+    "context",
+    "file",
+    "thread",
+    "line",
+    "module",
+    "code_module",
+    "code_line",
+    "code_thread",
+    "method",
+    "path",
+    "user_id",
+)
 
 
 def bind_request_context(**values: Any) -> None:
@@ -58,3 +71,38 @@ def _copy_contextvars_onto_record(record: logging.LogRecord) -> None:
     for key in _RECORD_CONTEXT_KEYS:
         if key in context:
             setattr(record, key, context[key])
+
+
+def add_stdlib_callsite(
+    _logger: logging.Logger, _method: str, event_dict: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    Copy stdlib callsite fields onto the structlog event for JSON stories.
+
+    :param event_dict: Formatter event, may include ``_record``.
+    :return: Event with ``module``, ``line``, ``thread`` when missing.
+    """
+    record = event_dict.get("_record")
+    if record is None:
+        return event_dict
+    event_dict.setdefault("module", record.name)
+    event_dict.setdefault("line", record.lineno)
+    event_dict.setdefault("thread", record.threadName)
+    event_dict.setdefault("file", record.filename)
+    if getattr(record, "context", None) is not None:
+        event_dict.setdefault("context", record.context)
+    return event_dict
+
+
+def omit_console_context_fields(
+    _logger: logging.Logger, _method: str, event_dict: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    Keep the terminal line short; full context lives in ``logs/app.log``.
+
+    :param event_dict: Console formatter event.
+    :return: Event without bulky story fields.
+    """
+    for key in _CONSOLE_DROP_KEYS:
+        event_dict.pop(key, None)
+    return event_dict

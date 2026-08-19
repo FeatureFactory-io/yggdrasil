@@ -101,7 +101,7 @@ def test_browse_trace_shares_request_id(
 @override_settings(REQUEST_TRACE=True)
 def test_trace_nests_helper_under_caller(caplog: pytest.LogCaptureFixture) -> None:
     """Nested yggdrasil calls increase depth on the ray."""
-    caplog.set_level(logging.INFO, logger="yggdrasil.trace")
+    caplog.set_level(logging.DEBUG, logger="yggdrasil.trace")
     elements = [
         {"name": "API", "package": "Application", "package_slug": "application"},
     ]

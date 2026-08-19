@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import threading
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -28,7 +29,10 @@ _stack: ContextVar[list[float] | None] = ContextVar("request_trace_stack", defau
 _SKIP_PREFIXES = (
     "yggdrasil.log_context",
     "yggdrasil.request_trace",
+    "yggdrasil.web.log_story",
 )
+_SECRET_KEYS = frozenset({"password", "token", "secret", "api_key", "authorization", "cookie"})
+_SKIP_LOCALS = frozenset({"self", "cls", "args", "kwargs"})
 _SKIP_NAMES = frozenset(
     {
         "<lambda>",
@@ -97,10 +101,16 @@ def _should_trace(frame: FrameType) -> bool:
 
 
 def _log_entry(frame: FrameType, stack: list[float]) -> None:
-    """Push a frame and log RequestTrace entry."""
+    """Push a frame and log RequestTrace entry with a safe locals snapshot."""
     depth = len(stack)
     stack.append(time.perf_counter())
-    logger.info("RequestTrace | entry | depth=%s where=%s", depth, _where(frame))
+    logger.log(
+        _event_level(frame),
+        "RequestTrace | entry | depth=%s where=%s",
+        depth,
+        _where(frame),
+        extra=_trace_extra(frame, _snapshot_locals(frame)),
+    )
 
 
 def _log_exit(frame: FrameType, stack: list[float]) -> None:
@@ -109,12 +119,64 @@ def _log_exit(frame: FrameType, stack: list[float]) -> None:
         return
     started = stack.pop()
     duration_ms = (time.perf_counter() - started) * 1000
-    logger.info(
+    logger.log(
+        _event_level(frame),
         "RequestTrace | exit | depth=%s where=%s duration_ms=%.2f",
         len(stack),
         _where(frame),
         duration_ms,
+        extra=_trace_extra(frame, {}),
     )
+
+
+def _event_level(frame: FrameType) -> int:
+    """Private helpers are DEBUG; public views/services are INFO story beats."""
+    if frame.f_code.co_name.startswith("_"):
+        return logging.DEBUG
+    return logging.INFO
+
+
+def _trace_extra(frame: FrameType, context: dict[str, Any]) -> dict[str, Any]:
+    """Build extra fields that do not collide with reserved LogRecord names."""
+    extra: dict[str, Any] = {
+        "code_module": frame.f_globals.get("__name__", "") or "",
+        "code_line": frame.f_lineno,
+        "code_thread": threading.current_thread().name,
+    }
+    if context:
+        extra["context"] = context
+    return extra
+
+
+def _snapshot_locals(frame: FrameType) -> dict[str, Any]:
+    """Serialize a few non-secret locals for the JSON story body."""
+    snapshot: dict[str, Any] = {}
+    for key, value in list(frame.f_locals.items())[:12]:
+        if key in _SKIP_LOCALS or key.startswith("_"):
+            continue
+        if key.lower() in _SECRET_KEYS or any(part in key.lower() for part in _SECRET_KEYS):
+            snapshot[key] = "***"
+            continue
+        snapshot[key] = _safe_value(value)
+        if len(snapshot) >= 8:
+            break
+    return snapshot
+
+
+def _safe_value(value: Any) -> Any:
+    """Return a JSON-friendly, truncated view of a local."""
+    if value is None or isinstance(value, bool | int | float):
+        return value
+    if isinstance(value, str):
+        return value if len(value) <= 200 else f"{value[:200]}…"
+    if isinstance(value, list | tuple):
+        return [_safe_value(item) for item in list(value)[:8]]
+    if isinstance(value, dict):
+        return {str(key): _safe_value(item) for key, item in list(value.items())[:8]}
+    name = type(value).__name__
+    if name in {"WSGIRequest", "HttpRequest"}:
+        return {"type": name, "path": getattr(value, "path", None)}
+    return f"<{name}>"
 
 
 def _where(frame: FrameType) -> str:

@@ -65,6 +65,12 @@ def infer_bootstrap_relationship_ops(
 
     elements = _elements_from_ops(element_ops)
     names = {item["name"] for item in elements}
+    logger.info(
+        "bootstrap_relationship_llm.infer_bootstrap_relationship_ops | processing | "
+        "element_count=%s llm=%s",
+        len(elements),
+        llm_model,
+    )
     log_munin_structure("bootstrap_elements", elements)
 
     if not names or llm is None:
@@ -291,7 +297,8 @@ def _apply_anti_star(
         kept.append(op)
     if dropped:
         logger.info(
-            "infer_bootstrap_relationship_ops | anti_star dropped_hub_edges=%s max_inbound=%s",
+            "bootstrap_relationship_llm.infer_bootstrap_relationship_ops | branch | "
+            "reason=anti_star dropped_hub_edges=%s max_inbound=%s",
             dropped,
             max_inbound,
         )
@@ -366,9 +373,8 @@ def _ops_from_llm_payload(
         if source_name in do_not_reference or target_name in do_not_reference:
             rejected += 1
             logger.info(
-                "_ops_from_llm_payload | rejected user_id=%s reason=do_not_reference "
-                "source=%s target=%s",
-                user_id,
+                "bootstrap_relationship_llm._ops_from_llm_payload | branch | "
+                "reason=do_not_reference source=%s target=%s",
                 source_name,
                 target_name,
             )

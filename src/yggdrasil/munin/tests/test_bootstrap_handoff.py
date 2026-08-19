@@ -3,16 +3,21 @@
 from __future__ import annotations
 
 import json
+import logging
 from unittest.mock import patch
 
 import pytest
+from django.test import Client
+from django.urls import reverse
 from tests.fixtures.factories import UserFactory
 from tests.fixtures.factories.model_factories import YggdrasilModelFactory
+from tests.support.log_story import assert_log_story
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
 from yggdrasil.graph.models import Element, Relationship, ensure_c4_metamodel
 from yggdrasil.mcp.server import set_current_user_id, set_token_scope
 from yggdrasil.mcp.tools.propose import propose_changeset
+from yggdrasil.munin.agent import MuninAgent
 from yggdrasil.munin.bootstrap_planner import plan_bootstrap_changeset, should_enrich_ratatosk_ops
 from yggdrasil.munin.llm_factory import ScriptedMuninLLM, build_munin_planning_llm
 
@@ -89,19 +94,30 @@ class _FakeLLM:
 
 
 @pytest.mark.django_db
-def test_bootstrap_planner_adds_relationship_ops() -> None:
+def test_bootstrap_planner_adds_relationship_ops(caplog) -> None:
     """CLI-04: four manifest elements yield relationship ops via scripted Munin."""
     mm = ensure_c4_metamodel()
     model = YggdrasilModelFactory(name="BootstrapTest", slug="bootstrap-test", metamodel=mm)
     ops = _four_element_ops()
     llm = build_munin_planning_llm()
-    merged, summary = plan_bootstrap_changeset(
-        model_id=model.pk, element_ops=ops, user_id=1, llm=llm
-    )
+    with caplog.at_level(logging.INFO):
+        merged, summary = plan_bootstrap_changeset(
+            model_id=model.pk, element_ops=ops, user_id=1, llm=llm
+        )
     rel_ops = [op for op in merged if op["op_type"] == ChangeSetItem.OP_ADD_RELATIONSHIP]
     assert len(rel_ops) >= 1
     assert "add-relationship" in summary
     assert "source=llm" in summary or "source=manifest_scripted" in summary
+    assert_log_story(
+        caplog,
+        where="bootstrap_planner.plan_bootstrap_changeset",
+        beats={"processing": ["element_ops=", "applied=", "names="]},
+    )
+    assert_log_story(
+        caplog,
+        where="bootstrap_relationship_llm.infer_bootstrap_relationship_ops",
+        beats={"processing": ["element_count="]},
+    )
 
 
 @pytest.mark.django_db
@@ -300,3 +316,48 @@ def test_propose_changeset_skips_relationships_for_below_threshold_elements(rw_u
     assert result["pending_count"] == 1
     cs = ChangeSet.objects.get(pk=result["changeset_id"])
     assert cs.items.filter(op_type=ChangeSetItem.OP_ADD_RELATIONSHIP).count() == 0
+
+
+@pytest.mark.django_db
+def test_munin_agent_chat_log_story_read_only(caplog) -> None:
+    """Natural-language chat logs entry, tool/nl branch, and exit."""
+    mm = ensure_c4_metamodel()
+    model = YggdrasilModelFactory(name="ChatModel", slug="chat-model", metamodel=mm)
+    agent = MuninAgent(llm=ScriptedMuninLLM(), model_id=model.pk, user_id=1)
+    with caplog.at_level(logging.INFO, logger="yggdrasil.munin.agent"):
+        agent.chat("Who owns Payment API?", history=[])
+    assert_log_story(
+        caplog,
+        where="MuninAgent.chat",
+        beats={
+            "entry": ["message_len=", "history_len=", "preview="],
+            "nl": ["reason=read_only_or_nl"],
+            "exit": ["tool_calls=", "changeset_id="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_munin_chat_view_log_story_happy(rw_user, caplog) -> None:
+    """POST /chat/munin/ logs entry, llm choice, history length, and exit."""
+    client = Client()
+    client.force_login(rw_user)
+    with caplog.at_level(logging.INFO):
+        response = client.post(
+            reverse("web:munin_chat"),
+            {"message": "how many elements?", "history": "[]"},
+        )
+    assert response.status_code == 200
+    assert_log_story(
+        caplog,
+        where="MuninChatView.post",
+        beats={
+            "entry": ["model_id=", "user=", "message_len=", "history_len=", "llm="],
+            "exit": ["changeset_id="],
+        },
+    )
+    assert_log_story(
+        caplog,
+        where="MuninChatView._get_llm_client",
+        beats={"factory": ["reason=factory", "llm="]},
+    )

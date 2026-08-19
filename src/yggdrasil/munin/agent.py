@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("yggdrasil.munin.agent")
 
+_PREVIEW_CHARS = 80
 _service = ChangeSetService()
 
 # Interim review-mode store until YggdrasilModel.review_mode lands (SAO §7).
@@ -53,7 +54,7 @@ def set_model_review_mode(model_pk: int, mode: str) -> None:
         msg = f"Invalid review mode={mode!r}"
         raise ValueError(msg)
     _MODEL_REVIEW_MODES[model_pk] = mode
-    logger.info("set_model_review_mode | model_pk=%s mode=%s", model_pk, mode)
+    logger.info("set_model_review_mode | entry | model_pk=%s mode=%s", model_pk, mode)
 
 
 @dataclass
@@ -106,7 +107,7 @@ class MuninAgent:
         self._model_id = model_id
         self._user_id = user_id
         logger.info(
-            "MuninAgent: initialised | model_id=%s user_id=%s llm=%s",
+            "MuninAgent.__init__ | entry | model_id=%s user_id=%s llm=%s",
             model_id,
             user_id,
             llm.model_id,
@@ -131,28 +132,54 @@ class MuninAgent:
         :raises LLMError: If the LLM call fails.
         """
         logger.info(
-            "chat | model_id=%s user_id=%s message=%r",
+            "MuninAgent.chat | entry | model_id=%s user_id=%s message_len=%s history_len=%s preview=%s",
             self._model_id,
             self._user_id,
-            message[:120],
+            len(message),
+            len(history),
+            message[:_PREVIEW_CHARS],
         )
-        if message.startswith("TOOL:create_element"):
-            return self._handle_create_element_tool(message)
-        if message.startswith("TOOL:update_element"):
-            return self._handle_update_element_tool(message)
-        if message.startswith("TOOL:delete_element"):
-            return self._handle_delete_element_tool(message)
-        if message.startswith("TOOL:create_relationship"):
-            return self._handle_create_relationship_tool(message)
-        if message.startswith("TOOL:update_relationships_batch"):
-            return self._handle_update_relationships_batch_tool(message)
-        response = self._handle_natural_language(message, instructions=instructions)
+        response = self._dispatch_chat(message, instructions)
         logger.info(
-            "chat | turn=1 tool_calls=%s user=%s",
+            "MuninAgent.chat | exit | turn=1 tool_calls=%s user=%s changeset_id=%s",
             len(response.tool_calls),
             self._user_id,
+            response.changeset_id,
         )
         return response
+
+    def _dispatch_chat(self, message: str, instructions: str) -> MuninResponse:
+        """Route TOOL: messages vs natural-language intents."""
+        if message.startswith("TOOL:create_element"):
+            logger.info(
+                "MuninAgent.chat | branch | reason=tool_chosen tool=create_element",
+            )
+            return self._handle_create_element_tool(message)
+        if message.startswith("TOOL:update_element"):
+            logger.info(
+                "MuninAgent.chat | branch | reason=tool_chosen tool=update_element",
+            )
+            return self._handle_update_element_tool(message)
+        if message.startswith("TOOL:delete_element"):
+            logger.info(
+                "MuninAgent.chat | branch | reason=tool_chosen tool=delete_element",
+            )
+            return self._handle_delete_element_tool(message)
+        if message.startswith("TOOL:create_relationship"):
+            logger.info(
+                "MuninAgent.chat | branch | reason=tool_chosen tool=create_relationship",
+            )
+            return self._handle_create_relationship_tool(message)
+        if message.startswith("TOOL:update_relationships_batch"):
+            logger.info(
+                "MuninAgent.chat | branch | reason=tool_chosen tool=update_relationships_batch",
+            )
+            return self._handle_update_relationships_batch_tool(message)
+        logger.info(
+            "MuninAgent.chat | branch | reason=read_only_or_nl message_len=%s",
+            len(message),
+        )
+        return self._handle_natural_language(message, instructions=instructions)
 
     def replan_operation(
         self,
@@ -170,10 +197,19 @@ class MuninAgent:
         :return: MuninResponse with changeset_id of the replacement ChangeSet.
         :raises ValueError: If item not found.
         """
+        logger.info(
+            "MuninAgent.replan_operation | entry | rejected_item_id=%s instructions_len=%s",
+            rejected_item_id,
+            len(instructions),
+        )
         try:
             item = ChangeSetItem.objects.select_related("changeset").get(pk=rejected_item_id)
         except ChangeSetItem.DoesNotExist as exc:
             msg = f"ChangeSetItem id={rejected_item_id} not found"
+            logger.info(
+                "MuninAgent.replan_operation | error | reason=item_not_found rejected_item_id=%s",
+                rejected_item_id,
+            )
             raise ValueError(msg) from exc
         user = self._load_user()
         llm_note = self._llm.complete(
@@ -192,6 +228,11 @@ class MuninAgent:
         # External-system guidance → avoid diagram placement; propose element update note.
         op_type = item.op_type
         if "external system" in instructions.lower() and op_type == ChangeSetItem.OP_ADD_TO_DIAGRAM:
+            logger.info(
+                "MuninAgent.replan_operation | branch | reason=external_system_no_diagram "
+                "rejected_item_id=%s",
+                rejected_item_id,
+            )
             op_type = ChangeSetItem.OP_UPDATE_ELEMENT
             corrected_detail["note"] = "treat as external system; do not add to container diagram"
         changeset = _service.propose(
@@ -209,7 +250,7 @@ class MuninAgent:
             user=user,
         )
         logger.info(
-            "replan_operation | rejected_item=%s replacement_cs=%s",
+            "MuninAgent.replan_operation | exit | rejected_item=%s replacement_cs=%s",
             rejected_item_id,
             changeset.pk,
         )
@@ -238,31 +279,32 @@ class MuninAgent:
     def _handle_natural_language(self, message: str, *, instructions: str = "") -> MuninResponse:
         """Route free-form chat intents against live graph ground truth."""
         lowered = message.lower()
-        if "how many elements" in lowered:
+        intent = self._match_chat_intent(lowered)
+        logger.info(
+            "MuninAgent._handle_natural_language | branch | reason=%s message_len=%s",
+            intent,
+            len(message),
+        )
+        if intent == "element_count":
             return self._intent_element_count()
-        if "who owns" in lowered and "payment api" in lowered:
+        if intent == "owner":
             return self._intent_owner("Payment API")
-        if "depends on payment api" in lowered or (
-            "depends on" in lowered and "payment api" in lowered
-        ):
+        if intent == "traverse_payment_api":
             return self._intent_traverse_payment_api()
-        if "add notification service" in lowered:
+        if intent == "prefill_create":
             return self._intent_prefill_create(
                 name="Notification Service",
                 stereotype="Container",
                 package="Technology",
             )
-        if "tell me a story" in lowered and "payment api" in lowered:
+        if intent == "timeline":
             return self._intent_timeline("Payment API")
-        if "link all components" in lowered and "payment" in lowered:
+        if intent == "batch_link":
             return self._intent_batch_link_payment_components()
-        if "markdown briefing" in lowered or (
-            "generate a markdown" in lowered and "payment" in lowered
-        ):
+        if intent == "markdown_briefing":
             return self._intent_markdown_briefing()
-        if "changed since" in lowered or "domain objects have changed" in lowered:
+        if intent == "changed_since":
             return self._intent_changed_since()
-        # Grounded fallback: answer only from element names present in the model.
         names = list(Element.objects.filter(model_id=self._model_id).values_list("name", flat=True))
         note = self._llm.complete(
             messages=[LLMMessage(role="user", content=message)],
@@ -271,7 +313,35 @@ class MuninAgent:
         text = f"{note}\nKnown elements: {', '.join(names)}" if names else note
         if instructions:
             text = f"{text}\n(instructions: {instructions})"
+        logger.info(
+            "MuninAgent._handle_natural_language | branch | reason=read_only_answer known_elements=%s",
+            len(names),
+        )
         return MuninResponse(text=text, cited_elements=[{"name": n} for n in names[:10]])
+
+    def _match_chat_intent(self, lowered: str) -> str:
+        """Classify a lowered user message into a named chat intent."""
+        if "how many elements" in lowered:
+            return "element_count"
+        if "who owns" in lowered and "payment api" in lowered:
+            return "owner"
+        if "depends on payment api" in lowered or (
+            "depends on" in lowered and "payment api" in lowered
+        ):
+            return "traverse_payment_api"
+        if "add notification service" in lowered:
+            return "prefill_create"
+        if "tell me a story" in lowered and "payment api" in lowered:
+            return "timeline"
+        if "link all components" in lowered and "payment" in lowered:
+            return "batch_link"
+        if "markdown briefing" in lowered or (
+            "generate a markdown" in lowered and "payment" in lowered
+        ):
+            return "markdown_briefing"
+        if "changed since" in lowered or "domain objects have changed" in lowered:
+            return "changed_since"
+        return "grounded_fallback"
 
     def _intent_element_count(self) -> MuninResponse:
         count = Element.objects.filter(model_id=self._model_id).count()
@@ -523,7 +593,8 @@ graph LR
         if review_mode == ChangeSet.REVIEW_AUTO:
             changeset = _service.approve(changeset_id=changeset.pk, user=user)
         logger.info(
-            "chat | turn=create_element proposed cs_id=%s status=%s",
+            "MuninAgent.chat | branch | reason=changeset_proposed turn=create_element "
+            "cs_id=%s status=%s",
             changeset.pk,
             changeset.status,
         )
@@ -584,7 +655,8 @@ graph LR
         if review_mode == ChangeSet.REVIEW_AUTO:
             changeset = _service.approve(changeset_id=changeset.pk, user=user)
         logger.info(
-            "chat | turn=update_element proposed cs_id=%s status=%s",
+            "MuninAgent.chat | branch | reason=changeset_proposed turn=update_element "
+            "cs_id=%s status=%s",
             changeset.pk,
             changeset.status,
         )
@@ -640,7 +712,8 @@ graph LR
             user=user,
         )
         logger.info(
-            "chat | turn=delete_element proposed cs_id=%s blast_radius=%s",
+            "MuninAgent.chat | branch | reason=changeset_proposed turn=delete_element "
+            "cs_id=%s blast_radius=%s",
             changeset.pk,
             blast_radius,
         )
@@ -707,7 +780,8 @@ graph LR
         if review_mode == ChangeSet.REVIEW_AUTO:
             changeset = _service.approve(changeset_id=changeset.pk, user=user)
         logger.info(
-            "chat | turn=create_relationship proposed cs_id=%s edge_rule=%s",
+            "MuninAgent.chat | branch | reason=changeset_proposed turn=create_relationship "
+            "cs_id=%s edge_rule=%s",
             changeset.pk,
             edge_rule,
         )
@@ -770,7 +844,8 @@ graph LR
             user=user,
         )
         logger.info(
-            "chat | turn=update_relationships_batch proposed cs_id=%s ops=%s",
+            "MuninAgent.chat | branch | reason=changeset_proposed turn=update_relationships_batch "
+            "cs_id=%s ops=%s",
             changeset.pk,
             len(propose_ops),
         )
@@ -804,5 +879,8 @@ graph LR
         try:
             return User.objects.get(pk=self._user_id)
         except User.DoesNotExist:
-            logger.info("_load_user | user_id=%s not found", self._user_id)
+            logger.info(
+                "MuninAgent._load_user | branch | reason=user_not_found user_id=%s",
+                self._user_id,
+            )
             return None

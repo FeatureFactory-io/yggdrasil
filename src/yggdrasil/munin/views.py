@@ -49,27 +49,46 @@ class MuninChatView(LoginRequiredMixin, View):
         :return: 200 HTMX partial or 400 on validation error.
         :raises ValidationError: If message is blank.
         """
-        message = (request.POST.get("message") or "").strip()
-        if not message and request.body:
-            try:
-                payload = json.loads(request.body.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                payload = {}
-            message = str(payload.get("message") or "").strip()
+        message = self._read_message(request)
         if not message:
+            logger.info("MuninChatView.post | validation | reason=blank_message")
             return HttpResponseBadRequest("message is required")
         model_id = self._get_model_id(request)
         history = self._parse_history(request)
         llm = self._get_llm_client()
-        agent = MuninAgent(llm=llm, model_id=model_id, user_id=request.user.pk)
         logger.info(
-            "MuninChatView | post | model_id=%s user=%s",
+            "MuninChatView.post | entry | model_id=%s user=%s user_pk=%s "
+            "message_len=%s history_len=%s llm=%s",
             model_id,
             request.user.pk,
+            request.user.pk,
+            len(message),
+            len(history),
+            getattr(llm, "model_id", type(llm).__name__),
         )
+        agent = MuninAgent(llm=llm, model_id=model_id, user_id=request.user.pk)
         response = agent.chat(message, history=history)
-        html = self._render_partial(response)
-        http = HttpResponse(html, content_type="text/html")
+        logger.info(
+            "MuninChatView.post | exit | changeset_id=%s nav=%s",
+            response.changeset_id,
+            bool(response.navigation_url),
+        )
+        return self._http_from_munin(response)
+
+    def _read_message(self, request: HttpRequest) -> str:
+        """Read message from POST form or JSON body."""
+        message = (request.POST.get("message") or "").strip()
+        if message or not request.body:
+            return message
+        try:
+            payload = json.loads(request.body.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            payload = {}
+        return str(payload.get("message") or "").strip()
+
+    def _http_from_munin(self, response: MuninResponse) -> HttpResponse:
+        """Build HTMX response with optional navigation/changeset headers."""
+        http = HttpResponse(self._render_partial(response), content_type="text/html")
         if response.navigation_url:
             http["HX-Push-Url"] = response.navigation_url
             http["X-Munin-Navigation-Url"] = response.navigation_url
@@ -79,7 +98,12 @@ class MuninChatView(LoginRequiredMixin, View):
 
     def _get_llm_client(self) -> BaseLLM:
         """Instantiate the Munin planning-tier LLM client from settings."""
-        return build_munin_planning_llm()
+        llm = build_munin_planning_llm()
+        logger.info(
+            "MuninChatView._get_llm_client | branch | reason=factory llm=%s",
+            getattr(llm, "model_id", type(llm).__name__),
+        )
+        return llm
 
     def _get_model_id(self, request: HttpRequest) -> int:
         """Extract model_id from session or query param."""
@@ -104,16 +128,22 @@ class MuninChatView(LoginRequiredMixin, View):
         try:
             history = json.loads(raw)
         except json.JSONDecodeError:
+            logger.info("MuninChatView._parse_history | branch | reason=invalid_json")
             return []
         if not isinstance(history, list):
+            logger.info("MuninChatView._parse_history | branch | reason=not_list")
             return []
+        logger.info(
+            "MuninChatView._parse_history | exit | history_len=%s",
+            len(history),
+        )
         return history
 
     def _render_partial(self, response: MuninResponse) -> str:
         """Render a minimal HTMX chat bubble for the Munin response."""
         cites = "".join(
             f'<li><a href="/elements/{item.get("name", "").lower().replace(" ", "-")}">'
-            f'{item.get("name")}</a></li>'
+            f"{item.get('name')}</a></li>"
             for item in (response.cited_elements or [])
         )
         nav = (

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.test import override_settings
+from tests.support.log_story import assert_log_story
 
 from yggdrasil.munin.llm_factory import (
     ScriptedMuninLLM,
@@ -19,18 +22,33 @@ def test_resolve_munin_planning_model_defaults_to_sonnet5() -> None:
     assert resolved == "claude-sonnet-4-5-20250929"
 
 
-def test_build_munin_planning_llm_scripted_in_tests() -> None:
+def test_build_munin_planning_llm_scripted_in_tests(caplog) -> None:
     """Test settings use scripted Munin LLM."""
-    llm = build_munin_planning_llm()
+    with caplog.at_level(logging.INFO):
+        llm = build_munin_planning_llm()
     assert isinstance(llm, ScriptedMuninLLM)
     assert llm.model_id == "scripted-munin"
     assert munin_allows_manifest_fallback(llm) is True
+    assert_log_story(
+        caplog,
+        where="build_munin_planning_llm",
+        beats={
+            "provider": ["reason=settings_llm_provider", "provider="],
+            "scripted": ["reason=scripted_provider"],
+        },
+    )
 
 
-def test_build_munin_planning_llm_injected_passthrough() -> None:
+def test_build_munin_planning_llm_injected_passthrough(caplog) -> None:
     """Explicit injection bypasses factory resolution."""
     sentinel = object()
-    assert build_munin_planning_llm(llm=sentinel) is sentinel
+    with caplog.at_level(logging.INFO):
+        assert build_munin_planning_llm(llm=sentinel) is sentinel
+    assert_log_story(
+        caplog,
+        where="build_munin_planning_llm",
+        beats={"injected": ["reason=injected"]},
+    )
 
 
 def test_scripted_munin_returns_bootstrap_relationship_json() -> None:

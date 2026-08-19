@@ -94,6 +94,10 @@ def build_munin_planning_llm(*, llm: Any | None = None) -> BaseLLM:
         llm_model=getattr(llm, "model_id", type(llm).__name__) if llm is not None else "",
     )
     if llm is not None:
+        logger.info(
+            "build_munin_planning_llm | branch | reason=injected llm=%s",
+            getattr(llm, "model_id", type(llm).__name__),
+        )
         log_munin_exit(
             "build_munin_planning_llm",
             where="llm_factory.build_munin_planning_llm",
@@ -115,12 +119,15 @@ def build_munin_planning_llm(*, llm: Any | None = None) -> BaseLLM:
     log_munin_structure("munin_llm_config", config_snapshot)
     resolved_model = resolve_munin_planning_model(provider=provider)
     logger.info(
-        "build_munin_planning_llm | provider=%s resolved_model=%s",
+        "build_munin_planning_llm | branch | reason=settings_llm_provider provider=%s resolved_model=%s",
         provider,
         resolved_model,
     )
 
     if provider == "scripted":
+        logger.info(
+            "build_munin_planning_llm | branch | reason=scripted_provider llm=scripted-munin",
+        )
         client = ScriptedMuninLLM()
         log_munin_exit(
             "build_munin_planning_llm",
@@ -132,10 +139,14 @@ def build_munin_planning_llm(*, llm: Any | None = None) -> BaseLLM:
         return cast("BaseLLM", client)
 
     if provider == "anthropic":
+        logger.info(
+            "build_munin_planning_llm | branch | reason=anthropic_provider model=%s",
+            resolved_model,
+        )
         api_key = str(getattr(settings, "ANTHROPIC_API_KEY", "") or "").strip()
         if not api_key:
             msg = "LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set[Any]"
-            logger.error("build_munin_planning_llm | reason=missing_api_key")
+            logger.error("build_munin_planning_llm | error | reason=missing_api_key")
             raise LLMError(msg)
         from yggdrasil.llm.adapters.anthropic import AnthropicClient
 
@@ -150,6 +161,10 @@ def build_munin_planning_llm(*, llm: Any | None = None) -> BaseLLM:
         return cast("BaseLLM", anthropic_client)
 
     if provider == "ollama":
+        logger.info(
+            "build_munin_planning_llm | branch | reason=ollama_provider model=%s",
+            resolved_model,
+        )
         try:
             from yggdrasil.llm.adapters.ollama import OllamaClient
 
@@ -187,7 +202,7 @@ def resolve_munin_planning_model(*, provider: str) -> str:
         if legacy in _ANTHROPIC_ALIASES:
             resolved = _ANTHROPIC_ALIASES[legacy]
             logger.info(
-                "resolve_munin_planning_model | provider=%s input=%s branch=alias resolved_id=%s",
+                "resolve_munin_planning_model | branch | reason=alias provider=%s input=%s resolved_id=%s",
                 provider,
                 legacy,
                 resolved,
@@ -195,7 +210,7 @@ def resolve_munin_planning_model(*, provider: str) -> str:
             return resolved
         if legacy.startswith("claude"):
             logger.info(
-                "resolve_munin_planning_model | provider=%s input=%s branch=passthrough",
+                "resolve_munin_planning_model | branch | reason=passthrough provider=%s input=%s",
                 provider,
                 legacy,
             )
@@ -207,7 +222,7 @@ def resolve_munin_planning_model(*, provider: str) -> str:
     if provider == "ollama":
         resolved = legacy if legacy not in _ANTHROPIC_ALIASES else _DEFAULT_OLLAMA_MUNIN
         logger.info(
-            "resolve_munin_planning_model | provider=%s input=%s resolved_id=%s",
+            "resolve_munin_planning_model | branch | reason=ollama_model provider=%s input=%s resolved_id=%s",
             provider,
             legacy,
             resolved,
@@ -215,7 +230,7 @@ def resolve_munin_planning_model(*, provider: str) -> str:
         return resolved
 
     logger.info(
-        "resolve_munin_planning_model | provider=%s resolved_id=%s branch=scripted_or_other",
+        "resolve_munin_planning_model | branch | reason=scripted_or_other provider=%s resolved_id=%s",
         provider,
         _SCRIPTED_MODEL_ID,
     )

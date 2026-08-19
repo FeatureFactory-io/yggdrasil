@@ -65,6 +65,13 @@ def plan_bootstrap_changeset(
     log_munin_structure("incoming_element_ops", element_ops)
 
     names = _element_names_from_ops(element_ops)
+    logger.info(
+        "bootstrap_planner.plan_bootstrap_changeset | processing | "
+        "element_ops=%s applied=%s names=%s",
+        len(element_ops),
+        len(applied_names),
+        len(names),
+    )
     log_munin_structure("element_names", sorted(names))
     log_munin_structure("applied_element_names", sorted(applied_names))
 
@@ -210,8 +217,8 @@ def _filter_relationship_ops_for_applied_elements(
             kept.append(op)
         else:
             logger.info(
-                "plan_bootstrap_changeset | drop_relationship source=%s target=%s "
-                "reason=endpoint_below_confidence_threshold",
+                "bootstrap_planner.plan_bootstrap_changeset | branch | "
+                "reason=endpoint_below_confidence source=%s target=%s",
                 source,
                 target,
             )

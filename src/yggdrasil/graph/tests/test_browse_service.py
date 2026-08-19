@@ -93,6 +93,45 @@ def test_user_can_read_model_rejects_private() -> None:
 
 
 @pytest.mark.django_db
+def test_list_readable_models_log_story_happy(caplog) -> None:
+    """Readable-model query logs ACL branch, not only entry/exit counts."""
+    user = UserFactory()
+    YggdrasilModelFactory(name="Alpha", slug="alpha")
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
+        browse_service.list_readable_models(user)
+    assert_log_story(
+        caplog,
+        where="browse_service.list_readable_models",
+        beats={
+            "entry": ["user_pk="],
+            "branch": ["reason=group_acl", "group_ids="],
+            "exit": ["model_count="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_user_can_read_model_log_story_reject(caplog) -> None:
+    """Denied Model access logs why, not a silent PermissionError."""
+    other_group, _ = Group.objects.get_or_create(name="other-team")
+    user = UserFactory(groups="architect")
+    YggdrasilModelFactory(name="Private", slug="private", owner_group=other_group)
+    with (
+        caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"),
+        pytest.raises(PermissionError),
+    ):
+        browse_service.user_can_read_model(user, "private")
+    assert_log_story(
+        caplog,
+        where="browse_service.user_can_read_model",
+        beats={
+            "entry": ["user_pk=", "model_slug=private"],
+            "error": ["reason=not_readable", "readable_count="],
+        },
+    )
+
+
+@pytest.mark.django_db
 def test_resolve_default_model_log_story_happy(caplog) -> None:
     """W12: default resolver emits branch beats."""
     user = UserFactory()
@@ -148,6 +187,30 @@ def test_subgraph_includes_edges_among_nodes(view_browser_model) -> None:
 
 
 # -- W13: depth traversal BFS --
+
+
+@pytest.mark.django_db
+def test_resolve_root_element_ids_log_story_happy(view_browser_explorer_model, caplog) -> None:
+    """Narrowing filters log why roots were chosen and which PKs matched."""
+    ymodel = browse_service.resolve_model("yggdrasil")
+    filters = browse_service.BrowseFilters(stereotype="component")
+    with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
+        browse_service.resolve_root_element_ids(ymodel, filters)
+    assert_log_story(
+        caplog,
+        where="browse_service.resolve_root_element_ids",
+        beats={
+            "entry": ["model_slug=yggdrasil"],
+            "branch": ["reason=narrowing_filters", "stereotype=component"],
+            "processing": ["matched_pks=", "root_count="],
+            "exit": ["root_count="],
+        },
+    )
+    assert_log_story(
+        caplog,
+        where="browse_service._filtered_queryset",
+        beats={"processing": ["stereotype=component", "model_slug=yggdrasil"]},
+    )
 
 
 @pytest.mark.django_db
@@ -311,12 +374,20 @@ def test_compute_max_depth_capped_at_20(view_browser_user, monkeypatch, caplog) 
     with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
         result = browse_service.compute_max_depth(model, {root.pk})
     assert result == 3
-    assert any("capped=" in record.message for record in caplog.records)
+    assert_log_story(
+        caplog,
+        where="browse_service.compute_max_depth",
+        beats={
+            "entry": ["root_count=", "cap="],
+            "processing": ["visited_count=", "hops="],
+            "exit": ["max_depth=", "capped="],
+        },
+    )
 
 
 @pytest.mark.django_db
 def test_bfs_subgraph_log_story_happy(view_browser_model, caplog) -> None:
-    """W13: BFS subgraph emits entry, branch, and exit beats."""
+    """W13: BFS subgraph emits entry, config, branch, processing, and exit beats."""
     with caplog.at_level(logging.INFO, logger="yggdrasil.graph.browse"):
         browse_service.subgraph_from_roots(model_slug="yggdrasil", depth=1)
     assert_log_story(
@@ -324,7 +395,9 @@ def test_bfs_subgraph_log_story_happy(view_browser_model, caplog) -> None:
         where="browse_service.subgraph_from_roots",
         beats={
             "entry": ["depth=", "direction=outgoing"],
-            "processing": ["node_count=", "edge_count="],
+            "config": ["stereotype=", "package=", "rel_stereotypes="],
+            "branch": ["reason=all_induced_edges"],
+            "processing": ["node_count=", "edge_count=", "root_pks=", "hops_requested="],
             "exit": ["max_depth="],
         },
     )
@@ -332,8 +405,13 @@ def test_bfs_subgraph_log_story_happy(view_browser_model, caplog) -> None:
         caplog,
         where="browse_service.resolve_root_element_ids",
         beats={
-            "branch": ["reason=graph_sources", "root_count="],
+            "branch": ["reason=graph_sources", "root_pks=", "root_count="],
         },
+    )
+    assert_log_story(
+        caplog,
+        where="browse_service._bfs_expand",
+        beats={"processing": ["start_count=", "hops_requested=", "visited="]},
     )
 
 

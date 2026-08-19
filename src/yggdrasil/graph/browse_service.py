@@ -32,6 +32,18 @@ DEFAULT_MODEL_SLUG = "yggdrasil"
 MODEL_COOKIE_NAME = "yggdrasil_model"
 MAX_DEPTH = 20
 DEFAULT_DEPTH = 1
+_PK_SAMPLE_LIMIT = 12
+
+
+def _format_pk_sample(ids: set[int] | frozenset[int], *, limit: int = _PK_SAMPLE_LIMIT) -> str:
+    """Return a grep-friendly PK list, truncated when large."""
+    ordered = sorted(ids)
+    if not ordered:
+        return "none"
+    if len(ordered) <= limit:
+        return ",".join(str(pk) for pk in ordered)
+    head = ",".join(str(pk) for pk in ordered[:limit])
+    return f"{head}+{len(ordered) - limit}"
 
 
 @dataclass(frozen=True)
@@ -82,9 +94,20 @@ def list_readable_models(user: User) -> QuerySet[YggdrasilModel]:
     """
     logger.info("browse_service.list_readable_models | entry | user_pk=%s", user.pk)
     if user.is_superuser or user.is_staff:
+        logger.info(
+            "browse_service.list_readable_models | branch | user_pk=%s "
+            "reason=staff_or_superuser scope=all",
+            user.pk,
+        )
         queryset = YggdrasilModel.objects.all()
     else:
         group_ids = list(user.groups.values_list("pk", flat=True))
+        logger.info(
+            "browse_service.list_readable_models | branch | user_pk=%s "
+            "reason=group_acl group_ids=%s",
+            user.pk,
+            group_ids,
+        )
         queryset = YggdrasilModel.objects.filter(
             Q(owner_group__isnull=True) | Q(owner_group_id__in=group_ids)
         )
@@ -157,11 +180,29 @@ def user_can_read_model(user: User, model_slug: str) -> YggdrasilModel:
     :raises ValueError: If the slug does not exist.
     :raises PermissionError: If the user cannot read the Model.
     """
+    logger.info(
+        "browse_service.user_can_read_model | entry | user_pk=%s model_slug=%s",
+        user.pk,
+        model_slug,
+    )
     model = resolve_model(model_slug)
     readable_slugs = {item.slug.lower() for item in list_readable_models(user)}
     if model.slug.lower() not in readable_slugs:
+        logger.info(
+            "browse_service.user_can_read_model | error | user_pk=%s model_slug=%s "
+            "reason=not_readable readable_count=%s",
+            user.pk,
+            model_slug,
+            len(readable_slugs),
+        )
         msg = f"Model {model_slug!r} not readable"
         raise PermissionError(msg)
+    logger.info(
+        "browse_service.user_can_read_model | exit | user_pk=%s model_slug=%s model_id=%s",
+        user.pk,
+        model.slug,
+        model.pk,
+    )
     return model
 
 
@@ -436,7 +477,21 @@ def resolve_root_element_ids(ymodel: YggdrasilModel, filters: BrowseFilters) -> 
         filters,
     )
     if _has_narrowing_filter(filters):
+        logger.info(
+            "browse_service.resolve_root_element_ids | branch | reason=narrowing_filters "
+            "stereotype=%s stereotypes=%s package=%s packages=%s health=%s",
+            filters.stereotype,
+            filters.stereotypes,
+            filters.package,
+            filters.packages,
+            filters.health,
+        )
         root_ids = set(_filtered_queryset(ymodel, filters).values_list("pk", flat=True))
+        logger.info(
+            "browse_service.resolve_root_element_ids | processing | matched_pks=%s root_count=%s",
+            _format_pk_sample(root_ids),
+            len(root_ids),
+        )
     else:
         incoming_targets = set(
             Relationship.objects.filter(model=ymodel).values_list("target_id", flat=True)
@@ -447,7 +502,10 @@ def resolve_root_element_ids(ymodel: YggdrasilModel, filters: BrowseFilters) -> 
             .values_list("pk", flat=True)
         )
         logger.info(
-            "browse_service.resolve_root_element_ids | branch | reason=graph_sources root_count=%s",
+            "browse_service.resolve_root_element_ids | branch | reason=graph_sources "
+            "incoming_target_count=%s root_pks=%s root_count=%s",
+            len(incoming_targets),
+            _format_pk_sample(root_ids),
             len(root_ids),
         )
     logger.info(
@@ -505,6 +563,12 @@ def _bfs_expand(
                     parent_map[neighbor_id] = node_id
                     next_frontier.add(neighbor_id)
         frontier = next_frontier
+    logger.info(
+        "browse_service._bfs_expand | processing | start_count=%s hops_requested=%s visited=%s",
+        len(root_ids),
+        depth,
+        len(visited),
+    )
     return visited, parent_map
 
 
@@ -516,9 +580,39 @@ def compute_max_depth(ymodel: YggdrasilModel, root_ids: set[int]) -> int:
     :param root_ids: BFS root element PKs.
     :return: Maximum useful depth level (at least 1).
     """
+    logger.info(
+        "browse_service.compute_max_depth | entry | root_count=%s cap=%s",
+        len(root_ids),
+        MAX_DEPTH,
+    )
     if not root_ids:
+        logger.info(
+            "browse_service.compute_max_depth | branch | reason=empty_roots max_depth=1",
+        )
         return 1
     adjacency = _outgoing_adjacency(ymodel)
+    depth, visited = _outgoing_hop_depth(root_ids, adjacency)
+    capped = depth >= MAX_DEPTH
+    logger.info(
+        "browse_service.compute_max_depth | processing | visited_count=%s hops=%s "
+        "adjacency_sources=%s",
+        len(visited),
+        depth,
+        len(adjacency),
+    )
+    logger.info(
+        "browse_service.compute_max_depth | exit | max_depth=%s capped=%s",
+        depth,
+        capped,
+    )
+    return depth
+
+
+def _outgoing_hop_depth(
+    root_ids: set[int],
+    adjacency: dict[int, list[int]],
+) -> tuple[int, set[int]]:
+    """Walk outgoing adjacency from roots until frontier empties or ``MAX_DEPTH``."""
     depth = 1
     frontier = set(root_ids)
     visited = set(root_ids)
@@ -533,13 +627,7 @@ def compute_max_depth(ymodel: YggdrasilModel, root_ids: set[int]) -> int:
             break
         depth += 1
         frontier = next_frontier
-    capped = depth >= MAX_DEPTH
-    logger.info(
-        "browse_service.compute_max_depth | exit | max_depth=%s capped=%s",
-        depth,
-        capped,
-    )
-    return depth
+    return depth, visited
 
 
 def subgraph_from_roots(
@@ -589,6 +677,17 @@ def subgraph_from_roots(
         depth,
         user_id,
     )
+    logger.info(
+        "browse_service.subgraph_from_roots | config | stereotype=%s stereotypes=%s "
+        "package=%s packages=%s health=%s rel_stereotypes=%s field_map_keys=%s",
+        stereotype,
+        stereotypes,
+        package,
+        packages,
+        health,
+        relationship_stereotypes,
+        sorted(field_map),
+    )
     ymodel = resolve_model(model_slug)
     root_ids = resolve_root_element_ids(ymodel, filters)
     adjacency = _outgoing_adjacency(ymodel)
@@ -626,7 +725,16 @@ def subgraph_from_roots(
         model=ymodel, source_id__in=id_set, target_id__in=id_set
     ).select_related("stereotype")
     if relationship_stereotypes:
+        logger.info(
+            "browse_service.subgraph_from_roots | branch | "
+            "reason=relationship_stereotype_filter slugs=%s",
+            relationship_stereotypes,
+        )
         rels = rels.filter(stereotype__slug__in=[s.lower() for s in relationship_stereotypes])
+    else:
+        logger.info(
+            "browse_service.subgraph_from_roots | branch | reason=all_induced_edges",
+        )
     cytoscape_edges = [
         {
             "data": {
@@ -640,9 +748,13 @@ def subgraph_from_roots(
     ]
     max_depth = compute_max_depth(ymodel, root_ids)
     logger.info(
-        "browse_service.subgraph_from_roots | processing | node_count=%s edge_count=%s",
+        "browse_service.subgraph_from_roots | processing | node_count=%s edge_count=%s "
+        "visited=%s root_pks=%s hops_requested=%s",
         len(node_summaries),
         len(cytoscape_edges),
+        len(visited),
+        _format_pk_sample(root_ids),
+        depth,
     )
     logger.info(
         "browse_service.subgraph_from_roots | exit | model_slug=%s max_depth=%s user_id=%s",
@@ -926,6 +1038,16 @@ def _relationship_inspector_detail(rel: Relationship) -> dict[str, Any]:
 
 def _filtered_queryset(ymodel: YggdrasilModel, filters: BrowseFilters) -> QuerySet[Element]:
     """Apply browse filters to an element queryset."""
+    logger.info(
+        "browse_service._filtered_queryset | processing | model_slug=%s packages=%s "
+        "package=%s stereotypes=%s stereotype=%s health=%s",
+        ymodel.slug,
+        filters.packages,
+        filters.package,
+        filters.stereotypes,
+        filters.stereotype,
+        filters.health,
+    )
     qs = Element.objects.filter(model=ymodel).select_related("stereotype", "package")
     if filters.packages:
         slugs = [pkg.lower() for pkg in filters.packages]

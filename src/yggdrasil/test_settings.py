@@ -17,8 +17,6 @@ os.environ.setdefault("MUNIN_PLANNING_MODEL", "sonnet5")
 os.environ.setdefault("ANTHROPIC_API_KEY", "")
 os.environ.setdefault("OPENAI_API_KEY", "")
 os.environ.setdefault("OLLAMA_BASE_URL", "http://localhost:11434")
-# Request rays are opt-in per test via override_settings(REQUEST_TRACE=True).
-os.environ["REQUEST_TRACE"] = "false"
 
 from yggdrasil.settings import *  # noqa: F403
 
@@ -48,6 +46,3 @@ CACHES = {
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.MD5PasswordHasher",
 ]
-
-# Profiler off unless a test opts in — keeps the suite fast and log stories stable.
-REQUEST_TRACE = False

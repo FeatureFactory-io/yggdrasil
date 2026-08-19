@@ -10,6 +10,8 @@ from pathlib import Path
 import environ
 import structlog
 
+from yggdrasil.log_context import install_log_record_factory
+
 BASE_DIR = Path(__file__).resolve().parent.parent.parent  # repo root
 
 env = environ.Env(
@@ -184,12 +186,17 @@ LOGS_DIR = BASE_DIR / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 
 # Shared pre-chain for stdlib log records flowing into structlog formatters.
+# merge_contextvars + ExtraAdder surface request_id on every formatted line.
 _STRUCTLOG_PRE_CHAIN = [
+    structlog.contextvars.merge_contextvars,
+    structlog.stdlib.ExtraAdder(),
     structlog.stdlib.add_log_level,
     structlog.stdlib.add_logger_name,
     structlog.processors.TimeStamper(fmt="iso"),
     structlog.processors.StackInfoRenderer(),
 ]
+
+install_log_record_factory()
 
 LOGGING = {
     "version": 1,
@@ -246,7 +253,7 @@ LOGGING = {
             "propagate": False,
         },
         "yggdrasil.web": {
-            "handlers": ["console", "gui_file"],
+            "handlers": ["console", "app_file", "gui_file"],
             "level": LOG_LEVEL,
             "propagate": False,
         },

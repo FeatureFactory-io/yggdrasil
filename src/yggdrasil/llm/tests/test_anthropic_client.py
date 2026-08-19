@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
+from tests.support.log_story import assert_log_story
 
 from yggdrasil.llm.adapters.anthropic import AnthropicClient
 from yggdrasil.llm.base import LLMError, LLMMessage
@@ -72,7 +74,7 @@ def test_anthropic_build_payload_includes_system_and_messages(client: AnthropicC
     assert payload["temperature"] == 0.2
 
 
-def test_anthropic_complete_posts_to_messages_api(client: AnthropicClient) -> None:
+def test_anthropic_complete_posts_to_messages_api(client: AnthropicClient, caplog) -> None:
     """Mock SDK messages.create; returns parsed LLMResponse."""
     mock_message = MagicMock()
     mock_message.model_dump.return_value = {
@@ -83,9 +85,18 @@ def test_anthropic_complete_posts_to_messages_api(client: AnthropicClient) -> No
     }
     with patch("anthropic.Anthropic") as mock_cls:
         mock_cls.return_value.messages.create.return_value = mock_message
-        resp = client.complete([LLMMessage(role="user", content="hi")], system="sys")
+        with caplog.at_level(logging.INFO, logger="yggdrasil.llm.anthropic"):
+            resp = client.complete([LLMMessage(role="user", content="hi")], system="sys")
     assert resp.content == "ok"
     mock_cls.return_value.messages.create.assert_called_once()
+    assert_log_story(
+        caplog,
+        where="AnthropicClient.complete",
+        beats={
+            "entry": ["model=", "messages="],
+            "exit": ["tokens_in=", "tokens_out="],
+        },
+    )
 
 
 def test_anthropic_complete_sdk_error_raises_llm_error(client: AnthropicClient) -> None:

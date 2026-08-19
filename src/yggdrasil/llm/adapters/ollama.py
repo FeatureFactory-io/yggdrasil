@@ -20,7 +20,7 @@ from yggdrasil.llm.structured import normalize_llm_text
 
 logger = logging.getLogger("yggdrasil.llm.ollama")
 
-_PREVIEW_CHARS = 1200
+_PREVIEW_CHARS = 80
 _DEFAULT_MODEL = "qwen3:14b"
 _DEFAULT_BASE_URL = "http://localhost:11434"
 _DEFAULT_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "300"))
@@ -56,7 +56,7 @@ class OllamaClient:
             or _DEFAULT_BASE_URL
         ).rstrip("/")
         logger.info(
-            "OllamaClient: initialised | model=%s base_url=%s",
+            "OllamaClient.__init__ | entry | model=%s base_url=%s",
             self.model_id,
             self._base_url,
         )
@@ -81,8 +81,29 @@ class OllamaClient:
         payload = self._build_payload(messages, system, max_tokens, temperature)
         url = f"{self._base_url}/api/chat"
         user_content = str(messages[-1].content if messages else "")
+        self._log_complete_entry(messages, system, max_tokens, temperature, user_content)
+        try:
+            with httpx.Client(timeout=_DEFAULT_TIMEOUT) as client:
+                response = client.post(url, json=payload)
+                response.raise_for_status()
+                raw = response.json()
+        except httpx.HTTPError as exc:
+            self._log_complete_error(exc, url, messages, system, user_content)
+            msg = f"Ollama request failed: {exc}"
+            raise LLMError(msg) from exc
+        return self._log_complete_exit(self._parse_response(raw))
+
+    def _log_complete_entry(
+        self,
+        messages: list[LLMMessage],
+        system: str,
+        max_tokens: int,
+        temperature: float,
+        user_content: str,
+    ) -> None:
+        """Log complete() entry and prompt previews (never full dumps)."""
         logger.info(
-            "OllamaClient.complete | entry model=%s messages=%s max_tokens=%s temperature=%s",
+            "OllamaClient.complete | entry | model=%s messages=%s max_tokens=%s temperature=%s",
             self.model_id,
             len(messages),
             max_tokens,
@@ -90,38 +111,50 @@ class OllamaClient:
         )
         if system:
             logger.info(
-                "OllamaClient.complete | request.system preview=%s",
+                "OllamaClient.complete | config | system_len=%s preview=%s",
+                len(system),
                 self._preview(system),
             )
         logger.info(
-            "OllamaClient.complete | request.user chars=%s preview=%s",
+            "OllamaClient.complete | config | user_len=%s preview=%s",
             len(user_content),
             self._preview(user_content),
         )
-        try:
-            with httpx.Client(timeout=_DEFAULT_TIMEOUT) as client:
-                response = client.post(url, json=payload)
-                response.raise_for_status()
-                raw = response.json()
-        except httpx.HTTPError as exc:
-            msg = f"Ollama request failed: {exc}"
-            logger.error(
-                "OllamaClient.complete | error model=%s url=%s messages=%s system_chars=%s user_chars=%s | %s",
-                self.model_id,
-                url,
-                len(messages),
-                len(system),
-                len(user_content),
-                msg,
+
+    def _log_complete_error(
+        self,
+        exc: Exception,
+        url: str,
+        messages: list[LLMMessage],
+        system: str,
+        user_content: str,
+    ) -> None:
+        """Log HTTP failure without leaking secrets."""
+        logger.error(
+            "OllamaClient.complete | error | model=%s url=%s messages=%s "
+            "system_chars=%s user_chars=%s | %s",
+            self.model_id,
+            url,
+            len(messages),
+            len(system),
+            len(user_content),
+            f"Ollama request failed: {exc}",
+        )
+
+    def _log_complete_exit(self, result: LLMResponse) -> LLMResponse:
+        """Log empty-content branch and token counts, then return ``result``."""
+        if not result.content:
+            logger.info(
+                "OllamaClient.complete | branch | reason=empty model=%s",
+                result.model,
             )
-            raise LLMError(msg) from exc
-        result = self._parse_response(raw)
         logger.info(
-            "OllamaClient.complete | result model=%s content_chars=%s thinking_chars=%s usage=%s stop=%s preview=%s",
+            "OllamaClient.complete | exit | model=%s content_chars=%s "
+            "tokens_in=%s tokens_out=%s stop=%s preview=%s",
             result.model,
             len(result.content),
-            len(result.thinking),
-            result.usage,
+            result.usage.get("input"),
+            result.usage.get("output"),
             result.stop_reason,
             self._preview(result.content),
         )

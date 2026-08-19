@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+from tests.support.log_story import assert_log_story
 
 from yggdrasil.llm.adapters.ollama import OllamaClient
 from yggdrasil.llm.base import LLMError, LLMMessage
@@ -101,13 +103,15 @@ def test_ollama_default_max_tokens_is_8000() -> None:
 
 
 @patch("httpx.Client")
-def test_ollama_complete_success(mock_client_cls) -> None:
+def test_ollama_complete_success(mock_client_cls, caplog) -> None:
     """complete() posts to /api/chat and returns content."""
     mock_response = MagicMock()
     mock_response.json.return_value = {
         "model": "qwen3:14b",
         "message": {"content": '{"targets": []}'},
         "done": True,
+        "prompt_eval_count": 4,
+        "eval_count": 2,
     }
     mock_response.raise_for_status = MagicMock()
     mock_client = MagicMock()
@@ -117,9 +121,18 @@ def test_ollama_complete_success(mock_client_cls) -> None:
     mock_client_cls.return_value = mock_client
 
     client = OllamaClient(model="qwen3:14b", base_url="http://localhost:11434")
-    resp = client.complete([LLMMessage(role="user", content="map tree")])
+    with caplog.at_level(logging.INFO, logger="yggdrasil.llm.ollama"):
+        resp = client.complete([LLMMessage(role="user", content="map tree")])
     assert '{"targets"' in resp.content
     mock_client.post.assert_called_once()
+    assert_log_story(
+        caplog,
+        where="OllamaClient.complete",
+        beats={
+            "entry": ["model=", "messages="],
+            "exit": ["tokens_in=", "tokens_out="],
+        },
+    )
 
 
 @patch("httpx.Client")

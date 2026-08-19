@@ -17,6 +17,17 @@ from typing import Any, cast
 
 logger = logging.getLogger("yggdrasil.llm.structured")
 
+_PREVIEW_CHARS = 80
+
+
+def _preview(text: str, limit: int = _PREVIEW_CHARS) -> str:
+    """Return a single-line 80-char preview; never dump full LLM text at INFO."""
+    collapsed = (text or "").replace("\n", " ")
+    if len(collapsed) <= limit:
+        return collapsed
+    return collapsed[:limit]
+
+
 _THINKING_BLOCK_RE = re.compile(
     r"<\s*think(?:ing)?\s*>[\s\S]*?<\s*/\s*think(?:ing)?\s*>",
     re.IGNORECASE,
@@ -79,18 +90,27 @@ def extract_json_array(raw: str) -> list[dict[str, Any]] | None:
     :return: List of dicts when valid array found; otherwise ``None``.
     """
     text = normalize_llm_text(raw)
+    raw_len = len(raw or "")
+    logger.info(
+        "extract_json_array | entry | len=%s preview=%s",
+        raw_len,
+        _preview(raw or ""),
+    )
     if not text:
-        logger.info("extract_json_array | result=empty_input")
+        logger.info("extract_json_array | branch | reason=empty len=%s", raw_len)
         return None
     data = _load_json_or_slice(text, start_char="[", end_char="]")
     if not isinstance(data, list):
-        logger.info("extract_json_array | result=not_array type=%s", type(data).__name__)
+        logger.info(
+            "extract_json_array | branch | reason=parse_failed type=%s",
+            type(data).__name__,
+        )
         return None
     items = [item for item in data if isinstance(item, dict) and item.get("name")]
     logger.info(
-        "extract_json_array | result=ok items=%s raw_len=%s",
+        "extract_json_array | exit | reason=ok items=%s raw_len=%s",
         len(items),
-        len(raw or ""),
+        raw_len,
     )
     return items
 
@@ -103,14 +123,27 @@ def extract_json_object(raw: str) -> dict[str, Any] | None:
     :return: Dict when valid object found; otherwise ``None``.
     """
     text = normalize_llm_text(raw)
+    raw_len = len(raw or "")
+    logger.info(
+        "extract_json_object | entry | len=%s preview=%s",
+        raw_len,
+        _preview(raw or ""),
+    )
     if not text:
-        logger.info("extract_json_object | result=empty_input")
+        logger.info("extract_json_object | branch | reason=empty len=%s", raw_len)
         return None
     data = _load_json_or_slice(text, start_char="{", end_char="}")
     if not isinstance(data, dict):
-        logger.info("extract_json_object | result=not_object type=%s", type(data).__name__)
+        logger.info(
+            "extract_json_object | branch | reason=parse_failed type=%s",
+            type(data).__name__,
+        )
         return None
-    logger.info("extract_json_object | result=ok keys=%s raw_len=%s", len(data), len(raw or ""))
+    logger.info(
+        "extract_json_object | exit | reason=ok keys=%s raw_len=%s",
+        len(data),
+        raw_len,
+    )
     return dict(data)
 
 
@@ -124,7 +157,7 @@ def _load_json_or_slice(text: str, *, start_char: str, end_char: str) -> object 
         end = text.rfind(end_char)
         if start < 0 or end <= start:
             logger.info(
-                "_load_json_or_slice | result=parse_fail start=%s end=%s",
+                "_load_json_or_slice | branch | reason=parse_failed start=%s end=%s",
                 start_char,
                 end_char,
             )
@@ -132,5 +165,5 @@ def _load_json_or_slice(text: str, *, start_char: str, end_char: str) -> object 
         try:
             return cast("object | None", json.loads(text[start : end + 1]))
         except json.JSONDecodeError:
-            logger.info("_load_json_or_slice | result=slice_parse_fail")
+            logger.info("_load_json_or_slice | branch | reason=parse_failed slice=true")
             return None

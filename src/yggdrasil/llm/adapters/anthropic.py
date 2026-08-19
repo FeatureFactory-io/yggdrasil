@@ -40,7 +40,7 @@ class AnthropicClient:
         self._api_key = api_key or os.getenv("ANTHROPIC_API_KEY", "")
         if not self._api_key:
             raise LLMError("ANTHROPIC_API_KEY is not set[Any] — cannot initialise AnthropicClient")
-        logger.info("AnthropicClient: initialised | model=%s", self.model_id)
+        logger.info("AnthropicClient.__init__ | entry | model=%s", self.model_id)
 
     def complete(
         self,
@@ -61,7 +61,7 @@ class AnthropicClient:
         """
         payload = self._build_payload(messages, system, max_tokens, temperature)
         logger.info(
-            "AnthropicClient.complete | entry model=%s messages=%s max_tokens=%s",
+            "AnthropicClient.complete | entry | model=%s messages=%s max_tokens=%s",
             self.model_id,
             len(messages),
             max_tokens,
@@ -71,18 +71,24 @@ class AnthropicClient:
         except Exception as exc:
             msg = f"Anthropic request failed for model={self.model_id}: {exc}"
             logger.error(
-                "AnthropicClient.complete | error model=%s class=%s",
+                "AnthropicClient.complete | error | model=%s class=%s",
                 self.model_id,
                 type(exc).__name__,
             )
             raise LLMError(msg) from exc
         result = self._parse_response(raw)
+        if not result.content:
+            logger.info(
+                "AnthropicClient.complete | branch | reason=empty model=%s",
+                result.model,
+            )
         logger.info(
-            "AnthropicClient.complete | result model=%s content_chars=%s thinking_chars=%s usage=%s stop=%s",
+            "AnthropicClient.complete | exit | model=%s content_chars=%s "
+            "tokens_in=%s tokens_out=%s stop=%s",
             result.model,
             len(result.content),
-            len(result.thinking),
-            result.usage,
+            result.usage.get("input"),
+            result.usage.get("output"),
             result.stop_reason,
         )
         return result

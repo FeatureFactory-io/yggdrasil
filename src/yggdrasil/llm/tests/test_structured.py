@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+
+from tests.support.log_story import assert_log_story
+
 from yggdrasil.llm.structured import (
     extract_json_array,
     extract_json_object,
@@ -15,12 +19,21 @@ _THINKING_OPEN = "<thinking>"
 _THINKING_CLOSE = "</thinking>"
 
 
-def test_extract_json_array_clean() -> None:
+def test_extract_json_array_clean(caplog) -> None:
     """Plain JSON array parses."""
     raw = '[{"name": "Payment API", "stereotype": "container", "confidence": 0.9}]'
-    parsed = extract_json_array(raw)
+    with caplog.at_level(logging.INFO, logger="yggdrasil.llm.structured"):
+        parsed = extract_json_array(raw)
     assert parsed is not None
     assert parsed[0]["name"] == "Payment API"
+    assert_log_story(
+        caplog,
+        where="extract_json_array",
+        beats={
+            "entry": ["len=", "preview="],
+            "ok": ["reason=ok", "items="],
+        },
+    )
 
 
 def test_extract_json_array_after_redacted_thinking_block() -> None:
@@ -44,7 +57,7 @@ def test_extract_json_array_markdown_fence() -> None:
     assert parsed[0]["name"] == "Billing Worker"
 
 
-def test_extract_json_object_after_thinking_block() -> None:
+def test_extract_json_object_after_thinking_block(caplog) -> None:
     """Project map JSON object after thinking block."""
     raw = (
         _THINKING_OPEN
@@ -52,16 +65,39 @@ def test_extract_json_object_after_thinking_block() -> None:
         + _THINKING_CLOSE
         + '\n{"project_kind": "python-web", "targets": ["README.md"]}'
     )
-    parsed = extract_json_object(raw)
+    with caplog.at_level(logging.INFO, logger="yggdrasil.llm.structured"):
+        parsed = extract_json_object(raw)
     assert parsed is not None
     assert parsed["project_kind"] == "python-web"
     assert parsed["targets"] == ["README.md"]
+    assert_log_story(
+        caplog,
+        where="extract_json_object",
+        beats={"ok": ["reason=ok", "keys="]},
+    )
 
 
-def test_extract_json_array_rejects_prose_only() -> None:
+def test_extract_json_array_parse_failed_log_story(caplog) -> None:
+    """Prose without JSON array logs reason=parse_failed."""
+    with caplog.at_level(logging.INFO, logger="yggdrasil.llm.structured"):
+        assert extract_json_array("definitely not json") is None
+    assert_log_story(
+        caplog,
+        where="extract_json_array",
+        beats={"failed": ["reason=parse_failed"]},
+    )
+
+
+def test_extract_json_array_rejects_prose_only(caplog) -> None:
     """Thinking-only prose without JSON returns None."""
     raw = _THINK_OPEN + "No architecture found." + _THINK_CLOSE
-    assert extract_json_array(raw) is None
+    with caplog.at_level(logging.INFO, logger="yggdrasil.llm.structured"):
+        assert extract_json_array(raw) is None
+    assert_log_story(
+        caplog,
+        where="extract_json_array",
+        beats={"empty": ["reason=empty"]},
+    )
 
 
 def test_strip_thinking_blocks_removes_redacted_reasoning() -> None:

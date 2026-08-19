@@ -29,5 +29,14 @@ class TokenAuthentication(BaseAuthentication):
     """
 
     def authenticate(self, request: Request) -> tuple[None, None] | None:
-        logger.debug("TokenAuthentication.authenticate called (placeholder)")
+        has_authorization = bool(request.META.get("HTTP_AUTHORIZATION"))
+        logger.info(
+            "TokenAuthentication.authenticate | entry | has_authorization=%s",
+            has_authorization,
+        )
+        logger.info(
+            "TokenAuthentication.authenticate | branch | reason=placeholder_unimplemented "
+            "has_authorization=%s",
+            has_authorization,
+        )
         return None

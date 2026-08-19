@@ -64,14 +64,18 @@ class LoginView(View):
         GET /auth/login/ (authenticated)   → 302 to dashboard
         """
         logger.info(
-            "LoginView.get: entry | ip=%s authenticated=%s",
+            "LoginView.get | entry | ip=%s authenticated=%s",
             request.META.get("REMOTE_ADDR"),
             request.user.is_authenticated,
         )
         if request.user.is_authenticated:
-            logger.info("LoginView.get: user already authenticated, redirecting")
+            logger.info(
+                "LoginView.get | branch | reason=already_authenticated user_pk=%s",
+                request.user.pk,
+            )
             return self._redirect_after_login(request)
-        logger.info("LoginView.get: rendering login form")
+        logger.info("LoginView.get | branch | reason=unauthenticated_form")
+        logger.info("LoginView.get | exit | rendering login form")
         return render(request, self.template_name)
 
     def post(self, request: HttpRequest) -> HttpResponse:
@@ -94,21 +98,29 @@ class LoginView(View):
         email = request.POST.get("email", "").strip()
         password = request.POST.get("password", "")
         logger.info(
-            "LoginView.post: attempt | email=%s ip=%s",
+            "LoginView.post | entry | attempt email=%s ip=%s",
             email,
             request.META.get("REMOTE_ADDR"),
         )
         user = self._authenticate_by_email(request, email, password)
         if user is None:
-            logger.warning("LoginView.post: authentication failed | email=%s", email)
-            return render(
-                request,
-                self.template_name,
-                {"error": "Invalid email or password.", "field_email": email},
+            logger.warning(
+                "LoginView.post | branch | reason=authentication_failed email=%s",
+                email,
             )
+            return self._render_login_failure(request, email)
         login(request, User.objects.get(pk=user.pk))
-        logger.info("LoginView.post: login success | user_pk=%s", user.pk)
+        logger.info("LoginView.post | processing | login success user_pk=%s", user.pk)
+        logger.info("LoginView.post | exit | user_pk=%s", user.pk)
         return self._redirect_after_login(request)
+
+    def _render_login_failure(self, request: HttpRequest, email: str) -> HttpResponse:
+        """Re-render the login form with a generic credential error."""
+        return render(
+            request,
+            self.template_name,
+            {"error": "Invalid email or password.", "field_email": email},
+        )
 
     def _authenticate_by_email(
         self, request: HttpRequest, email: str, password: str
@@ -125,28 +137,45 @@ class LoginView(View):
         :param password: Plaintext password. Example: ``test-pass-only-1234``
         :return: Authenticated user or ``None``.
         """
-        user_model = get_user_model()
+        logger.info("LoginView._authenticate_by_email | entry | email=%s", email)
         # Prefer username==email (common for provisioned accounts), then email lookup.
         user = authenticate(request, username=email, password=password)
         if user is not None:
             logger.info(
-                "LoginView._authenticate_by_email: matched as username | email=%s",
+                "LoginView._authenticate_by_email | branch | reason=matched_as_username email=%s",
                 email,
             )
             return user
+        return self._authenticate_resolved_email(request, email, password)
+
+    def _authenticate_resolved_email(
+        self, request: HttpRequest, email: str, password: str
+    ) -> AbstractBaseUser | None:
+        """Look up the account by email, then authenticate with its username."""
+        user_model = get_user_model()
         matched = user_model.objects.filter(email__iexact=email).order_by("pk").first()
         if matched is None:
             logger.info(
-                "LoginView._authenticate_by_email: no user for email=%s",
+                "LoginView._authenticate_by_email | branch | reason=no_user_for_email email=%s",
                 email,
             )
             return None
         logger.info(
-            "LoginView._authenticate_by_email: resolved email=%s → username=%s",
+            "LoginView._authenticate_by_email | branch | reason=resolved_email "
+            "email=%s username=%s",
             email,
             matched.get_username(),
         )
-        return authenticate(request, username=matched.get_username(), password=password)
+        user = authenticate(request, username=matched.get_username(), password=password)
+        if user is None:
+            logger.info(
+                "LoginView._authenticate_by_email | branch | reason=resolved_user_auth_failed "
+                "email=%s",
+                email,
+            )
+            return None
+        logger.info("LoginView._authenticate_by_email | exit | user_pk=%s", user.pk)
+        return user
 
     def _redirect_after_login(self, request: HttpRequest) -> HttpResponse:
         """
@@ -161,10 +190,26 @@ class LoginView(View):
         (no next)     → redirect to /views/
         """
         next_url = request.POST.get("next") or request.GET.get("next", _DEFAULT_REDIRECT)
-        if not next_url or not next_url.startswith("/") or next_url.startswith("//"):
-            next_url = _DEFAULT_REDIRECT
-        logger.info("LoginView._redirect_after_login: redirecting to %s", next_url)
+        logger.info("LoginView._redirect_after_login | entry | next=%s", next_url)
+        next_url = self._resolve_safe_next(next_url)
+        logger.info("LoginView._redirect_after_login | exit | redirecting to %s", next_url)
         return redirect(next_url)
+
+    def _resolve_safe_next(self, next_url: str) -> str:
+        """Reject open redirects; allow same-origin relative paths only."""
+        if not next_url or not next_url.startswith("/") or next_url.startswith("//"):
+            logger.info(
+                "LoginView._redirect_after_login | branch | reason=open_redirect_rejected "
+                "next=%s fallback=%s",
+                next_url,
+                _DEFAULT_REDIRECT,
+            )
+            return _DEFAULT_REDIRECT
+        logger.info(
+            "LoginView._redirect_after_login | branch | reason=next_allowed next=%s",
+            next_url,
+        )
+        return next_url
 
 
 class LogoutView(LoginRequiredMixin, View):
@@ -172,6 +217,8 @@ class LogoutView(LoginRequiredMixin, View):
 
     def post(self, request: HttpRequest) -> HttpResponse:
         """Log out and redirect to login page."""
+        logger.info("LogoutView.post | entry | user_pk=%s", request.user.pk)
+        logger.info("LogoutView.post | branch | reason=not_implemented")
         raise NotImplementedError()
 
 
@@ -235,7 +282,7 @@ class TokenCreateView(LoginRequiredMixin, View):
         name = request.POST.get("name", "").strip()
         scope = request.POST.get("scope", PersonalAccessToken.SCOPE_READ_ONLY)
         logger.info(
-            "TokenCreateView.post: entry | user_pk=%s name=%s scope=%s",
+            "TokenCreateView.post | entry | user_pk=%s name=%s scope=%s",
             request.user.pk,
             name,
             scope,
@@ -243,9 +290,16 @@ class TokenCreateView(LoginRequiredMixin, View):
         try:
             token, raw = TokenService().create_token(_require_user(request.user), name, scope)
         except ValueError as exc:
-            logger.warning("TokenCreateView.post: validation error | %s", exc)
+            logger.warning(
+                "TokenCreateView.post | branch | reason=validation_error error=%s",
+                exc,
+            )
             return self._render_with_error(request, str(exc))
-        logger.info("TokenCreateView.post: created | token_pk=%s", token.pk)
+        logger.info(
+            "TokenCreateView.post | processing | created token_pk=%s shown_once=true",
+            token.pk,
+        )
+        logger.info("TokenCreateView.post | exit | token_pk=%s", token.pk)
         return self._render_with_new_token(request, token.name, raw)
 
     def _render_with_error(self, request: HttpRequest, error: str) -> HttpResponse:
@@ -293,21 +347,24 @@ class TokenRevokeView(LoginRequiredMixin, View):
         from yggdrasil.auth.models import PersonalAccessToken
 
         logger.info(
-            "TokenRevokeView.post: entry | user_pk=%s token_id=%s",
+            "TokenRevokeView.post | entry | user_pk=%s token_id=%s",
             request.user.pk,
             token_id,
         )
         try:
             TokenService().revoke_token(_require_user(request.user), token_id)
         except PersonalAccessToken.DoesNotExist:
-            logger.warning("TokenRevokeView.post: token not found | token_id=%s", token_id)
+            logger.warning(
+                "TokenRevokeView.post | branch | reason=not_found token_id=%s",
+                token_id,
+            )
             return HttpResponseNotFound("Token not found")
         except PermissionError:
             logger.warning(
-                "TokenRevokeView.post: forbidden | user_pk=%s token_id=%s",
+                "TokenRevokeView.post | branch | reason=ownership_denied " "user_pk=%s token_id=%s",
                 request.user.pk,
                 token_id,
             )
             return HttpResponseForbidden("Not your token")
-        logger.info("TokenRevokeView.post: revoked | token_id=%s", token_id)
+        logger.info("TokenRevokeView.post | exit | revoked token_id=%s", token_id)
         return redirect(reverse("auth:token_list"))

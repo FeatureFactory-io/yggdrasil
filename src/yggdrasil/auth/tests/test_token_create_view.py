@@ -6,10 +6,15 @@ Tests use the Django test client against the real view — no mocks.
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 from django.urls import reverse
+from tests.support.log_story import assert_log_story
 
 from yggdrasil.auth.models import PersonalAccessToken
+
+_AUTH_LOG = "yggdrasil.auth"
 
 
 @pytest.mark.django_db
@@ -127,3 +132,81 @@ def test_create_token_different_users_isolated(client, django_user_model):
     response = client.get(reverse("auth:token_list"))
 
     assert b"private-a" not in response.content
+
+
+@pytest.mark.django_db
+def test_create_token_view_log_story_happy(client, django_user_model, caplog):
+    """Successful create logs name/scope/token_pk and never the raw token."""
+    user = django_user_model.objects.create_user(username="u_create_story", password="p")
+    client.force_login(user)
+    with caplog.at_level(logging.INFO, logger=_AUTH_LOG):
+        response = client.post(
+            reverse("auth:token_create"),
+            {"name": "ci-bot", "scope": "read-write"},
+        )
+    assert response.status_code == 200
+    raw = response.context["new_token_raw"]
+    assert_log_story(
+        caplog,
+        where="TokenCreateView.post",
+        beats={
+            "entry": [" | entry | ", "user_pk=", "name=ci-bot", "scope=read-write"],
+            "processing": [" | processing | ", "created", "token_pk="],
+            "exit": [" | exit | ", "token_pk="],
+        },
+    )
+    assert_log_story(
+        caplog,
+        where="TokenService.create_token",
+        beats={"exit": [" | exit | ", "token_pk="]},
+    )
+    assert raw not in caplog.text
+
+
+@pytest.mark.django_db
+def test_create_token_view_log_story_reject_blank_name(client, django_user_model, caplog):
+    """Blank name logs view validation_error and service blank_name."""
+    user = django_user_model.objects.create_user(username="u_create_blank", password="p")
+    client.force_login(user)
+    with caplog.at_level(logging.INFO, logger=_AUTH_LOG):
+        response = client.post(
+            reverse("auth:token_create"),
+            {"name": "", "scope": "read-only"},
+        )
+    assert response.status_code == 400
+    assert_log_story(
+        caplog,
+        where="TokenCreateView.post",
+        beats={
+            "entry": [" | entry | ", "user_pk="],
+            "branch": [" | branch | ", "reason=validation_error"],
+        },
+    )
+    assert_log_story(
+        caplog,
+        where="TokenService._validate_create_params",
+        beats={"validation": [" | validation | ", "reason=blank_name"]},
+    )
+
+
+@pytest.mark.django_db
+def test_create_token_view_log_story_reject_invalid_scope(client, django_user_model, caplog):
+    """Unknown scope logs view validation_error and service invalid_scope."""
+    user = django_user_model.objects.create_user(username="u_create_scope", password="p")
+    client.force_login(user)
+    with caplog.at_level(logging.INFO, logger=_AUTH_LOG):
+        response = client.post(
+            reverse("auth:token_create"),
+            {"name": "t", "scope": "super-admin"},
+        )
+    assert response.status_code == 400
+    assert_log_story(
+        caplog,
+        where="TokenCreateView.post",
+        beats={"branch": [" | branch | ", "reason=validation_error"]},
+    )
+    assert_log_story(
+        caplog,
+        where="TokenService._validate_create_params",
+        beats={"validation": [" | validation | ", "reason=invalid_scope"]},
+    )

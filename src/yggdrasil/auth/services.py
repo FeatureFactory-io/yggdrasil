@@ -64,14 +64,23 @@ class TokenService:
         """
         from yggdrasil.auth.models import PersonalAccessToken
 
-        self._validate_create_params(name, scope)
-        raw = self._generate_raw_token()
-        token_hash = self._hash_token(raw)
         logger.info(
-            "TokenService.create_token | user_pk=%s name=%s scope=%s",
+            "TokenService.create_token | entry | user_pk=%s name=%s scope=%s",
             user.pk,
             name,
             scope,
+        )
+        self._validate_create_params(name, scope)
+        logger.info(
+            "TokenService.create_token | validation | status=ok name=%s scope=%s",
+            name,
+            scope,
+        )
+        raw = self._generate_raw_token()
+        token_hash = self._hash_token(raw)
+        logger.info(
+            "TokenService.create_token | processing | hashed=true hash_prefix=%s",
+            token_hash[:8],
         )
         token = PersonalAccessToken.objects.create(
             user=User.objects.get(pk=user.pk),
@@ -79,7 +88,7 @@ class TokenService:
             token_hash=token_hash,
             scope=scope,
         )
-        logger.info("TokenService.create_token: created | token_pk=%s", token.pk)
+        logger.info("TokenService.create_token | exit | created token_pk=%s", token.pk)
         return token, raw
 
     def _validate_create_params(self, name: str, scope: str) -> None:
@@ -93,10 +102,19 @@ class TokenService:
         from yggdrasil.auth.models import PersonalAccessToken
 
         if not name or not name.strip():
+            logger.info("TokenService._validate_create_params | validation | reason=blank_name")
             raise ValueError("Token name cannot be blank")
         valid_scopes = {PersonalAccessToken.SCOPE_READ_ONLY, PersonalAccessToken.SCOPE_READ_WRITE}
         if scope not in valid_scopes:
+            logger.info(
+                "TokenService._validate_create_params | validation | reason=invalid_scope scope=%s",
+                scope,
+            )
             raise ValueError(f"Invalid scope {scope!r}. Expected one of {sorted(valid_scopes)}")
+        logger.info(
+            "TokenService._validate_create_params | validation | reason=ok scope=%s",
+            scope,
+        )
 
     def revoke_token(self, user: AbstractBaseUser, token_id: int) -> None:
         """
@@ -112,19 +130,23 @@ class TokenService:
         >>> svc = TokenService()
         >>> svc.revoke_token(user, token_id=1)  # raises PermissionError if wrong owner
         """
-        from yggdrasil.auth.models import PersonalAccessToken
-
-        logger.info("TokenService.revoke_token | user_pk=%s token_id=%s", user.pk, token_id)
-        token = PersonalAccessToken.objects.get(pk=token_id)
+        logger.info("TokenService.revoke_token | entry | user_pk=%s token_id=%s", user.pk, token_id)
+        token = self._get_token_for_revoke(token_id)
         if token.user_id != user.pk:
             logger.warning(
-                "TokenService.revoke_token: ownership mismatch | user_pk=%s token.user_pk=%s",
+                "TokenService.revoke_token | branch | reason=ownership_mismatch "
+                "user_pk=%s token.user_pk=%s",
                 user.pk,
                 token.user_id,
             )
             raise PermissionError(f"Token {token_id} does not belong to user {user.pk}")
+        logger.info(
+            "TokenService.revoke_token | processing | deleting token_id=%s owner_pk=%s",
+            token_id,
+            token.user_id,
+        )
         token.delete()
-        logger.info("TokenService.revoke_token: deleted | token_id=%s", token_id)
+        logger.info("TokenService.revoke_token | exit | deleted token_id=%s", token_id)
 
     def list_tokens(self, user: AbstractBaseUser) -> QuerySet[PersonalAccessToken]:
         """
@@ -143,8 +165,18 @@ class TokenService:
         """
         from yggdrasil.auth.models import PersonalAccessToken  # avoid circular at module level
 
-        logger.info("TokenService.list_tokens | user_pk=%s", user.pk)
-        return PersonalAccessToken.objects.filter(user_id=user.pk).order_by("-created_at")
+        logger.info("TokenService.list_tokens | entry | user_pk=%s", user.pk)
+        logger.info(
+            "TokenService.list_tokens | branch | reason=owner_filter user_pk=%s",
+            user.pk,
+        )
+        tokens = PersonalAccessToken.objects.filter(user_id=user.pk).order_by("-created_at")
+        logger.info(
+            "TokenService.list_tokens | exit | user_pk=%s token_count=%s",
+            user.pk,
+            tokens.count(),
+        )
+        return tokens
 
     def authenticate(self, raw_token: str) -> AbstractBaseUser | None:
         """
@@ -167,18 +199,24 @@ class TokenService:
 
         from yggdrasil.auth.models import PersonalAccessToken
 
+        logger.info(
+            "TokenService.authenticate | entry | token_len=%s",
+            len(raw_token) if raw_token else 0,
+        )
         if not raw_token or not raw_token.strip():
-            logger.info("TokenService.authenticate: blank token — reject")
+            logger.info("TokenService.authenticate | branch | reason=blank_token")
             return None
         token_hash = self._hash_token(raw_token.strip())
-        try:
-            token = PersonalAccessToken.objects.select_related("user").get(token_hash=token_hash)
-        except PersonalAccessToken.DoesNotExist:
-            logger.warning("TokenService.authenticate: no match for hash prefix=%s", token_hash[:8])
+        token = self._lookup_token_by_hash(token_hash)
+        if token is None:
             return None
         PersonalAccessToken.objects.filter(pk=token.pk).update(last_used_at=timezone.now())
         logger.info(
-            "TokenService.authenticate: ok | user_pk=%s token_pk=%s scope=%s",
+            "TokenService.authenticate | processing | last_used_at updated token_pk=%s",
+            token.pk,
+        )
+        logger.info(
+            "TokenService.authenticate | exit | user_pk=%s token_pk=%s scope=%s",
             token.user_id,
             token.pk,
             token.scope,
@@ -186,6 +224,32 @@ class TokenService:
         return token.user
 
     # ── private helpers ──────────────────────────────────────────────────────
+
+    def _get_token_for_revoke(self, token_id: int) -> PersonalAccessToken:
+        """Load a token by PK or log and re-raise if it does not exist."""
+        from yggdrasil.auth.models import PersonalAccessToken
+
+        try:
+            return PersonalAccessToken.objects.get(pk=token_id)
+        except PersonalAccessToken.DoesNotExist:
+            logger.info(
+                "TokenService.revoke_token | error | reason=not_found token_id=%s",
+                token_id,
+            )
+            raise
+
+    def _lookup_token_by_hash(self, token_hash: str) -> PersonalAccessToken | None:
+        """Return the token for *token_hash*, or None when no row matches."""
+        from yggdrasil.auth.models import PersonalAccessToken
+
+        try:
+            return PersonalAccessToken.objects.select_related("user").get(token_hash=token_hash)
+        except PersonalAccessToken.DoesNotExist:
+            logger.warning(
+                "TokenService.authenticate | error | reason=no_match hash_prefix=%s",
+                token_hash[:8],
+            )
+            return None
 
     def _generate_raw_token(self) -> str:
         """

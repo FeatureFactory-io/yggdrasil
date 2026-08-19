@@ -6,10 +6,15 @@ Tests use the Django test client against the real view — no mocks.
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 from django.urls import reverse
+from tests.support.log_story import assert_log_story
 
 from yggdrasil.auth.models import PersonalAccessToken
+
+_AUTH_LOG = "yggdrasil.auth"
 
 
 @pytest.mark.django_db
@@ -115,3 +120,78 @@ def test_revoke_requires_login(client, django_user_model):
     assert response.status_code == 302
     assert "/auth/login/" in response["Location"]
     assert PersonalAccessToken.objects.filter(pk=token.pk).exists()
+
+
+@pytest.mark.django_db
+def test_revoke_log_story_happy(client, django_user_model, caplog):
+    """Owner revoke logs processing/delete and view exit."""
+    user = django_user_model.objects.create_user(username="u_revoke_story", password="p")
+    token = PersonalAccessToken.objects.create(
+        user=user, name="my-token", token_hash="abc123story", scope="read-only"
+    )
+    client.force_login(user)
+    with caplog.at_level(logging.INFO, logger=_AUTH_LOG):
+        response = client.post(reverse("auth:token_revoke", args=[token.pk]))
+    assert response.status_code == 302
+    assert_log_story(
+        caplog,
+        where="TokenRevokeView.post",
+        beats={
+            "entry": [" | entry | ", "user_pk=", "token_id="],
+            "exit": [" | exit | ", "revoked", "token_id="],
+        },
+    )
+    assert_log_story(
+        caplog,
+        where="TokenService.revoke_token",
+        beats={
+            "entry": [" | entry | ", "user_pk=", "token_id="],
+            "processing": [" | processing | ", "deleting", "token_id="],
+            "exit": [" | exit | ", "deleted", "token_id="],
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_revoke_log_story_reject_ownership(client, django_user_model, caplog):
+    """Cross-user revoke logs ownership_denied / ownership_mismatch reasons."""
+    owner = django_user_model.objects.create_user(username="owner_story", password="p")
+    attacker = django_user_model.objects.create_user(username="attacker_story", password="p")
+    token = PersonalAccessToken.objects.create(
+        user=owner, name="owner-token", token_hash="def456story", scope="read-only"
+    )
+    client.force_login(attacker)
+    with caplog.at_level(logging.INFO, logger=_AUTH_LOG):
+        response = client.post(reverse("auth:token_revoke", args=[token.pk]))
+    assert response.status_code == 403
+    assert_log_story(
+        caplog,
+        where="TokenRevokeView.post",
+        beats={"branch": [" | branch | ", "reason=ownership_denied", "token_id="]},
+    )
+    assert_log_story(
+        caplog,
+        where="TokenService.revoke_token",
+        beats={"branch": [" | branch | ", "reason=ownership_mismatch"]},
+        level="WARNING",
+    )
+
+
+@pytest.mark.django_db
+def test_revoke_log_story_reject_not_found(client, django_user_model, caplog):
+    """Missing token logs not_found on both the view and the service."""
+    user = django_user_model.objects.create_user(username="u_revoke_404", password="p")
+    client.force_login(user)
+    with caplog.at_level(logging.INFO, logger=_AUTH_LOG):
+        response = client.post(reverse("auth:token_revoke", args=[9999]))
+    assert response.status_code == 404
+    assert_log_story(
+        caplog,
+        where="TokenRevokeView.post",
+        beats={"branch": [" | branch | ", "reason=not_found", "token_id=9999"]},
+    )
+    assert_log_story(
+        caplog,
+        where="TokenService.revoke_token",
+        beats={"error": [" | error | ", "reason=not_found", "token_id=9999"]},
+    )

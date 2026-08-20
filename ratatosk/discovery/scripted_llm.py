@@ -6,6 +6,8 @@ import json
 import logging
 from dataclasses import dataclass
 
+from yggdrasil.llm.base import LLMRequestOptions, reject_unsupported_options
+
 logger = logging.getLogger("ratatosk.discovery.scripted_llm")
 
 _PREVIEW_CHARS = 1200
@@ -75,10 +77,19 @@ class ScriptedDiscoveryLLM:
         max_tokens: int = 1024,
         temperature: float = 0.2,
         *,
-        options: object | None = None,
+        options: LLMRequestOptions | None = None,
     ) -> LLMResponse:
-        if options is not None:
-            raise ValueError("Scripted discovery does not support LLM options")
+        """Return a deterministic discovery result for the supplied prompt.
+
+        :param messages: Discovery prompt messages.
+        :param system: Optional system prompt.
+        :param max_tokens: Accepted for provider interface compatibility.
+        :param temperature: Accepted for provider interface compatibility.
+        :param options: Empty options are accepted; non-empty options are unsupported.
+        :return: A deterministic discovery response.
+        :raises LLMError: If unsupported provider-specific options are requested.
+        """
+        reject_unsupported_options(options, provider="Scripted discovery")
         self._call_count += 1
         user_content = messages[-1].content if messages else ""
         logger.info(

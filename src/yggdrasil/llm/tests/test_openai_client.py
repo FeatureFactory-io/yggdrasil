@@ -140,6 +140,44 @@ def test_openai_payload_maps_system_messages_and_structured_output() -> None:
     }
 
 
+def test_openai_structured_schema_is_a_deep_immutable_snapshot() -> None:
+    """Nested caller mutations cannot alter an already-validated schema request."""
+    schema = {
+        "type": "object",
+        "properties": {"ok": {"type": "boolean"}},
+        "required": ["ok"],
+    }
+    structured_output = LLMStructuredOutput(name="result", schema=schema)
+    options = LLMRequestOptions(structured_output=structured_output)
+    schema["properties"]["ok"]["type"] = "string"
+    schema["required"].append("changed")
+
+    client, sdk = _client([_response()])
+    client.complete([LLMMessage(role="user", content="hello")], options=options)
+
+    assert sdk.responses.calls[0]["text"] == {
+        "format": {
+            "type": "json_schema",
+            "name": "result",
+            "schema": {
+                "type": "object",
+                "properties": {"ok": {"type": "boolean"}},
+                "required": ["ok"],
+            },
+            "strict": True,
+        }
+    }
+    with pytest.raises(TypeError):
+        structured_output.schema["properties"]["ok"]["type"] = "string"
+
+
+@pytest.mark.parametrize("invalid_number", [float("nan"), float("inf"), float("-inf")])
+def test_openai_structured_schema_rejects_non_finite_numbers(invalid_number: float) -> None:
+    """Strict JSON schemas reject values that cannot be represented in JSON."""
+    with pytest.raises(LLMError, match="finite"):
+        LLMStructuredOutput(name="result", schema={"maximum": invalid_number})
+
+
 def test_openai_reasoning_effort_uses_reasoning_payload_without_temperature() -> None:
     """Reasoning requests use the provider reasoning field explicitly."""
     client, sdk = _client([_response()])
@@ -160,6 +198,35 @@ def test_openai_response_maps_usage_and_never_exposes_thinking() -> None:
     assert result.usage == {"input": 11, "output": 7, "total": 18, "reasoning": 2}
     assert result.stop_reason == "completed"
     assert result.thinking == ""
+
+
+def test_openai_response_extracts_output_content_without_output_text() -> None:
+    """Responses output items remain supported when the convenience field is absent."""
+    raw = SimpleNamespace(
+        output_text="",
+        model="gpt-test",
+        status="completed",
+        output=[
+            SimpleNamespace(
+                content=[SimpleNamespace(type="output_text", text="fallback response text")]
+            )
+        ],
+    )
+    client, _ = _client([raw])
+
+    result = client.complete([LLMMessage(role="user", content="hello")])
+
+    assert result.content == "fallback response text"
+
+
+def test_openai_malformed_usage_is_not_a_successful_response() -> None:
+    """Malformed token metadata maps to LLMError rather than leaking a conversion error."""
+    raw = _response()
+    raw.usage.output_tokens = "unknown"
+    client, _ = _client([raw])
+
+    with pytest.raises(LLMError, match="malformed usage"):
+        client.complete([LLMMessage(role="user", content="hello")])
 
 
 def test_openai_missing_key_fails_before_sdk_construction(monkeypatch) -> None:
@@ -187,18 +254,26 @@ def test_openai_custom_base_url_is_passed_explicitly_to_sdk(monkeypatch) -> None
     assert constructor_args["max_retries"] == 0
 
 
-def test_openai_ignores_ambient_sdk_base_url_when_not_explicit(monkeypatch) -> None:
-    """Official routing does not inherit an unvalidated SDK environment endpoint."""
-    constructor_args: dict[str, object] = {}
-
-    class _FakeSDKOpenAI:
-        def __init__(self, **kwargs: object) -> None:
-            constructor_args.update(kwargs)
-
+def test_openai_uses_official_sdk_base_url_when_not_explicit(monkeypatch) -> None:
+    """Official routing cannot inherit an unvalidated SDK environment endpoint."""
     monkeypatch.setenv("OPENAI_BASE_URL", "http://example.test/v1")
-    monkeypatch.setattr(openai, "OpenAI", _FakeSDKOpenAI)
-    OpenAIClient(model="gpt-test", api_key="sk-test")
-    assert "base_url" not in constructor_args
+    client = OpenAIClient(model="gpt-test", api_key="sk-test")
+    assert str(client._client.base_url) == "https://api.openai.com/v1/"
+
+
+@pytest.mark.parametrize("timeout", ["invalid", 0, -1, float("inf"), True])
+def test_openai_invalid_timeout_fails_as_configuration_error(timeout: object) -> None:
+    """Invalid explicit timeout values never escape the adapter error boundary."""
+    with pytest.raises(LLMError, match="timeout"):
+        OpenAIClient(model="gpt-test", api_key="sk-test", sdk_client=object(), timeout=timeout)  # type: ignore[arg-type]
+
+
+def test_openai_invalid_timeout_environment_fails_as_configuration_error(monkeypatch) -> None:
+    """Malformed timeout environment data is validated when the client is constructed."""
+    monkeypatch.setenv("OPENAI_TIMEOUT_SECONDS", "invalid")
+
+    with pytest.raises(LLMError, match="timeout"):
+        OpenAIClient(model="gpt-test", api_key="sk-test", sdk_client=object())
 
 
 def test_openai_invalid_messages_fail_before_request() -> None:
@@ -214,6 +289,29 @@ def test_openai_malformed_response_is_not_success() -> None:
     client, _ = _client([SimpleNamespace(output_text="", status="completed")])
     with pytest.raises(LLMError, match="malformed or incomplete"):
         client.complete([LLMMessage(role="user", content="hello")])
+
+
+@pytest.mark.parametrize("status", ["incomplete", "failed", "cancelled"])
+def test_openai_non_completed_response_is_not_success(status: str) -> None:
+    """Partial provider output must not become a downstream success result."""
+    client, _ = _client([SimpleNamespace(output_text="partial", status=status)])
+    with pytest.raises(LLMError, match="did not complete"):
+        client.complete([LLMMessage(role="user", content="hello")])
+
+
+def test_openai_non_completed_response_is_not_retried() -> None:
+    """A successful HTTP response with incomplete generation is never resent."""
+    client, sdk = _client(
+        [
+            SimpleNamespace(output_text="partial", status="incomplete"),
+            _response("must remain unused"),
+        ]
+    )
+
+    with pytest.raises(LLMError, match="did not complete"):
+        client.complete([LLMMessage(role="user", content="hello")])
+
+    assert len(sdk.responses.calls) == 1
 
 
 @pytest.mark.parametrize(
@@ -339,3 +437,12 @@ def test_existing_scripted_client_rejects_openai_only_options() -> None:
             [LLMMessage(role="user", content="hello")],
             options=LLMRequestOptions(reasoning_effort="low"),
         )
+
+
+def test_existing_scripted_client_accepts_empty_options() -> None:
+    """An explicitly empty options object remains equivalent to omitting options."""
+    result = ScriptedLLM(["ok"]).complete(
+        [LLMMessage(role="user", content="hello")],
+        options=LLMRequestOptions(),
+    )
+    assert result.content == "ok"

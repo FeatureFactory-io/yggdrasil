@@ -234,9 +234,10 @@ def load_bootstrap_config(
         resolved_planning = (
             _resolve_base_model(provider, planning_raw, raw) if planning_raw else resolved
         )
+    elif provider == "openai":
+        resolved_planning = _resolve_openai_planning_model(planning_raw)
     else:
-        planning_default = "" if provider == "openai" else _DEFAULT_PLANNING_ALIAS
-        resolved_planning = _resolve_base_model(provider, planning_raw or planning_default, raw)
+        resolved_planning = _resolve_base_model(provider, planning_raw or _DEFAULT_PLANNING_ALIAS, raw)
 
     max_extract = clamp_int_limit(
         raw.get("RATATOSK_MAX_EXTRACT_TARGETS") or yaml_layer.get("max_extract_targets"),
@@ -284,6 +285,17 @@ def load_bootstrap_config(
         config.openai_base_url is not None,
     )
     return config
+
+
+def _resolve_openai_planning_model(raw_model: str) -> str:
+    """Resolve OpenAI planning IDs without applying extract-tier legacy overrides."""
+    resolved = resolve_model_id("openai", raw_model, default_model=DEFAULT_OPENAI_MODEL)
+    logger.info(
+        "_resolve_openai_planning_model | input=%s resolved_id=%s",
+        raw_model or "(unset)",
+        resolved,
+    )
+    return resolved
 
 
 def build_llm_from_config(config: BootstrapConfig, *, model: str | None = None) -> Any:

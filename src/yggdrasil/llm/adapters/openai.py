@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 import random
 import time
@@ -16,8 +17,9 @@ from yggdrasil.llm.structured import normalize_llm_text
 logger = logging.getLogger("yggdrasil.llm.openai")
 
 _DEFAULT_MODEL = "gpt-5.6-terra"
-_DEFAULT_TIMEOUT = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "60"))
+_DEFAULT_TIMEOUT_SECONDS = 60.0
 _DEFAULT_MAX_TOKENS = int(os.getenv("RATATOSK_LLM_MAX_TOKENS", "8000"))
+_OFFICIAL_BASE_URL = "https://api.openai.com/v1"
 _MAX_ATTEMPTS = 3
 _BACKOFF_SECONDS = 1.0
 _TRANSIENT_EXCEPTION_NAMES = frozenset(
@@ -55,11 +57,11 @@ class OpenAIClient:
         sdk_client: Any | None = None,
         sleep_fn: Callable[[float], None] | None = None,
         random_fn: Callable[[], float] | None = None,
-        timeout: float = _DEFAULT_TIMEOUT,
+        timeout: float | None = None,
     ) -> None:
         self.model_id = (model or os.getenv("LLM_OPENAI_MODEL", _DEFAULT_MODEL)).strip()
         self._api_key = (api_key or os.getenv("OPENAI_API_KEY", "")).strip()
-        self._timeout = self._validate_timeout(timeout)
+        self._timeout = self._resolve_timeout(timeout)
         if not self.model_id:
             raise LLMError("OpenAI model must not be empty")
         if not self._api_key:
@@ -127,7 +129,7 @@ class OpenAIClient:
                 "format": {
                     "type": "json_schema",
                     "name": structured.name,
-                    "schema": dict(structured.schema),
+                    "schema": structured.as_json_schema(),
                     "strict": True,
                 }
             }
@@ -189,11 +191,13 @@ class OpenAIClient:
 
     def _parse_response(self, raw: Any) -> LLMResponse:
         """Extract public text and usage from a Responses API result."""
+        stop_reason = self._extract_stop_reason(raw)
+        if stop_reason != "completed":
+            raise LLMError(f"OpenAI response did not complete: status={stop_reason}")
         content = normalize_llm_text(self._extract_output_text(raw))
         if not content:
             raise LLMError("LLMError identifying malformed or incomplete OpenAI response")
         usage = self._extract_usage(raw)
-        stop_reason = self._extract_stop_reason(raw)
         return LLMResponse(
             content=content,
             model=str(self._value(raw, "model") or self.model_id),
@@ -230,12 +234,25 @@ class OpenAIClient:
         ):
             value = cls._value(usage_raw, source)
             if value is not None:
-                usage[target] = int(value)
+                usage[target] = cls._parse_token_count(value, source)
         details = cls._value(usage_raw, "output_tokens_details") or {}
         reasoning = cls._value(details, "reasoning_tokens")
         if reasoning is not None:
-            usage["reasoning"] = int(reasoning)
+            usage["reasoning"] = cls._parse_token_count(reasoning, "reasoning_tokens")
         return usage
+
+    @staticmethod
+    def _parse_token_count(value: Any, field_name: str) -> int:
+        """Validate one provider token count before normalizing it.
+
+        :param value: Raw provider usage field.
+        :param field_name: Provider field name for the error message.
+        :return: A non-negative token count.
+        :raises LLMError: If provider metadata is malformed.
+        """
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise LLMError(f"OpenAI response has malformed usage field: {field_name}")
+        return value
 
     @classmethod
     def _extract_stop_reason(cls, raw: Any) -> str:
@@ -273,9 +290,8 @@ class OpenAIClient:
                 "api_key": self._api_key,
                 "max_retries": 0,
                 "timeout": self._timeout,
+                "base_url": self._base_url or _OFFICIAL_BASE_URL,
             }
-            if self._base_url is not None:
-                client_kwargs["base_url"] = self._base_url
             return openai.OpenAI(
                 **client_kwargs,
             )
@@ -283,11 +299,25 @@ class OpenAIClient:
             raise LLMError("OpenAI SDK client initialization failed") from exc
 
     @staticmethod
-    def _validate_timeout(timeout: float) -> float:
-        """Validate the adapter timeout without accepting an unsafe value."""
-        if timeout <= 0:
-            raise LLMError("OpenAI timeout must be positive")
-        return float(timeout)
+    def _resolve_timeout(timeout: float | None) -> float:
+        """Resolve and validate a configured timeout without import-time failures.
+
+        :param timeout: Explicit timeout, or ``None`` to read the environment.
+        :return: A finite positive timeout in seconds.
+        :raises LLMError: If the configured timeout is invalid.
+        """
+        raw_timeout: object = (
+            os.getenv("OPENAI_TIMEOUT_SECONDS", str(_DEFAULT_TIMEOUT_SECONDS))
+            if timeout is None
+            else timeout
+        )
+        try:
+            normalized_timeout = float(raw_timeout)
+        except (TypeError, ValueError) as exc:
+            raise LLMError("OpenAI timeout must be a finite positive number") from exc
+        if isinstance(raw_timeout, bool) or not math.isfinite(normalized_timeout) or normalized_timeout <= 0:
+            raise LLMError("OpenAI timeout must be a finite positive number")
+        return normalized_timeout
 
     def _is_transient(self, exc: Exception) -> bool:
         """Classify only documented transport/rate/server failures as retryable."""

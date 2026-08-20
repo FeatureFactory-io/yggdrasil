@@ -77,15 +77,19 @@ or an explicitly configured Responses-compatible server:
 LLM_PROVIDER=openai
 OPENAI_API_KEY=<provided-through-your-environment-or-secret-manager>
 BASE_MODEL=gpt-5.6-terra
+RATATOSK_PLANNING_MODEL=openai_quality
 ```
 
-For a local LM Studio server that exposes POST /v1/responses, configure
-OPENAI_BASE_URL=http://127.0.0.1:1234/v1,
+For a local LM Studio server that exposes `POST /v1/responses`, configure:
+
+```bash
+LLM_PROVIDER=openai
+OPENAI_BASE_URL=http://127.0.0.1:1234/v1
 OPENAI_API_KEY=local-test
-BASE_MODEL=gemma-4-e4b
-Set the same opaque
-model ID in RATATOSK_PLANNING_MODEL and MUNIN_PLANNING_MODEL when those tiers
-should use the local model.
+BASE_MODEL=gemma-4-e4b-uncensored-hauhaucs-aggressive
+RATATOSK_PLANNING_MODEL=gemma-4-e4b-uncensored-hauhaucs-aggressive
+MUNIN_PLANNING_MODEL=gemma-4-e4b-uncensored-hauhaucs-aggressive
+```
 
 The OpenAI adapter supports synchronous text, strict structured JSON outputs,
 usage metadata, and bounded transient retries. It never probes models or falls

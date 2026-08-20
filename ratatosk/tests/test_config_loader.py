@@ -19,7 +19,7 @@ from ratatosk.discovery.limits import (
 )
 from ratatosk.discovery.scripted_llm import ScriptedDiscoveryLLM
 from yggdrasil.llm.adapters.anthropic import AnthropicClient
-from yggdrasil.llm.base import LLMError
+from yggdrasil.llm.base import LLMError, LLMMessage, LLMRequestOptions
 
 
 def test_load_config_llm_provider_ollama_from_env() -> None:
@@ -64,6 +64,19 @@ def test_load_config_openai_accepts_opaque_compatible_model_and_base_url() -> No
     assert config.openai_base_url == "http://127.0.0.1:1234/v1"
 
 
+def test_load_config_openai_planning_tier_ignores_base_model_legacy_override() -> None:
+    """An explicit planning model remains independent from the extract-model override."""
+    config = load_bootstrap_config(
+        env={
+            "LLM_PROVIDER": "openai",
+            "LLM_OPENAI_MODEL": "gpt-extract",
+            "RATATOSK_PLANNING_MODEL": "gpt-plan",
+        }
+    )
+    assert config.resolved_model == "gpt-extract"
+    assert config.resolved_planning_model == "gpt-plan"
+
+
 def test_load_config_server_url_from_env() -> None:
     """CFG-09: YGGDRASIL_SERVER_URL is loaded."""
     config = load_bootstrap_config(
@@ -103,6 +116,20 @@ def test_build_llm_scripted_only_when_explicit() -> None:
     config = load_bootstrap_config(env={"LLM_PROVIDER": "scripted"})
     llm = build_llm_from_config(config)
     assert isinstance(llm, ScriptedDiscoveryLLM)
+
+
+def test_cli_scripted_discovery_options_preserve_provider_contract() -> None:
+    """Empty options are accepted; unsupported options fail without consuming a reply."""
+    llm = ScriptedDiscoveryLLM()
+    message = LLMMessage(role="user", content="find candidates")
+
+    result = llm.complete([message], options=LLMRequestOptions())
+
+    assert result.content
+    assert llm.call_count == 1
+    with pytest.raises(LLMError, match="does not support"):
+        llm.complete([message], options=LLMRequestOptions(reasoning_effort="low"))
+    assert llm.call_count == 1
 
 
 def test_build_llm_no_silent_fallback_when_ollama_requested(monkeypatch) -> None:

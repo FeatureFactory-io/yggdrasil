@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
 from django.test import override_settings
 
+from yggdrasil.llm.base import LLMError, LLMMessage, LLMRequestOptions
 from yggdrasil.munin.llm_factory import (
     ScriptedMuninLLM,
     build_munin_planning_llm,
@@ -107,8 +109,6 @@ def test_build_munin_planning_llm_passes_openai_base_url(monkeypatch) -> None:
 
 def test_scripted_munin_returns_bootstrap_relationship_json() -> None:
     """Scripted Munin emits manifest edges for bootstrap relationship prompts."""
-    from yggdrasil.llm.base import LLMMessage
-
     llm = ScriptedMuninLLM()
     response = llm.complete(
         messages=[
@@ -126,3 +126,13 @@ def test_scripted_munin_returns_bootstrap_relationship_json() -> None:
     payload = json.loads(response.content)
     assert isinstance(payload, list)
     assert len(payload) >= 1
+
+
+def test_scripted_munin_options_preserve_provider_contract() -> None:
+    """Empty options are accepted and unsupported options do not produce a reply."""
+    llm = ScriptedMuninLLM()
+    message = LLMMessage(role="user", content="hello")
+
+    assert llm.complete([message], options=LLMRequestOptions()).content
+    with pytest.raises(LLMError, match="does not support"):
+        llm.complete([message], options=LLMRequestOptions(reasoning_effort="low"))

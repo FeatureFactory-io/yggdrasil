@@ -1,0 +1,166 @@
+{
+  "schema_version": "nsp-boundary-graph/v2",
+  "change": {
+    "id": "openai-llm-provider-v2-compatible-endpoints",
+    "summary": "Add explicit Responses-compatible endpoint routing and opaque OpenAI model IDs while preserving existing providers",
+    "classification": "boundary-expanding",
+    "authorization_evidence": ["REQ-4"],
+    "unit": "yggdrasil.llm OpenAI adapter and Ratatosk/Munin provider factories",
+    "scope": ["provider factory -> OpenAIClient -> OpenAI Responses API -> LLMResponse", "configuration -> model resolution -> adapter construction", "provider failure -> bounded retry or LLMError"],
+    "compatibility": "Anthropic, Ollama, scripted, injected clients, existing complete callers, and the default provider remain unchanged; OpenAI remains opt-in, gains only explicitly configured Responses-compatible endpoints, and no longer rejects explicit model IDs by prefix.",
+    "coverage_basis": "Approved user plan, AGENTS.md, SAO.md, current BaseLLM/adapters/factories/tests, and official OpenAI Responses API documentation."
+  },
+  "evidence": [
+    {"id": "REQ-1", "kind": "user_requirement", "authority": "authoritative", "location": "approved implementation plan", "statement": "Add direct OpenAI Responses API support as a fourth provider without replacing Anthropic, Ollama/local, or scripted providers."},
+    {"id": "REQ-2", "kind": "user_requirement", "authority": "authoritative", "location": "approved implementation plan", "statement": "Support text, native structured outputs, usage reporting, optional reasoning effort, and bounded transient retries."},
+    {"id": "REQ-3", "kind": "user_requirement", "authority": "authoritative", "location": "approved implementation plan", "statement": "Do not add Cursor, Azure-specific support, streaming, tools, non-text products, raw reasoning disclosure, or provider fallback."},
+    {"id": "REQ-4", "kind": "user_requirement", "authority": "authoritative", "location": "approved compatible-endpoint implementation plan", "statement": "Support an explicitly configured OPENAI_BASE_URL for Responses-compatible local servers, keep one openai provider, preserve separate Ratatosk and Munin model tiers, and allow arbitrary explicit model IDs such as a local Gemma model."},
+    {"id": "REPO-1", "kind": "repository_contract", "authority": "authoritative", "location": "src/yggdrasil/llm/base.py", "statement": "BaseLLM.complete returns LLMResponse with content, model, usage, stop_reason, and thinking."},
+    {"id": "REPO-2", "kind": "repository_contract", "authority": "authoritative", "location": "ratatosk/config.py and src/yggdrasil/munin/llm_factory.py", "statement": "Factories select one adapter from LLM_PROVIDER and reject unknown providers."},
+    {"id": "REPO-3", "kind": "repository_contract", "authority": "authoritative", "location": "docs/architecture/test-architecture.md and .cursor/rules", "statement": "Ordinary tests are deterministic and logs must not expose secrets, prompts, or sensitive output."},
+    {"id": "DOC-1", "kind": "external_documentation", "authority": "supporting", "location": "https://developers.openai.com/api/docs/guides/text and https://developers.openai.com/api/docs/guides/structured-outputs", "statement": "Responses API text requests and strict structured output use documented Responses fields."},
+    {"id": "DOC-2", "kind": "external_documentation", "authority": "supporting", "location": "https://developers.openai.com/api/docs/guides/rate-limits and https://developers.openai.com/api/docs/guides/error-codes", "statement": "Transient rate-limit, timeout, connection, and server errors are distinct from permanent errors and may be retried with bounded backoff."}
+  ],
+  "responsibility": {
+    "does": [
+      {"id": "RESP-ADAPTER", "statement": "Validate, translate, call, retry, parse, and normalize a valid OpenAI text request through the official or explicitly configured Responses-compatible endpoint.", "supports": ["SUP-REQUEST", "SUP-RESPONSE", "SUP-STRUCTURED", "SUP-RETRY", "SUP-ENDPOINT"], "evidence": ["REQ-1", "REQ-2", "REQ-4", "REPO-1", "DOC-1", "DOC-2"]},
+      {"id": "RESP-FACTORY", "statement": "Select OpenAIClient only for LLM_PROVIDER=openai, validate its key, resolve OpenAI aliases or opaque explicit model IDs, and share endpoint resolution between Ratatosk and Munin.", "supports": ["SUP-CONFIG", "SUP-ENDPOINT"], "evidence": ["REQ-1", "REQ-4", "REPO-2"]},
+      {"id": "RESP-CALLER", "statement": "Propagate exhausted LLMError to the existing Ratatosk/Munin run boundary without claiming success.", "supports": ["EDGE-ADAPTER-CALLER"], "evidence": ["REQ-2", "REPO-2"]}
+    ],
+    "does_not": ["REJ-KEY", "REJ-PARAMS", "REJ-ENDPOINT", "REJ-RESPONSE", "UNSUP-PRODUCTS", "UNSUP-AZURE", "UNSUP-API-SHAPES", "DEL-CREDENTIAL", "FORBID-FALLBACK", "FORBID-ENDPOINT-FALLBACK", "FORBID-REASONING", "FORBID-LOGGING", "IMP-NETWORK", "IMP-ROUTING"]
+  },
+  "boundary": {
+    "supported": [
+      {"id": "SUP-REQUEST", "statement": "A non-empty provider-neutral message request with a valid OpenAI model can be sent through Responses API.", "expected": "One normalized LLMResponse or explicit LLMError.", "critical": true, "evidence": ["REQ-1", "REPO-1"]},
+      {"id": "SUP-RESPONSE", "statement": "A completed text result is normalized into content, model, usage, stop_reason, and an empty public thinking field.", "expected": "Existing Ratatosk/Munin parsers receive text-compatible content without hidden reasoning.", "critical": true, "evidence": ["REQ-2", "REPO-1", "DOC-1"]},
+      {"id": "SUP-STRUCTURED", "statement": "A valid structured-output specification is mapped to a strict JSON schema and returned as normalized text.", "expected": "The declared schema is sent and content remains consumable by existing JSON parsers.", "critical": true, "evidence": ["REQ-2", "DOC-1"]},
+      {"id": "SUP-RETRY", "statement": "Transient rate-limit, timeout, connection, and server failures are retried at most three total attempts with bounded exponential backoff and jitter.", "expected": "Later success returns normally; exhaustion returns LLMError without false success. A timeout after server acceptance may duplicate provider usage; exactly-once generation is not guaranteed.", "critical": true, "evidence": ["REQ-2", "DOC-2"]},
+      {"id": "SUP-CONFIG", "statement": "LLM_PROVIDER=openai constructs OpenAIClient using OPENAI_API_KEY and resolves supported aliases or explicit OpenAI model IDs.", "expected": "Ratatosk and Munin use OpenAIClient only for the openai provider.", "critical": true, "evidence": ["REQ-1", "REPO-2"]}
+      ,{"id": "SUP-ENDPOINT", "statement": "An explicitly configured valid OPENAI_BASE_URL routes the same Responses request to a compatible endpoint while an unset value explicitly uses the official OpenAI API endpoint.", "expected": "Ratatosk and Munin pass the identical validated endpoint setting to OpenAIClient without endpoint discovery or protocol substitution; ambient SDK endpoint variables cannot redirect requests.", "critical": true, "evidence": ["REQ-4", "REPO-2"]}
+    ],
+    "rejected": [
+      {"id": "REJ-KEY", "statement": "OpenAIClient construction without a non-empty OPENAI_API_KEY.", "response": "LLMError identifying missing OPENAI_API_KEY", "side_effects_forbidden": ["network request"], "critical": true, "evidence": ["REQ-1", "REPO-2"]},
+      {"id": "REJ-PARAMS", "statement": "Empty messages, invalid options, invalid limits, invalid or non-finite timeout configuration, incompatible parameters, or Claude/Ollama aliases selected for OpenAI.", "response": "LLMError identifying invalid OpenAI request configuration", "side_effects_forbidden": ["OpenAI request", "cross-provider substitution"], "critical": true, "evidence": ["REQ-2", "REQ-3", "REPO-1"]},
+      {"id": "REJ-ENDPOINT", "statement": "Blank, malformed, credential-bearing, query/fragment-bearing, non-HTTP(S), or non-loopback plain-HTTP OPENAI_BASE_URL values.", "response": "LLMError identifying invalid OPENAI_BASE_URL", "side_effects_forbidden": ["OpenAI request", "credential transmission", "endpoint fallback"], "critical": true, "evidence": ["REQ-4", "REPO-3"]},
+      {"id": "REJ-RESPONSE", "statement": "A provider result without usable completed text, with a status other than completed, with malformed token usage, or with an unparseable response shape.", "response": "LLMError identifying malformed or incomplete OpenAI response", "side_effects_forbidden": ["normalized success response", "downstream success state"], "critical": true, "evidence": ["REQ-2", "REPO-1"]}
+    ],
+    "unsupported": [
+      {"id": "UNSUP-PRODUCTS", "statement": "Streaming, tools/function calling, conversations/state, embeddings, audio, images, moderation, and other non-text OpenAI products.", "response": "Explicit unsupported-capability error or no exposed interface", "side_effects_forbidden": ["silent emulation", "provider fallback"], "critical": true, "evidence": ["REQ-3"]},
+      {"id": "UNSUP-AZURE", "statement": "Azure OpenAI-specific authentication, deployment routing, API-version configuration, and support guarantees.", "response": "Explicit provider error from an unsupported endpoint capability", "side_effects_forbidden": ["Azure-specific request construction", "silent endpoint adaptation"], "critical": true, "evidence": ["REQ-3"]},
+      {"id": "UNSUP-API-SHAPES", "statement": "Chat-Completions-only servers, native /api/v1/chat servers, endpoint discovery, and automatic capability detection.", "response": "Explicit provider error from an unsupported endpoint capability", "side_effects_forbidden": ["/chat/completions fallback", "/api/v1/chat fallback", "model discovery"], "critical": true, "evidence": ["REQ-3", "REQ-4"]}
+    ],
+    "delegated": [
+      {"id": "DEL-CREDENTIAL", "statement": "API-key provisioning, secret rotation, billing, quota, model access, and staging authorization.", "owner": "deployment/operator environment", "assumption": "OPENAI_API_KEY is securely supplied and the selected model is enabled.", "side_effects_forbidden": ["key creation", "key persistence", "billing mutation"], "critical": true, "evidence": ["REQ-3", "REPO-3"]}
+    ],
+    "forbidden": [
+      {"id": "FORBID-FALLBACK", "statement": "Silently fall back from OpenAI to Anthropic, Ollama, scripted, or another model after failure.", "critical": true, "evidence": ["REQ-3"], "mechanisms": ["explicit factory branches", "negative tests", "error propagation"]},
+      {"id": "FORBID-ENDPOINT-FALLBACK", "statement": "Silently fall back from a configured compatible endpoint to OpenAI Platform or another API shape.", "critical": true, "evidence": ["REQ-3", "REQ-4"], "mechanisms": ["explicit SDK base_url", "endpoint validation", "routing tests"]},
+      {"id": "FORBID-REASONING", "statement": "Expose raw hidden reasoning in LLMResponse, logs, or downstream records.", "critical": true, "evidence": ["REQ-2", "REPO-1"], "mechanisms": ["response parser", "thinking-field assertion", "log tests"]},
+      {"id": "FORBID-LOGGING", "statement": "Log API keys, prompts, response content, or full sensitive provider payloads.", "critical": true, "evidence": ["REQ-3", "REPO-3"], "mechanisms": ["metadata-only logging", "caplog tests"]}
+    ],
+    "impossible_by_construction": [
+      {"id": "IMP-NETWORK", "statement": "Ordinary scripted/unit/integration tests cannot reach OpenAI unless an explicit OpenAI client is constructed.", "critical": true, "evidence": ["REPO-3"], "enforcement": ["scripted injection", "factory isolation", "no live PR calls"]},
+      {"id": "IMP-ROUTING", "statement": "Selecting Anthropic, Ollama, or scripted cannot instantiate OpenAIClient.", "critical": true, "evidence": ["REQ-1", "REPO-2"], "enforcement": ["provider dispatch", "factory routing tests", "provider identity assertions"]}
+    ],
+    "undefined": [],
+    "unresolved": []
+  },
+  "failure_mapping": [
+    {"id": "FM-KEY", "failure": "LLMError identifying missing OPENAI_API_KEY", "outcome": "rejected", "handling": "map_without_network_call", "covers": ["REJ-KEY"], "evidence": ["REQ-1"]},
+    {"id": "FM-PARAMS", "failure": "LLMError identifying invalid OpenAI request configuration", "outcome": "rejected", "handling": "map_without_network_call", "covers": ["REJ-PARAMS"], "evidence": ["REQ-2", "REQ-3"]},
+    {"id": "FM-ENDPOINT", "failure": "LLMError identifying invalid OPENAI_BASE_URL", "outcome": "rejected", "handling": "map_without_network_call", "covers": ["REJ-ENDPOINT"], "evidence": ["REQ-4"]},
+    {"id": "FM-RESPONSE", "failure": "LLMError identifying malformed or incomplete OpenAI response", "outcome": "rejected", "handling": "map_without_success_state", "covers": ["REJ-RESPONSE"], "evidence": ["REPO-1"]},
+    {"id": "FM-UNSUPPORTED", "failure": "Explicit unsupported-capability error or no exposed interface", "outcome": "unsupported", "handling": "reject_without_fallback", "covers": ["UNSUP-PRODUCTS"], "evidence": ["REQ-3"]},
+    {"id": "FM-UNSUPPORTED-ENDPOINT", "failure": "Explicit provider error from an unsupported endpoint capability", "outcome": "unsupported", "handling": "propagate_without_fallback", "covers": ["UNSUP-AZURE", "UNSUP-API-SHAPES"], "evidence": ["REQ-3", "REQ-4"]},
+    {"id": "FM-TRANSIENT", "failure": "Transient provider failure", "outcome": "rejected", "handling": "bounded_retry_then_LLMError", "covers": ["SUP-RETRY"], "evidence": ["REQ-2", "DOC-2"]}
+  ],
+  "graph": {
+    "applicable": true,
+    "reason": "The change crosses configuration, two factories, callers, an external API, retry timing, and failure ownership.",
+    "components": [
+      {"id": "COMP-ADAPTER", "name": "OpenAIClient", "owner": "LLM adapter", "responsibility": "Validate, call, retry, parse, and normalize."},
+      {"id": "COMP-CALLER", "name": "Ratatosk and Munin callers", "owner": "application orchestration", "responsibility": "Consume LLMResponse and handle LLMError."}
+    ],
+    "terms": [
+      {"id": "TERM-RESPONSE", "name": "LLMResponse", "definition": "Provider-neutral normalized text response with model, usage, stop reason, and public thinking field.", "identity": "yggdrasil.llm.base.LLMResponse", "evidence": ["REPO-1"]},
+      {"id": "TERM-ERROR", "name": "LLMError", "definition": "A provider failure or invalid response that is never a successful LLM result.", "identity": "yggdrasil.llm.base.LLMError", "evidence": ["REPO-1"]}
+    ],
+    "edges": [
+      {"id": "EDGE-ADAPTER-CALLER", "provider": "COMP-ADAPTER", "consumer": "COMP-CALLER", "assumption": "The adapter receives a valid provider-neutral request.", "guarantee": "The caller receives LLMResponse on usable completion or LLMError on failure.", "failure_result": "Caller-owned run failure with no false success.", "terms": ["TERM-RESPONSE", "TERM-ERROR"], "critical": true, "evidence": ["REPO-1", "REQ-2"], "owner": "LLM adapter", "mechanisms": ["parser tests", "caller regression tests"]}
+    ],
+    "global_invariants": [],
+    "failure_obligations": [],
+    "temporal_constraints": [],
+    "concurrency_invariants": []
+  },
+  "challenge": {
+    "counterexamples": [
+      {"id": "CE-KEY", "adversary": "input", "targets": ["REJ-KEY"], "scenario": "Blank or whitespace-only API key.", "expected": "LLMError before network access.", "verified_by": ["CHK-CONSTRUCTION"], "status": "protected"},
+      {"id": "CE-PARAMS", "adversary": "input", "targets": ["REJ-PARAMS"], "scenario": "Empty messages, a non-finite timeout, or a Claude alias selected for OpenAI.", "expected": "LLMError without request or substitution.", "verified_by": ["CHK-CONSTRUCTION"], "status": "protected"},
+      {"id": "CE-ENDPOINT", "adversary": "input", "targets": ["REJ-ENDPOINT"], "scenario": "A malformed URL, remote plain HTTP URL, or URL with credentials is configured.", "expected": "LLMError before SDK construction or network access.", "verified_by": ["CHK-ENDPOINT"], "status": "protected"},
+      {"id": "CE-RESPONSE", "adversary": "input", "targets": ["REJ-RESPONSE"], "scenario": "Provider returns missing text, malformed token usage, an incomplete/failed/cancelled status, or a malformed response object.", "expected": "LLMError and no downstream success; a completed HTTP response is not resent.", "verified_by": ["CHK-PARSER", "CHK-RETRY"], "status": "protected"},
+      {"id": "CE-UNSUPPORTED", "adversary": "input", "targets": ["UNSUP-PRODUCTS", "UNSUP-AZURE", "UNSUP-API-SHAPES"], "scenario": "Caller requests streaming, Azure-specific configuration, or a Chat Completions-only endpoint.", "expected": "Unsupported result and no emulation or alternate network call.", "verified_by": ["CHK-NEGATIVE"], "status": "protected"},
+      {"id": "CE-DELEGATED", "adversary": "responsibility", "targets": ["DEL-CREDENTIAL"], "scenario": "No operator-provided key or model entitlement.", "expected": "Adapter rejects; it does not provision credentials or mutate billing.", "verified_by": ["CHK-CONSTRUCTION"], "status": "protected"},
+      {"id": "CE-FORBIDDEN", "adversary": "composition", "targets": ["FORBID-FALLBACK", "FORBID-ENDPOINT-FALLBACK", "FORBID-REASONING", "FORBID-LOGGING"], "scenario": "A configured compatible endpoint fails while alternate providers and the official endpoint are reachable.", "expected": "No provider or endpoint fallback; raw reasoning, prompt, content, or key never appears.", "verified_by": ["CHK-NEGATIVE"], "status": "protected"},
+      {"id": "CE-IMPOSSIBLE", "adversary": "composition", "targets": ["IMP-NETWORK", "IMP-ROUTING"], "scenario": "Run ordinary scripted tests and select non-OpenAI providers.", "expected": "No OpenAI network call or OpenAIClient construction.", "verified_by": ["CHK-REGRESSION"], "status": "protected"},
+      {"id": "CE-RETRY", "adversary": "sequence", "targets": ["SUP-RETRY"], "scenario": "Transient failures occur before eventual success or exhaustion.", "expected": "At most three attempts; permanent failures are not retried.", "verified_by": ["CHK-RETRY"], "status": "protected"},
+      {"id": "CE-GRAPH", "adversary": "composition", "targets": ["EDGE-ADAPTER-CALLER"], "scenario": "Adapter returns an error after the caller has started a run.", "expected": "Caller observes LLMError and does not report successful LLM work.", "verified_by": ["CHK-REGRESSION"], "status": "protected"}
+    ],
+    "overrestriction_cases": [
+      {"id": "OR-REQUEST", "targets": ["SUP-REQUEST"], "scenario": "Plain text request without optional capabilities.", "expected": "Request succeeds normally.", "verified_by": ["CHK-PAYLOAD"], "status": "accepted"},
+      {"id": "OR-RESPONSE", "targets": ["SUP-RESPONSE"], "scenario": "Response includes ordinary text and usage but no reasoning details.", "expected": "Text is returned and optional metadata absence is accepted.", "verified_by": ["CHK-PARSER"], "status": "accepted"},
+      {"id": "OR-STRUCTURED", "targets": ["SUP-STRUCTURED"], "scenario": "Valid schema has a caller-selected name and nested fields.", "expected": "Schema is passed through without hardcoded shape restriction.", "verified_by": ["CHK-PAYLOAD"], "status": "accepted"},
+      {"id": "OR-RETRY", "targets": ["SUP-RETRY"], "scenario": "First transient failure is followed by success on the second attempt.", "expected": "The second attempt succeeds without requiring three failures.", "verified_by": ["CHK-RETRY"], "status": "accepted"},
+      {"id": "OR-CONFIG", "targets": ["SUP-CONFIG"], "scenario": "A valid explicit OpenAI-compatible model ID is not one of the aliases, including gemma-4-e4b-uncensored-hauhaucs-aggressive.", "expected": "Explicit model ID passes through without a prefix restriction.", "verified_by": ["CHK-FACTORY"], "status": "accepted"},
+      {"id": "OR-ENDPOINT", "targets": ["SUP-ENDPOINT"], "scenario": "A loopback HTTP Responses base URL is explicitly configured.", "expected": "The exact base URL is passed to the SDK without modification or fallback.", "verified_by": ["CHK-ENDPOINT"], "status": "accepted"}
+    ],
+    "specification_mutants": [
+      {"id": "SM-BOUNDARY", "targets": ["SUP-REQUEST", "SUP-RESPONSE", "SUP-STRUCTURED", "SUP-RETRY", "SUP-CONFIG", "SUP-ENDPOINT"], "mutation": "Remove one supported OpenAI capability.", "killed_by": ["CHK-PAYLOAD", "CHK-PARSER", "CHK-RETRY", "CHK-FACTORY", "CHK-ENDPOINT"], "executed_by": ["CMD-SPEC-MUTATION"], "status": "killed"},
+      {"id": "SM-ENDPOINT", "targets": ["SUP-ENDPOINT", "REJ-ENDPOINT", "FORBID-ENDPOINT-FALLBACK"], "mutation": "Remove the explicit compatible-endpoint boundary or URL validation obligation.", "killed_by": ["CHK-ENDPOINT", "CHK-NEGATIVE"], "executed_by": ["CMD-SPEC-MUTATION"], "status": "killed"},
+      {"id": "SM-NEGATIVE", "targets": ["REJ-KEY", "REJ-PARAMS", "REJ-ENDPOINT", "REJ-RESPONSE", "UNSUP-PRODUCTS", "UNSUP-AZURE", "UNSUP-API-SHAPES", "DEL-CREDENTIAL", "FORBID-FALLBACK", "FORBID-ENDPOINT-FALLBACK", "FORBID-REASONING", "FORBID-LOGGING", "IMP-NETWORK", "IMP-ROUTING"], "mutation": "Remove or weaken one exclusion, delegated responsibility, or impossible-by-construction boundary.", "killed_by": ["CHK-CONSTRUCTION", "CHK-ENDPOINT", "CHK-NEGATIVE", "CHK-REGRESSION"], "executed_by": ["CMD-SPEC-MUTATION"], "status": "killed"},
+      {"id": "SM-GRAPH", "targets": ["EDGE-ADAPTER-CALLER"], "mutation": "Remove the adapter-to-caller error ownership guarantee.", "killed_by": ["CHK-REGRESSION"], "executed_by": ["CMD-SPEC-MUTATION"], "status": "killed"}
+    ],
+    "implementation_mutants": [
+      {"id": "IM-KEY", "targets": ["REJ-KEY"], "mutation": "Allow construction with a blank key.", "killed_by": ["CHK-CONSTRUCTION"], "executed_by": ["CMD-IMPL-MUTATION"], "status": "killed"},
+      {"id": "IM-FALLBACK", "targets": ["FORBID-FALLBACK", "FORBID-ENDPOINT-FALLBACK", "IMP-ROUTING"], "mutation": "Instantiate another provider or endpoint after OpenAI failure.", "killed_by": ["CHK-FACTORY", "CHK-ENDPOINT", "CHK-NEGATIVE"], "executed_by": ["CMD-IMPL-MUTATION"], "status": "killed"},
+      {"id": "IM-RETRY-ALL", "targets": ["SUP-RETRY", "REJ-PARAMS"], "mutation": "Retry permanent validation or authentication failures.", "killed_by": ["CHK-RETRY", "CHK-CONSTRUCTION"], "executed_by": ["CMD-IMPL-MUTATION"], "status": "killed"},
+      {"id": "IM-RAW-REASONING", "targets": ["SUP-RESPONSE", "FORBID-REASONING", "FORBID-LOGGING"], "mutation": "Expose raw reasoning or response content in the response or logs.", "killed_by": ["CHK-PARSER", "CHK-NEGATIVE"], "executed_by": ["CMD-IMPL-MUTATION"], "status": "killed"},
+      {"id": "IM-ENDPOINT", "targets": ["REJ-ENDPOINT", "SUP-ENDPOINT", "FORBID-ENDPOINT-FALLBACK"], "mutation": "Bypass OPENAI_BASE_URL validation before SDK construction.", "killed_by": ["CHK-ENDPOINT"], "executed_by": ["CMD-IMPL-MUTATION"], "status": "killed"},
+      {"id": "IM-COVERAGE", "targets": ["DEL-CREDENTIAL", "EDGE-ADAPTER-CALLER", "IMP-NETWORK", "REJ-ENDPOINT", "REJ-RESPONSE", "SUP-CONFIG", "SUP-REQUEST", "SUP-STRUCTURED", "SUP-ENDPOINT", "UNSUP-AZURE", "UNSUP-API-SHAPES", "UNSUP-PRODUCTS"], "mutation": "Remove one remaining construction, routing, parsing, or unsupported-boundary guard.", "killed_by": ["CHK-CONSTRUCTION", "CHK-PAYLOAD", "CHK-PARSER", "CHK-FACTORY", "CHK-ENDPOINT", "CHK-NEGATIVE", "CHK-REGRESSION"], "executed_by": ["CMD-IMPL-MUTATION"], "status": "killed"}
+    ]
+  },
+  "verification": {
+    "checks": [
+      {"id": "CHK-CONSTRUCTION", "kind": "unit_test", "name": "test_openai_client_rejects_missing_key_invalid_inputs_and_timeout", "covers": ["REJ-KEY", "REJ-PARAMS", "DEL-CREDENTIAL"], "observable": "LLMError before network call or SDK construction", "status": "passed"},
+      {"id": "CHK-ENDPOINT", "kind": "unit_test", "name": "test_openai_compatible_endpoint_validation_and_factory_routing", "covers": ["SUP-ENDPOINT", "REJ-ENDPOINT", "FORBID-ENDPOINT-FALLBACK"], "observable": "Validated custom URL reaches the SDK unchanged; the official URL is passed explicitly; invalid URLs fail before SDK construction", "status": "passed"},
+      {"id": "CHK-LM-STUDIO-SMOKE", "kind": "manual_smoke_test", "name": "Ratatosk router through LM Studio Responses-compatible local endpoint", "covers": ["SUP-REQUEST", "SUP-CONFIG", "SUP-ENDPOINT"], "observable": "Ratatosk builds both OpenAI tiers for the opaque qwen/qwen3-8b ID and the configured local endpoint returns completed non-empty text", "status": "passed"},
+      {"id": "CHK-PAYLOAD", "kind": "unit_test", "name": "test_openai_responses_payload_and_structured_options", "covers": ["SUP-REQUEST", "SUP-STRUCTURED"], "observable": "Expected Responses fields and schema pass-through", "status": "passed"},
+      {"id": "CHK-PARSER", "kind": "unit_test", "name": "test_openai_response_normalization_usage_validation_and_reasoning_redaction", "covers": ["SUP-RESPONSE", "REJ-RESPONSE", "FORBID-REASONING"], "observable": "Only completed responses with valid usage return normalized text/status; no public raw reasoning", "status": "passed"},
+      {"id": "CHK-RETRY", "kind": "unit_test", "name": "test_openai_error_classification_and_retry_boundaries", "covers": ["SUP-RETRY"], "observable": "Transient retries are bounded and permanent failures are not retried", "status": "passed"},
+      {"id": "CHK-FACTORY", "kind": "integration_test", "name": "test_ratatosk_and_munin_route_only_openai_to_openai_client", "covers": ["SUP-CONFIG", "REJ-PARAMS", "FORBID-FALLBACK", "IMP-ROUTING"], "observable": "OpenAI identity, opaque model ID pass-through, independent planning/extract tiers, and unchanged alternate routing", "status": "passed"},
+      {"id": "CHK-NEGATIVE", "kind": "unit_test", "name": "test_openai_boundaries_reject_unsupported_and_sensitive_behavior", "covers": ["UNSUP-PRODUCTS", "UNSUP-AZURE", "UNSUP-API-SHAPES", "FORBID-FALLBACK", "FORBID-ENDPOINT-FALLBACK", "FORBID-REASONING", "FORBID-LOGGING"], "observable": "Unsupported requests and sensitive logs are blocked without provider, endpoint, or API-shape fallback", "status": "passed"},
+      {"id": "CHK-REGRESSION", "kind": "repository_test", "name": "test_existing_providers_and_callers_preserve_empty_and_rejected_options", "covers": ["IMP-NETWORK", "IMP-ROUTING", "EDGE-ADAPTER-CALLER"], "observable": "Existing providers reject non-empty unsupported options, preserve empty options, and make no live OpenAI call", "status": "passed"}
+    ],
+    "commands": [
+      {"id": "CMD-DESIGN", "kind": "verification", "command": "python .agents/skills/negative-space-programming/scripts/compile_contract.py docs/contracts/openai-llm-provider.boundary.json --gate design --format markdown", "mutants": [], "status": "passed", "result": "PASS; 21 critical items; no diagnostics"},
+      {"id": "CMD-TESTS", "kind": "verification", "command": "uv run pytest src/yggdrasil/llm/tests ratatosk/tests/test_config_loader.py src/yggdrasil/munin/tests/test_llm_factory.py src/yggdrasil/ratatosk/tests/test_discovery_agent.py", "mutants": [], "status": "passed", "result": "PASS; focused provider, factory, resolver, mutation, and scripted-adapter suites passed; no live OpenAI Platform call"},
+      {"id": "CMD-LM-STUDIO-SMOKE", "kind": "verification", "command": "local Ratatosk OpenAI router smoke against http://127.0.0.1:1234/v1", "mutants": [], "status": "passed", "result": "PASS; both Ratatosk tiers selected OpenAIClient for qwen/qwen3-8b and extract returned ROUTER_OK using OPENAI_API_KEY=local-test with reasoning effort minimal"},
+      {"id": "CMD-SPEC-MUTATION", "kind": "specification_mutation", "command": "uv run pytest src/yggdrasil/llm/tests/test_openai_mutation_probes.py -q", "mutants": ["SM-BOUNDARY", "SM-ENDPOINT", "SM-NEGATIVE", "SM-GRAPH"], "status": "passed", "result": "4/4 specification mutants rejected by the design compiler"},
+      {"id": "CMD-IMPL-MUTATION", "kind": "implementation_mutation", "command": "uv run pytest src/yggdrasil/llm/tests/test_openai_mutation_probes.py -q", "mutants": ["IM-KEY", "IM-FALLBACK", "IM-RETRY-ALL", "IM-RAW-REASONING", "IM-ENDPOINT", "IM-COVERAGE"], "status": "passed", "result": "6/6 implementation mutants killed by executable boundary oracles"},
+      {"id": "CMD-ACCEPTANCE", "kind": "verification", "command": "python .agents/skills/negative-space-programming/scripts/compile_contract.py docs/contracts/openai-llm-provider.boundary.json --gate acceptance --format markdown", "mutants": [], "status": "passed", "result": "PASS; all current critical clauses, cases, checks, and mutation thresholds satisfied"}
+    ]
+  },
+  "acceptance": {
+    "thresholds": {"valid_domain_recall": 1.0, "negative_rejection_recall": 1.0, "max_overrestriction_rate": 0.0, "max_forbidden_escape_rate": 0.0, "max_unsupported_leakage": 0.0, "min_critical_clause_coverage": 1.0, "min_specification_mutation_score": 0.8, "min_implementation_mutation_score": 0.8},
+    "observed": {
+      "valid_domain_recall": 1.0,
+      "negative_rejection_recall": 1.0,
+      "overrestriction_rate": 0.0,
+      "forbidden_escape_rate": 0.0,
+      "unsupported_leakage": 0.0,
+      "critical_clause_coverage": 1.0,
+      "specification_mutation_score": 1.0,
+      "implementation_mutation_score": 1.0
+    }
+  }
+}

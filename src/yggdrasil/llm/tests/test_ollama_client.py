@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from yggdrasil.llm.adapters.ollama import OllamaClient
-from yggdrasil.llm.base import LLMError, LLMMessage
+from yggdrasil.llm.base import LLMError, LLMMessage, LLMRequestOptions
 
 
 def test_ollama_client_build_payload() -> None:
@@ -24,6 +24,16 @@ def test_ollama_client_build_payload() -> None:
     assert payload["stream"] is False
     assert payload["messages"][0]["role"] == "system"
     assert payload["options"]["num_predict"] == 512
+
+
+def test_ollama_rejects_openai_only_options_before_http_call() -> None:
+    """Ollama never silently drops unsupported provider-specific options."""
+    client = OllamaClient(model="qwen3:14b", base_url="http://localhost:11434")
+    with pytest.raises(LLMError, match="does not support"):
+        client.complete(
+            [LLMMessage(role="user", content="hello")],
+            options=LLMRequestOptions(reasoning_effort="low"),
+        )
 
 
 def test_ollama_client_parse_response() -> None:

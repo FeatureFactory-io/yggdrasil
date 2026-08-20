@@ -11,7 +11,13 @@ import logging
 import os
 from typing import Any
 
-from yggdrasil.llm.base import LLMError, LLMMessage, LLMResponse
+from yggdrasil.llm.base import (
+    LLMError,
+    LLMMessage,
+    LLMRequestOptions,
+    LLMResponse,
+    reject_unsupported_options,
+)
 from yggdrasil.llm.structured import normalize_llm_text
 
 logger = logging.getLogger("yggdrasil.llm.anthropic")
@@ -48,6 +54,8 @@ class AnthropicClient:
         system: str = "",
         max_tokens: int = _DEFAULT_MAX_TOKENS,
         temperature: float = 0.2,
+        *,
+        options: LLMRequestOptions | None = None,
     ) -> LLMResponse:
         """
         Call Anthropic /v1/messages and return a structured response.
@@ -59,6 +67,7 @@ class AnthropicClient:
         :return: LLMResponse with content, model, usage, stop_reason.
         :raises LLMError: On API error, rate limit, or invalid key.
         """
+        reject_unsupported_options(options, provider="Anthropic")
         payload = self._build_payload(messages, system, max_tokens, temperature)
         logger.info(
             "AnthropicClient.complete | entry model=%s messages=%s max_tokens=%s",

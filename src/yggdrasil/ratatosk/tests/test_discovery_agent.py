@@ -15,7 +15,7 @@ from tests.fixtures.factories.model_factories import (
 
 from yggdrasil.changeset.models import ChangeSet, ChangeSetItem
 from yggdrasil.graph.models import Element, ensure_c4_metamodel
-from yggdrasil.llm.base import LLMResponse
+from yggdrasil.llm.base import LLMError, LLMMessage, LLMRequestOptions, LLMResponse
 from yggdrasil.ratatosk.agent import (
     DiscoveryInput,
     RataskAgent,
@@ -47,6 +47,16 @@ class FakeLLM:
             return LLMResponse(content="[]", model=self.model_id)
         content = self._responses.pop(0)
         return LLMResponse(content=content, model=self.model_id)
+
+
+def test_scripted_discovery_options_preserve_provider_contract() -> None:
+    """Empty options are accepted and unsupported options never become a discovery reply."""
+    llm = ScriptedDiscoveryLLM()
+    message = LLMMessage(role="user", content="find candidates")
+
+    assert llm.complete([message], options=LLMRequestOptions()).content
+    with pytest.raises(LLMError, match="does not support"):
+        llm.complete([message], options=LLMRequestOptions(reasoning_effort="low"))
 
 
 class FakeSnapshot:

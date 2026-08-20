@@ -72,6 +72,32 @@ Feature: ACT-1-CFG Ratatosk CLI configuration
     When Ratatosk loads configuration for bootstrap
     Then the effective config key "max_extract_targets" is 75
 
+  @wip @openai
+  Scenario: ACT-1-CFG-15 LLM_PROVIDER openai selects OpenAI and its default model
+    Given the environment variable "LLM_PROVIDER" is set to "openai"
+    And the environment variable "OPENAI_API_KEY" is set to "sk-test-key"
+    When Ratatosk loads configuration for bootstrap
+    Then the effective config key "llm_provider" is "openai"
+    And the effective config key "resolved_model" is "gpt-5.6-terra"
+
+  @wip @openai
+  Scenario: ACT-1-CFG-16 OpenAI rejects a Claude model alias
+    Given the environment variable "LLM_PROVIDER" is set to "openai"
+    And the environment variable "BASE_MODEL" is set to "sonnet5"
+    And the environment variable "OPENAI_API_KEY" is set to "sk-test-key"
+    When Ratatosk loads configuration for bootstrap
+    Then configuration fails with an OpenAI model alias error
+
+  @wip @openai
+  Scenario: ACT-1-CFG-17 OpenAI uses an explicit local Responses endpoint and opaque model ID
+    Given the environment variable "LLM_PROVIDER" is set to "openai"
+    And the environment variable "OPENAI_BASE_URL" is set to "http://127.0.0.1:1234/v1"
+    And the environment variable "BASE_MODEL" is set to "gemma-4-e4b-uncensored-hauhaucs-aggressive"
+    And the environment variable "OPENAI_API_KEY" is set to "local-test"
+    When Ratatosk loads configuration for bootstrap
+    Then the effective config key "resolved_model" is "gemma-4-e4b-uncensored-hauhaucs-aggressive"
+    And the effective config key "openai_base_url" is "http://127.0.0.1:1234/v1"
+
   # ── MVP-W2: scout / update / doctor ────────────────────────────────────────
 
   @wip

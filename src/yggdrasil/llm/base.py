@@ -11,10 +11,17 @@ Dependency rules: llm.base has no inbound imports from other Yggdrasil apps.
 from __future__ import annotations
 
 import logging
+import math
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any, Protocol, runtime_checkable
 
 logger = logging.getLogger("yggdrasil.llm")
+
+
+class LLMError(Exception):
+    """Raised when an LLM call fails or a request/response is invalid."""
 
 
 @dataclass
@@ -27,6 +34,89 @@ class LLMMessage:
 
     role: str
     content: str
+
+
+@dataclass(frozen=True, slots=True)
+class LLMStructuredOutput:
+    """Strict JSON schema requested from a provider that supports it."""
+
+    name: str
+    schema: Mapping[str, Any]
+
+    def __post_init__(self) -> None:
+        """Validate and deeply freeze the JSON schema snapshot."""
+        if not self.name.strip():
+            raise LLMError("Structured output name must not be empty")
+        if not isinstance(self.schema, Mapping) or not self.schema:
+            raise LLMError("Structured output schema must be a non-empty mapping")
+        object.__setattr__(self, "schema", _freeze_json_value(self.schema))
+
+    def as_json_schema(self) -> dict[str, Any]:
+        """Return an independent mutable schema suitable for an SDK payload."""
+        schema = _thaw_json_value(self.schema)
+        if not isinstance(schema, dict):
+            raise AssertionError("Frozen structured output schema must be a mapping")
+        return schema
+
+
+def _freeze_json_value(value: Any) -> Any:
+    """Create an immutable recursive snapshot of a JSON-compatible value."""
+    if isinstance(value, Mapping):
+        frozen: dict[str, Any] = {}
+        for key, nested_value in value.items():
+            if not isinstance(key, str):
+                raise LLMError("Structured output schema keys must be strings")
+            frozen[key] = _freeze_json_value(nested_value)
+        return MappingProxyType(frozen)
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_json_value(item) for item in value)
+    if isinstance(value, float) and not math.isfinite(value):
+        raise LLMError("Structured output schema numbers must be finite")
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    raise LLMError("Structured output schema must contain JSON-compatible values")
+
+
+def _thaw_json_value(value: Any) -> Any:
+    """Materialize an immutable JSON snapshot for an outbound SDK request."""
+    if isinstance(value, Mapping):
+        return {key: _thaw_json_value(nested_value) for key, nested_value in value.items()}
+    if isinstance(value, tuple):
+        return [_thaw_json_value(item) for item in value]
+    return value
+
+
+@dataclass(frozen=True, slots=True)
+class LLMRequestOptions:
+    """Optional provider capabilities for one LLM request."""
+
+    structured_output: LLMStructuredOutput | None = None
+    reasoning_effort: str | None = None
+
+    def __post_init__(self) -> None:
+        """Reject unsupported reasoning levels before a network call."""
+        if self.reasoning_effort is not None and self.reasoning_effort not in {
+            "minimal",
+            "low",
+            "medium",
+            "high",
+        }:
+            raise LLMError(f"Unsupported reasoning effort: {self.reasoning_effort!r}")
+
+    @property
+    def is_empty(self) -> bool:
+        """Return whether this options object requests no optional capability."""
+        return self.structured_output is None and self.reasoning_effort is None
+
+
+def reject_unsupported_options(
+    options: LLMRequestOptions | None,
+    *,
+    provider: str,
+) -> None:
+    """Reject OpenAI-only options on providers that cannot honor them."""
+    if options is not None and not options.is_empty:
+        raise LLMError(f"{provider} provider does not support requested LLM options")
 
 
 @dataclass
@@ -73,6 +163,8 @@ class BaseLLM(Protocol):
         system: str = "",
         max_tokens: int = 1024,
         temperature: float = 0.2,
+        *,
+        options: LLMRequestOptions | None = None,
     ) -> LLMResponse:
         """
         Send messages to the LLM and return a single response.
@@ -81,14 +173,11 @@ class BaseLLM(Protocol):
         :param system: System prompt prepended before messages. Example: "You are Munin..."
         :param max_tokens: Maximum response length in tokens. Example: 1024
         :param temperature: Sampling temperature 0.0-1.0. Example: 0.2
+        :param options: Optional structured-output/reasoning capabilities.
         :return: LLMResponse with content, model, usage, stop_reason.
         :raises LLMError: If the API call fails or times out.
         """
         ...
-
-
-class LLMError(Exception):
-    """Raised when an LLM call fails (timeout, API error, invalid response)."""
 
 
 class ScriptedLLM:
@@ -127,6 +216,8 @@ class ScriptedLLM:
         system: str = "",
         max_tokens: int = 1024,
         temperature: float = 0.2,
+        *,
+        options: LLMRequestOptions | None = None,
     ) -> LLMResponse:
         """
         Return the next scripted response.
@@ -135,9 +226,11 @@ class ScriptedLLM:
         :param system: Ignored.
         :param max_tokens: Ignored.
         :param temperature: Ignored.
+        :param options: Must be empty or omitted.
         :return: LLMResponse with the next scripted content.
         :raises LLMError: If all responses have been consumed.
         """
+        reject_unsupported_options(options, provider="Scripted")
         logger.debug(
             "ScriptedLLM.complete: call %d | messages=%d",
             self._index,

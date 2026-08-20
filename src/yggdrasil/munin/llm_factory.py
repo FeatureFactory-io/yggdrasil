@@ -9,20 +9,27 @@ from typing import Any, cast
 
 from django.conf import settings
 
-from yggdrasil.llm.base import BaseLLM, LLMError, LLMMessage, LLMResponse
+from yggdrasil.llm.base import (
+    BaseLLM,
+    LLMError,
+    LLMMessage,
+    LLMRequestOptions,
+    LLMResponse,
+    reject_unsupported_options,
+)
+from yggdrasil.llm.provider_config import (
+    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_OPENAI_MODEL,
+    MODEL_ALIASES,
+    build_openai_client,
+    resolve_model_id,
+)
 from yggdrasil.munin.logging_utils import log_munin_entry, log_munin_exit, log_munin_structure
 
 logger = logging.getLogger("yggdrasil.munin.llm_factory")
 
 _SCRIPTED_MODEL_ID = "scripted-munin"
 _DEFAULT_MUNIN_ALIAS = "sonnet5"
-_DEFAULT_ANTHROPIC_MUNIN = "claude-sonnet-4-5-20250929"
-_DEFAULT_OLLAMA_MUNIN = "qwen3:14b"
-
-_ANTHROPIC_ALIASES: dict[str, str] = {
-    "sonnet5": _DEFAULT_ANTHROPIC_MUNIN,
-    "haiku": "claude-haiku-4-5-20251001",
-}
 
 # sample_webapp manifest edges — AT/scripted bootstrap only
 _SCRIPTED_BOOTSTRAP_EDGES: list[tuple[str, str, str]] = [
@@ -48,8 +55,11 @@ class ScriptedMuninLLM:
         system: str = "",
         max_tokens: int = 1024,
         temperature: float = 0.2,
+        *,
+        options: LLMRequestOptions | None = None,
     ) -> LLMResponse:
         """Return scripted JSON for bootstrap inference or a chat placeholder."""
+        reject_unsupported_options(options, provider="Scripted Munin")
         prompt = messages[-1].content if messages else ""
         if _is_bootstrap_relationship_prompt(prompt):
             content = _scripted_bootstrap_relationships(prompt)
@@ -105,11 +115,14 @@ def build_munin_planning_llm(*, llm: Any | None = None) -> BaseLLM:
 
     provider = str(getattr(settings, "LLM_PROVIDER", "ollama")).strip().lower()
     munin_alias = str(getattr(settings, "MUNIN_PLANNING_MODEL", _DEFAULT_MUNIN_ALIAS)).strip()
+    openai_base_url = str(getattr(settings, "OPENAI_BASE_URL", "") or "").strip() or None
     config_snapshot = {
         "llm_provider": provider,
         "munin_planning_model_alias": munin_alias,
         "ollama_base_url": str(getattr(settings, "OLLAMA_BASE_URL", "")),
         "anthropic_key_set": bool(str(getattr(settings, "ANTHROPIC_API_KEY", "") or "").strip()),
+        "openai_key_set": bool(str(getattr(settings, "OPENAI_API_KEY", "") or "").strip()),
+        "openai_endpoint_configured": openai_base_url is not None,
         "ratatosk_base_model_not_used": True,
     }
     log_munin_structure("munin_llm_config", config_snapshot)
@@ -149,6 +162,22 @@ def build_munin_planning_llm(*, llm: Any | None = None) -> BaseLLM:
         )
         return cast("BaseLLM", anthropic_client)
 
+    if provider == "openai":
+        api_key = str(getattr(settings, "OPENAI_API_KEY", "") or "").strip()
+        if not api_key:
+            msg = "LLM_PROVIDER=openai but OPENAI_API_KEY is not set"
+            logger.error("build_munin_planning_llm | reason=missing_api_key")
+            raise LLMError(msg)
+        openai_client = build_openai_client(resolved_model, api_key, openai_base_url)
+        log_munin_exit(
+            "build_munin_planning_llm",
+            where="llm_factory.build_munin_planning_llm",
+            success=True,
+            client_class=type(openai_client).__name__,
+            llm_model=resolved_model,
+        )
+        return cast("BaseLLM", openai_client)
+
     if provider == "ollama":
         try:
             from yggdrasil.llm.adapters.ollama import OllamaClient
@@ -168,7 +197,7 @@ def build_munin_planning_llm(*, llm: Any | None = None) -> BaseLLM:
             logger.error("build_munin_planning_llm | %s", msg)
             raise RuntimeError(msg) from exc
 
-    msg = f"Unknown LLM_PROVIDER={provider!r}; use scripted, ollama, or anthropic"
+    msg = f"Unknown LLM_PROVIDER={provider!r}; use scripted, ollama, anthropic, or openai"
     raise RuntimeError(msg)
 
 
@@ -180,39 +209,37 @@ def resolve_munin_planning_model(*, provider: str) -> str:
     :return: Concrete model id string.
     :raises ValueError: When anthropic alias is unknown.
     """
-    raw = str(getattr(settings, "MUNIN_PLANNING_MODEL", _DEFAULT_MUNIN_ALIAS)).strip()
-    legacy = str(os.environ.get("MUNIN_PLANNING_MODEL") or raw).strip() or _DEFAULT_MUNIN_ALIAS
+    raw = str(getattr(settings, "MUNIN_PLANNING_MODEL", "") or "").strip()
+    env_model = str(os.environ.get("MUNIN_PLANNING_MODEL") or "").strip()
+    configured_model = env_model or raw
 
     if provider == "anthropic":
-        if legacy in _ANTHROPIC_ALIASES:
-            resolved = _ANTHROPIC_ALIASES[legacy]
-            logger.info(
-                "resolve_munin_planning_model | provider=%s input=%s branch=alias resolved_id=%s",
-                provider,
-                legacy,
-                resolved,
-            )
-            return resolved
-        if legacy.startswith("claude"):
-            logger.info(
-                "resolve_munin_planning_model | provider=%s input=%s branch=passthrough",
-                provider,
-                legacy,
-            )
-            return legacy
-        msg = f"Unknown MUNIN_PLANNING_MODEL alias {legacy!r} for provider anthropic"
-        logger.error("resolve_munin_planning_model | %s", msg)
-        raise ValueError(msg)
+        return _resolve_munin_model_id(
+            provider=provider,
+            configured_model=configured_model or _DEFAULT_MUNIN_ALIAS,
+            default_model=MODEL_ALIASES["anthropic"][_DEFAULT_MUNIN_ALIAS],
+        )
 
     if provider == "ollama":
-        resolved = legacy if legacy not in _ANTHROPIC_ALIASES else _DEFAULT_OLLAMA_MUNIN
+        resolved = (
+            DEFAULT_OLLAMA_MODEL
+            if configured_model in MODEL_ALIASES["anthropic"]
+            else resolve_model_id("ollama", configured_model, default_model=DEFAULT_OLLAMA_MODEL)
+        )
         logger.info(
             "resolve_munin_planning_model | provider=%s input=%s resolved_id=%s",
             provider,
-            legacy,
+            configured_model or "(default)",
             resolved,
         )
         return resolved
+
+    if provider == "openai":
+        return _resolve_munin_model_id(
+            provider=provider,
+            configured_model=configured_model,
+            default_model=DEFAULT_OPENAI_MODEL,
+        )
 
     logger.info(
         "resolve_munin_planning_model | provider=%s resolved_id=%s branch=scripted_or_other",
@@ -220,6 +247,20 @@ def resolve_munin_planning_model(*, provider: str) -> str:
         _SCRIPTED_MODEL_ID,
     )
     return _SCRIPTED_MODEL_ID
+
+
+def _resolve_munin_model_id(
+    *, provider: str, configured_model: str, default_model: str
+) -> str:
+    """Resolve one Munin provider-specific model setting through the shared policy."""
+    resolved = resolve_model_id(provider, configured_model, default_model=default_model)
+    logger.info(
+        "resolve_munin_planning_model | provider=%s input=%s resolved_id=%s",
+        provider,
+        configured_model or "(default)",
+        resolved,
+    )
+    return resolved
 
 
 def munin_allows_manifest_fallback(llm: Any) -> bool:

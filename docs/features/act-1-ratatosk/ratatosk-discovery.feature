@@ -147,6 +147,27 @@ Feature: ACT-1-DISC Ratatosk real discovery
     Then the exit code is not 0
     And the output contains "ANTHROPIC_API_KEY"
 
+  @wip @openai
+  Scenario: ACT-1-LLM-07 Bootstrap uses OpenAI Responses API when LLM_PROVIDER is openai
+    Given the environment variable "LLM_PROVIDER" is set to "openai"
+    And the environment variable "OPENAI_API_KEY" is set
+    And Priya has a Yggdrasil personal access token with read-write scope
+    And the Yggdrasil model "Yggdrasil" exists with no elements
+    And the fixture repository "sample_webapp" is available
+    When Priya runs ratatosk bootstrap against fixture "sample_webapp" via subprocess
+    Then the discovery LLM was invoked at least once
+    And the output does not contain "scripted-discovery"
+    And the output does not contain "Ollama request failed"
+
+  @wip @openai
+  Scenario: ACT-1-LLM-08 Bootstrap fails clearly when OpenAI API key is missing
+    Given the environment variable "LLM_PROVIDER" is set to "openai"
+    And the environment variable "OPENAI_API_KEY" is not set
+    And the fixture repository "sample_webapp" is available
+    When Priya runs ratatosk bootstrap against fixture "sample_webapp" via subprocess
+    Then the exit code is not 0
+    And the output contains "OPENAI_API_KEY"
+
   # ── MVP-W2 / edge cases ────────────────────────────────────────────────────
 
   Scenario: ACT-1-DISC-03 Re-bootstrap bulk-wipes existing graph before rescan

@@ -13,7 +13,13 @@ import logging
 import os
 from typing import Any, cast
 
-from yggdrasil.llm.base import BaseLLM, LLMMessage, LLMResponse
+from yggdrasil.llm.base import (
+    BaseLLM,
+    LLMMessage,
+    LLMRequestOptions,
+    LLMResponse,
+    reject_unsupported_options,
+)
 
 logger = logging.getLogger("yggdrasil.ratatosk.llm_factory")
 
@@ -91,8 +97,11 @@ class ScriptedDiscoveryLLM:
         system: str = "",
         max_tokens: int = 1024,
         temperature: float = 0.2,
+        *,
+        options: LLMRequestOptions | None = None,
     ) -> LLMResponse:
         """Return the next scripted discovery response."""
+        reject_unsupported_options(options, provider="Scripted discovery")
         self._call_count += 1
         if self._responses is not None:
             if self._index >= len(self._responses):

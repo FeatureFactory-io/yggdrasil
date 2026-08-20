@@ -696,6 +696,11 @@ Owned by Metamodel `c4` (Django admin / `ensure_c4_metamodel()`), not by each Mo
 | `Then the effective config key "resolved_model" contains "{substring}"` | CFG-11 (@wip TFK-07) |
 | `Given the environment variable "ANTHROPIC_API_KEY" is set` | LLM-05 manual (@wip TFK-07) |
 | `Given the environment variable "ANTHROPIC_API_KEY" is not set` | LLM-06 (@wip TFK-07) |
+| `Given the environment variable "OPENAI_API_KEY" is set` | LLM-07 manual (@wip TFK-07) |
+| `Given the environment variable "OPENAI_API_KEY" is not set` | LLM-08 (@wip TFK-07) |
+| `LLM_PROVIDER=openai` with no model override | CFG-15 (@wip @openai) |
+| `LLM_PROVIDER=openai` with Claude alias | CFG-16 (@wip @openai) |
+| `LLM_PROVIDER=openai` with local Responses endpoint and opaque model ID | CFG-17 (@wip @openai) |
 
 **Ratatosk scout blackboard keys:** `evidence_plan`, `tool_calls`, `model_summary_chars`, `sources`, `scout_plan`.
 
@@ -708,10 +713,11 @@ CLI-01, CLI-04, CLI-06, CLI-07, CLI-08, CLI-09
 DISC-01, DISC-02, DISC-03, DISC-04, DISC-05, DISC-06, DISC-07, DISC-11, DISC-13, DISC-15, DISC-16, DISC-17, DISC-18, DISC-21
 LLM-01, LLM-02, LLM-03, LLM-04  (@ollama @wip)
 LLM-05, LLM-06  (@anthropic @wip)
+LLM-07, LLM-08, CFG-15, CFG-16, CFG-17  (@openai @wip)
 CFG-02, CFG-06, CFG-07, CFG-08, CFG-09, CFG-10, CFG-11, CFG-12, CFG-13
 ```
 
-Tag **`@ollama`** on LLM scenarios for optional CI. Default AT uses ScriptedDiscoveryLLM until BPE implements OllamaClient.
+Tag **`@ollama`**, **`@anthropic`**, and **`@openai`** on provider scenarios for optional/manual certification. Default AT uses ScriptedDiscoveryLLM and never requires cloud credentials.
 
 Feature files: `act-1-ratatosk/ratatosk-bootstrap.feature`, `ratatosk-discovery.feature`, `ratatosk-config.feature`, `ratatosk-model-summary.feature`, `ratatosk-scout.feature`, `act-6-cicd/ratatosk-update.feature`.
 

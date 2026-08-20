@@ -2777,7 +2777,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "mcp", specifier = ">=1.28.1" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11" },
-    { name = "openai", specifier = ">=1.40" },
+    { name = "openai", specifier = ">=1.99.1" },
     { name = "pip-audit", marker = "extra == 'dev'", specifier = ">=2.7" },
     { name = "playwright", marker = "extra == 'dev'", specifier = ">=1.46" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.8" },

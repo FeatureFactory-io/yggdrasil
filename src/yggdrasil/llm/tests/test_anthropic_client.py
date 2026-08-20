@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from yggdrasil.llm.adapters.anthropic import AnthropicClient
-from yggdrasil.llm.base import LLMError, LLMMessage
+from yggdrasil.llm.base import LLMError, LLMMessage, LLMRequestOptions
 
 
 @pytest.fixture
@@ -55,6 +55,15 @@ def test_anthropic_init_missing_key_raises_llm_error(monkeypatch) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     with pytest.raises(LLMError, match="ANTHROPIC_API_KEY"):
         AnthropicClient(model="claude-haiku-4-5-20251001", api_key="")
+
+
+def test_anthropic_rejects_openai_only_options_before_sdk_call(client: AnthropicClient) -> None:
+    """Anthropic never silently drops unsupported provider-specific options."""
+    with pytest.raises(LLMError, match="does not support"):
+        client.complete(
+            [LLMMessage(role="user", content="hello")],
+            options=LLMRequestOptions(reasoning_effort="low"),
+        )
 
 
 def test_anthropic_build_payload_includes_system_and_messages(client: AnthropicClient) -> None:
